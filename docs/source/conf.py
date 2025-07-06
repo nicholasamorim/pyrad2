@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # pyrad documentation build configuration file, created by
 # sphinx-quickstart on Thu Feb  2 15:16:16 2017.

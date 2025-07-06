@@ -92,8 +92,7 @@ class MockPoll:
             pass
 
     def poll(self, timeout=None):
-        for result in self.results:
-            yield result
+        yield from self.results
         raise MockFinished
 
 

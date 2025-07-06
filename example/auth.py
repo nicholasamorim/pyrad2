@@ -1,11 +1,14 @@
 #!/usr/bin/python
 from pyrad2.client import Client
 from pyrad2.dictionary import Dictionary
-import socket
 import sys
 import pyrad2.packet
 
-srv = Client(server="127.0.0.1", secret=b"Kah3choteereethiejeimaeziecumi", dict=Dictionary("dictionary"))
+srv = Client(
+    server="127.0.0.1",
+    secret=b"Kah3choteereethiejeimaeziecumi",
+    dict=Dictionary("dictionary"),
+)
 
 req = srv.CreateAuthPacket(code=pyrad2.packet.AccessRequest, User_Name="wichert")
 
@@ -23,7 +26,7 @@ try:
 except pyrad2.client.Timeout:
     print("RADIUS server does not reply")
     sys.exit(1)
-except socket.error as error:
+except OSError as error:
     print("Network error: " + error[1])
     sys.exit(1)
 
@@ -34,4 +37,4 @@ else:
 
 print("Attributes returned by server:")
 for i in reply.keys():
-    print("%s: %s" % (i, reply[i]))
+    print("{}: {}".format(i, reply[i]))

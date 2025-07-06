@@ -8,12 +8,13 @@ from pyrad2.dictionary import Dictionary
 from pyrad2.client_async import ClientAsync
 from pyrad2.packet import AccessAccept
 
-logging.basicConfig(level="DEBUG",
-                    format="%(asctime)s [%(levelname)-8s] %(message)s")
-client = ClientAsync(server="localhost",
-                     secret=b"Kah3choteereethiejeimaeziecumi",
-                     timeout=4,
-                     dict=Dictionary("dictionary"))
+logging.basicConfig(level="DEBUG", format="%(asctime)s [%(levelname)-8s] %(message)s")
+client = ClientAsync(
+    server="localhost",
+    secret=b"Kah3choteereethiejeimaeziecumi",
+    timeout=4,
+    dict=Dictionary("dictionary"),
+)
 
 loop = asyncio.get_event_loop()
 
@@ -31,6 +32,7 @@ def create_request(client, user):
 
     return req
 
+
 def print_reply(reply):
     if reply.code == AccessAccept:
         print("Access accepted")
@@ -39,23 +41,25 @@ def print_reply(reply):
 
     print("Attributes returned by server:")
     for i in reply.keys():
-        print("%s: %s" % (i, reply[i]))
+        print("{}: {}".format(i, reply[i]))
+
 
 def test_auth1():
-
     global client
 
     try:
         # Initialize transports
         loop.run_until_complete(
             asyncio.ensure_future(
-                client.initialize_transports(enable_auth=True,
-                                             local_addr='127.0.0.1',
-                                             local_auth_port=8000,
-                                             enable_acct=True,
-                                             enable_coa=True)))
-
-
+                client.initialize_transports(
+                    enable_auth=True,
+                    local_addr="127.0.0.1",
+                    local_auth_port=8000,
+                    enable_acct=True,
+                    enable_coa=True,
+                )
+            )
+        )
 
         req = client.CreateAuthPacket(User_Name="wichert")
 
@@ -69,17 +73,13 @@ def test_auth1():
 
         future = client.SendPacket(req)
 
-    #    loop.run_until_complete(future)
-        loop.run_until_complete(asyncio.ensure_future(
-            asyncio.gather(
-                future,
-                return_exceptions=True
-            )
-
-        ))
+        #    loop.run_until_complete(future)
+        loop.run_until_complete(
+            asyncio.ensure_future(asyncio.gather(future, return_exceptions=True))
+        )
 
         if future.exception():
-            print('EXCEPTION ', future.exception())
+            print("EXCEPTION ", future.exception())
         else:
             reply = future.result()
 
@@ -90,38 +90,39 @@ def test_auth1():
 
             print("Attributes returned by server:")
             for i in reply.keys():
-                print("%s: %s" % (i, reply[i]))
+                print("{}: {}".format(i, reply[i]))
 
         # Close transports
-        loop.run_until_complete(asyncio.ensure_future(
-            client.deinitialize_transports()))
-        print('END')
+        loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
+        print("END")
 
         del client
     except Exception as exc:
-        print('Error: ', exc)
-        print('\n'.join(traceback.format_exc().splitlines()))
+        global client
+        print("Error: ", exc)
+        print("\n".join(traceback.format_exc().splitlines()))
         # Close transports
-        loop.run_until_complete(asyncio.ensure_future(
-            client.deinitialize_transports()))
+        loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
 
     loop.close()
 
-def test_multi_auth():
 
+def test_multi_auth():
     global client
 
     try:
         # Initialize transports
         loop.run_until_complete(
             asyncio.ensure_future(
-                client.initialize_transports(enable_auth=True,
-                                             local_addr='127.0.0.1',
-                                             local_auth_port=8000,
-                                             enable_acct=True,
-                                             enable_coa=True)))
-
-
+                client.initialize_transports(
+                    enable_auth=True,
+                    local_addr="127.0.0.1",
+                    local_auth_port=8000,
+                    enable_acct=True,
+                    enable_coa=True,
+                )
+            )
+        )
 
         reqs = []
         for i in range(255):
@@ -130,35 +131,31 @@ def test_multi_auth():
             reqs.append(future)
 
         #    loop.run_until_complete(future)
-        loop.run_until_complete(asyncio.ensure_future(
-            asyncio.gather(
-                *reqs,
-                return_exceptions=True
-            )
-
-        ))
+        loop.run_until_complete(
+            asyncio.ensure_future(asyncio.gather(*reqs, return_exceptions=True))
+        )
 
         for future in reqs:
             if future.exception():
-                print('EXCEPTION ', future.exception())
+                print("EXCEPTION ", future.exception())
             else:
                 reply = future.result()
                 print_reply(reply)
 
         # Close transports
-        loop.run_until_complete(asyncio.ensure_future(
-            client.deinitialize_transports()))
-        print('END')
+        loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
+        print("END")
 
         del client
     except Exception as exc:
-        print('Error: ', exc)
-        print('\n'.join(traceback.format_exc().splitlines()))
+        global client
+        print("Error: ", exc)
+        print("\n".join(traceback.format_exc().splitlines()))
         # Close transports
-        loop.run_until_complete(asyncio.ensure_future(
-            client.deinitialize_transports()))
+        loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
 
     loop.close()
 
-#test_multi_auth()
+
+# test_multi_auth()
 test_auth1()

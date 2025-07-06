@@ -348,7 +348,7 @@ class DictionaryParsingTests(unittest.TestCase):
                     "ATTRIBUTE Test-Type 1 integer"
                 )
             )
-        except IOError as e:
+        except OSError as e:
             self.assertEqual("this_file_does_not_exist" in str(e), True)
         else:
             self.fail()

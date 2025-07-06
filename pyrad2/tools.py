@@ -27,7 +27,7 @@ def EncodeOctets(octetstring: str) -> str | bytes:
         hexstring = octetstring.split("0x")[1]
         encoded_octets = binascii.unhexlify(hexstring)
     elif isinstance(octetstring, str) and octetstring.isdecimal():
-        encoded_octets = struct.pack(">L", int(octetstring)).lstrip((b"\x00"))
+        encoded_octets = struct.pack(">L", int(octetstring)).lstrip(b"\x00")
     else:
         encoded_octets = octetstring
 
@@ -192,14 +192,14 @@ def DecodeAddress(addr: Buffer) -> str:
 def DecodeIPv6Prefix(addr: bytes | bytearray) -> str:
     addr = addr + b"\x00" * (18 - len(addr))
     _, length, prefix = ":".join(
-        map("{0:x}".format, struct.unpack("!BB" + "H" * 8, addr))
+        map("{:x}".format, struct.unpack("!BB" + "H" * 8, addr))
     ).split(":", 2)
-    return str(IPv6Network("%s/%s" % (prefix, int(length, 16))))
+    return str(IPv6Network("{}/{}".format(prefix, int(length, 16))))
 
 
 def DecodeIPv6Address(addr: bytes | bytearray) -> str:
     addr = addr + b"\x00" * (16 - len(addr))
-    prefix = ":".join(map("{0:x}".format, struct.unpack("!" + "H" * 8, addr)))
+    prefix = ":".join(map("{:x}".format, struct.unpack("!" + "H" * 8, addr)))
     return str(IPv6Address(prefix))
 
 

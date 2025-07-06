@@ -59,7 +59,7 @@ class DictFile:
                 fname = fil
             else:
                 fname = os.path.join(parentdir, fil)
-            fd = open(fname, "rt")
+            fd = open(fname)
             node = _Node(fd, fil, parentdir)
             fd.close()
         else:

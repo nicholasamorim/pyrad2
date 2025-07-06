@@ -2,7 +2,6 @@
 from pyrad2.client import Client
 from pyrad2.dictionary import Dictionary
 import random
-import socket
 import sys
 import pyrad2.packet
 
@@ -13,11 +12,16 @@ def SendPacket(srv, req):
     except pyrad2.client.Timeout:
         print("RADIUS server does not reply")
         sys.exit(1)
-    except socket.error as error:
+    except OSError as error:
         print("Network error: " + error[1])
         sys.exit(1)
 
-srv = Client(server="localhost", secret=b"Kah3choteereethiejeimaeziecumi", dict=Dictionary("dictionary"))
+
+srv = Client(
+    server="localhost",
+    secret=b"Kah3choteereethiejeimaeziecumi",
+    dict=Dictionary("dictionary"),
+)
 
 req = srv.CreateAcctPacket(User_Name="wichert")
 
