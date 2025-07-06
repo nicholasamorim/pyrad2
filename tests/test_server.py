@@ -21,23 +21,32 @@ class TrivialObject:
 
 class RemoteHostTests(unittest.TestCase):
     def testSimpleConstruction(self):
-        host = RemoteHost('address', 'secret', 'name', 'authport', 'acctport', 'coaport')
-        self.assertEqual(host.address, 'address')
-        self.assertEqual(host.secret, 'secret')
-        self.assertEqual(host.name, 'name')
-        self.assertEqual(host.authport, 'authport')
-        self.assertEqual(host.acctport, 'acctport')
-        self.assertEqual(host.coaport, 'coaport')
+        host = RemoteHost(
+            "address", "secret", "name", "authport", "acctport", "coaport"
+        )
+        self.assertEqual(host.address, "address")
+        self.assertEqual(host.secret, "secret")
+        self.assertEqual(host.name, "name")
+        self.assertEqual(host.authport, "authport")
+        self.assertEqual(host.acctport, "acctport")
+        self.assertEqual(host.coaport, "coaport")
 
     def testNamedConstruction(self):
-        host = RemoteHost(address='address', secret='secret', name='name',
-               authport='authport', acctport='acctport', coaport='coaport')
-        self.assertEqual(host.address, 'address')
-        self.assertEqual(host.secret, 'secret')
-        self.assertEqual(host.name, 'name')
-        self.assertEqual(host.authport, 'authport')
-        self.assertEqual(host.acctport, 'acctport')
-        self.assertEqual(host.coaport, 'coaport')
+        host = RemoteHost(
+            address="address",
+            secret="secret",
+            name="name",
+            authport="authport",
+            acctport="acctport",
+            coaport="coaport",
+        )
+        self.assertEqual(host.address, "address")
+        self.assertEqual(host.secret, "secret")
+        self.assertEqual(host.name, "name")
+        self.assertEqual(host.authport, "authport")
+        self.assertEqual(host.acctport, "acctport")
+        self.assertEqual(host.coaport, "coaport")
+
 
 class ServerConstructiontests(unittest.TestCase):
     def testSimpleConstruction(self):
@@ -50,23 +59,24 @@ class ServerConstructiontests(unittest.TestCase):
         self.assertEqual(server.hosts, {})
 
     def testParameterOrder(self):
-        server = Server([], 'authport', 'acctport', 'coaport','hosts', 'dict')
+        server = Server([], "authport", "acctport", "coaport", "hosts", "dict")
         self.assertEqual(server.authfds, [])
         self.assertEqual(server.acctfds, [])
-        self.assertEqual(server.authport, 'authport')
-        self.assertEqual(server.acctport, 'acctport')
-        self.assertEqual(server.coaport, 'coaport')
-        self.assertEqual(server.dict, 'dict')
+        self.assertEqual(server.authport, "authport")
+        self.assertEqual(server.acctport, "acctport")
+        self.assertEqual(server.coaport, "coaport")
+        self.assertEqual(server.dict, "dict")
 
     def testBindDuringConstruction(self):
         def BindToAddress(self, addr):
             self.bound.append(addr)
+
         bta = Server.BindToAddress
         Server.BindToAddress = BindToAddress
 
         Server.bound = []
-        server = Server(['one', 'two', 'three'])
-        self.assertEqual(server.bound, ['one', 'two', 'three'])
+        server = Server(["one", "two", "three"])
+        self.assertEqual(server.bound, ["one", "two", "three"])
         del Server.bound
 
         Server.BindToAddress = bta
@@ -82,24 +92,20 @@ class SocketTests(unittest.TestCase):
         socket.socket = self.orgsocket
 
     def testBind(self):
-        self.server.BindToAddress('192.168.13.13')
+        self.server.BindToAddress("192.168.13.13")
         self.assertEqual(len(self.server.authfds), 1)
-        self.assertEqual(self.server.authfds[0].address,
-                ('192.168.13.13', 1812))
+        self.assertEqual(self.server.authfds[0].address, ("192.168.13.13", 1812))
 
         self.assertEqual(len(self.server.acctfds), 1)
-        self.assertEqual(self.server.acctfds[0].address,
-                ('192.168.13.13', 1813))
+        self.assertEqual(self.server.acctfds[0].address, ("192.168.13.13", 1813))
 
     def testBindv6(self):
-        self.server.BindToAddress('2001:db8:123::1')
+        self.server.BindToAddress("2001:db8:123::1")
         self.assertEqual(len(self.server.authfds), 1)
-        self.assertEqual(self.server.authfds[0].address,
-                ('2001:db8:123::1', 1812))
+        self.assertEqual(self.server.authfds[0].address, ("2001:db8:123::1", 1812))
 
         self.assertEqual(len(self.server.acctfds), 1)
-        self.assertEqual(self.server.acctfds[0].address,
-                ('2001:db8:123::1', 1813))
+        self.assertEqual(self.server.acctfds[0].address, ("2001:db8:123::1", 1813))
 
     def testGrabPacket(self):
         def gen(data):
@@ -130,9 +136,13 @@ class SocketTests(unittest.TestCase):
         self.server._PrepareSockets()
 
         self.assertEqual(list(self.server._fdmap.keys()), [12, 14])
-        self.assertEqual(self.server._poll.registry,
-                {12: select.POLLIN | select.POLLPRI | select.POLLERR,
-                 14: select.POLLIN | select.POLLPRI | select.POLLERR})
+        self.assertEqual(
+            self.server._poll.registry,
+            {
+                12: select.POLLIN | select.POLLPRI | select.POLLERR,
+                14: select.POLLIN | select.POLLPRI | select.POLLERR,
+            },
+        )
 
     def testPrepareSocketAcctFds(self):
         self.server._poll = MockPoll()
@@ -141,26 +151,30 @@ class SocketTests(unittest.TestCase):
         self.server._PrepareSockets()
 
         self.assertEqual(list(self.server._fdmap.keys()), [12, 14])
-        self.assertEqual(self.server._poll.registry,
-                {12: select.POLLIN | select.POLLPRI | select.POLLERR,
-                 14: select.POLLIN | select.POLLPRI | select.POLLERR})
+        self.assertEqual(
+            self.server._poll.registry,
+            {
+                12: select.POLLIN | select.POLLPRI | select.POLLERR,
+                14: select.POLLIN | select.POLLPRI | select.POLLERR,
+            },
+        )
 
 
 class AuthPacketHandlingTests(unittest.TestCase):
     def setUp(self):
         self.server = Server()
-        self.server.hosts['host'] = TrivialObject()
-        self.server.hosts['host'].secret = 'supersecret'
+        self.server.hosts["host"] = TrivialObject()
+        self.server.hosts["host"].secret = "supersecret"
         self.packet = TrivialObject()
         self.packet.code = AccessRequest
-        self.packet.source = ('host', 'port')
+        self.packet.source = ("host", "port")
 
     def testHandleAuthPacketUnknownHost(self):
-        self.packet.source = ('stranger', 'port')
+        self.packet.source = ("stranger", "port")
         try:
             self.server._HandleAuthPacket(self.packet)
         except ServerPacketError as e:
-            self.assertTrue('unknown host' in str(e))
+            self.assertTrue("unknown host" in str(e))
         else:
             self.fail()
 
@@ -169,13 +183,14 @@ class AuthPacketHandlingTests(unittest.TestCase):
         try:
             self.server._HandleAuthPacket(self.packet)
         except ServerPacketError as e:
-            self.assertTrue('port' in str(e))
+            self.assertTrue("port" in str(e))
         else:
             self.fail()
 
     def testHandleAuthPacket(self):
         def HandleAuthPacket(self, pkt):
             self.handled = pkt
+
         hap = Server.HandleAuthPacket
         Server.HandleAuthPacket = HandleAuthPacket
 
@@ -188,18 +203,18 @@ class AuthPacketHandlingTests(unittest.TestCase):
 class AcctPacketHandlingTests(unittest.TestCase):
     def setUp(self):
         self.server = Server()
-        self.server.hosts['host'] = TrivialObject()
-        self.server.hosts['host'].secret = 'supersecret'
+        self.server.hosts["host"] = TrivialObject()
+        self.server.hosts["host"].secret = "supersecret"
         self.packet = TrivialObject()
         self.packet.code = AccountingRequest
-        self.packet.source = ('host', 'port')
+        self.packet.source = ("host", "port")
 
     def testHandleAcctPacketUnknownHost(self):
-        self.packet.source = ('stranger', 'port')
+        self.packet.source = ("stranger", "port")
         try:
             self.server._HandleAcctPacket(self.packet)
         except ServerPacketError as e:
-            self.assertTrue('unknown host' in str(e))
+            self.assertTrue("unknown host" in str(e))
         else:
             self.fail()
 
@@ -208,13 +223,14 @@ class AcctPacketHandlingTests(unittest.TestCase):
         try:
             self.server._HandleAcctPacket(self.packet)
         except ServerPacketError as e:
-            self.assertTrue('port' in str(e))
+            self.assertTrue("port" in str(e))
         else:
             self.fail()
 
     def testHandleAcctPacket(self):
         def HandleAcctPacket(self, pkt):
             self.handled = pkt
+
         hap = Server.HandleAcctPacket
         Server.HandleAcctPacket = HandleAcctPacket
 
@@ -240,33 +256,34 @@ class OtherTests(unittest.TestCase):
                 reply.kw = kw
                 return reply
 
-        reply = self.server.CreateReplyPacket(TrivialPacket(),
-                one='one', two='two')
+        reply = self.server.CreateReplyPacket(TrivialPacket(), one="one", two="two")
         self.assertTrue(isinstance(reply, TrivialObject))
         self.assertTrue(reply.source is TrivialPacket.source)
-        self.assertEqual(reply.kw, dict(one='one', two='two'))
+        self.assertEqual(reply.kw, dict(one="one", two="two"))
 
     def testAuthProcessInput(self):
         fd = MockFd(1)
         self.server._realauthfds = [1]
-        MockClassMethod(Server, '_GrabPacket')
-        MockClassMethod(Server, '_HandleAuthPacket')
+        MockClassMethod(Server, "_GrabPacket")
+        MockClassMethod(Server, "_HandleAuthPacket")
 
         self.server._ProcessInput(fd)
-        self.assertEqual([x[0] for x in self.server.called],
-                ['_GrabPacket', '_HandleAuthPacket'])
+        self.assertEqual(
+            [x[0] for x in self.server.called], ["_GrabPacket", "_HandleAuthPacket"]
+        )
         self.assertEqual(self.server.called[0][1][1], fd)
 
     def testAcctProcessInput(self):
         fd = MockFd(1)
         self.server._realauthfds = []
         self.server._realacctfds = [1]
-        MockClassMethod(Server, '_GrabPacket')
-        MockClassMethod(Server, '_HandleAcctPacket')
+        MockClassMethod(Server, "_GrabPacket")
+        MockClassMethod(Server, "_HandleAcctPacket")
 
         self.server._ProcessInput(fd)
-        self.assertEqual([x[0] for x in self.server.called],
-                ['_GrabPacket', '_HandleAcctPacket'])
+        self.assertEqual(
+            [x[0] for x in self.server.called], ["_GrabPacket", "_HandleAcctPacket"]
+        )
         self.assertEqual(self.server.called[0][1][1], fd)
 
 
@@ -282,9 +299,9 @@ class ServerRunTests(unittest.TestCase):
         UnmockClassMethods(Server)
 
     def testRunInitializes(self):
-        MockClassMethod(Server, '_PrepareSockets')
+        MockClassMethod(Server, "_PrepareSockets")
         self.assertRaises(MockFinished, self.server.Run)
-        self.assertEqual(self.server.called, [('_PrepareSockets', (), {})])
+        self.assertEqual(self.server.called, [("_PrepareSockets", (), {})])
         self.assertTrue(isinstance(self.server._fdmap, dict))
         self.assertTrue(isinstance(self.server._poll, MockPoll))
 
@@ -296,7 +313,8 @@ class ServerRunTests(unittest.TestCase):
     def testRunIgnoresServerPacketErrors(self):
         def RaisePacketError(self, fd):
             raise ServerPacketError
-        MockClassMethod(Server, '_ProcessInput', RaisePacketError)
+
+        MockClassMethod(Server, "_ProcessInput", RaisePacketError)
         self.server.authfds = [MockFd()]
         MockPoll.results = [(0, select.POLLIN)]
         self.assertRaises(MockFinished, self.server.Run)
@@ -304,18 +322,20 @@ class ServerRunTests(unittest.TestCase):
     def testRunIgnoresPacketErrors(self):
         def RaisePacketError(self, fd):
             raise PacketError
-        MockClassMethod(Server, '_ProcessInput', RaisePacketError)
+
+        MockClassMethod(Server, "_ProcessInput", RaisePacketError)
         self.server.authfds = [MockFd()]
         MockPoll.results = [(0, select.POLLIN)]
         self.assertRaises(MockFinished, self.server.Run)
 
     def testRunRunsProcessInput(self):
-        MockClassMethod(Server, '_ProcessInput')
+        MockClassMethod(Server, "_ProcessInput")
         self.server.authfds = fd = [MockFd()]
         MockPoll.results = [(0, select.POLLIN)]
         self.assertRaises(MockFinished, self.server.Run)
-        self.assertEqual(self.server.called, [('_ProcessInput', (fd[0],), {})])
+        self.assertEqual(self.server.called, [("_ProcessInput", (fd[0],), {})])
 
-if not hasattr(select, 'poll'):
+
+if not hasattr(select, "poll"):
     del SocketTests
     del ServerRunTests

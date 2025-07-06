@@ -25,6 +25,7 @@ class MockPacket:
 
     def __contains__(self, key):
         return key in self.data
+
     has_key = __contains__
 
     def __setitem__(self, key, value):
@@ -76,7 +77,7 @@ class MockFinished(Exception):
 
 
 class MockPoll:
-    results = []
+    results: list[bytes] = []
 
     def __init__(self):
         self.registry = {}
@@ -120,7 +121,7 @@ def UnmockClassMethods(klass):
     key = origkey(klass)
     if not hasattr(klass, key):
         return
-    for (name, func) in getattr(klass, key).items():
+    for name, func in getattr(klass, key).items():
         setattr(klass, name, func)
 
     delattr(klass, key)
