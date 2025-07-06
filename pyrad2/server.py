@@ -1,7 +1,7 @@
 import select
 import socket
 from dataclasses import dataclass
-from typing import Callable, Dict, Optional
+from typing import Callable, Optional
 
 from loguru import logger
 
@@ -63,7 +63,7 @@ class Server(host.Host):
 
     def __init__(
         self,
-        addresses: list[str] = [],
+        addresses: Optional[list[str]] = None,
         authport: int = 1812,
         acctport: int = 1813,
         coaport: int = 3799,
@@ -98,14 +98,15 @@ class Server(host.Host):
 
         self.hosts = hosts or {}
         self.auth_enabled = auth_enabled
-        self.authfds: list = []
+        self.authfds: list[socket.socket] = []
         self.acct_enabled = acct_enabled
         self.acctfds: list = []
         self.coa_enabled = coa_enabled
         self.coafds: list = []
 
-        for addr in addresses:
-            self.BindToAddress(addr)
+        if addresses:
+            for addr in addresses:
+                self.BindToAddress(addr)
 
     def _GetAddrInfo(
         self, addr: str
@@ -336,7 +337,7 @@ class Server(host.Host):
         to process them.
         """
         self._poll = select.poll()
-        self._fdmap: Dict[int, socket.socket] = {}
+        self._fdmap: dict[int, socket.socket] = {}
         self._PrepareSockets()
 
         while True:
