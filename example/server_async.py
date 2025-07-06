@@ -1,37 +1,30 @@
 #!/usr/bin/python
 
 import asyncio
-
 import logging
 import traceback
+
+from loguru import logger
+
 from pyrad2.dictionary import Dictionary
-from pyrad2.server_async import ServerAsync
 from pyrad2.packet import AccessAccept
 from pyrad2.server import RemoteHost
-
-try:
-    import uvloop
-
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-except Exception:
-    pass
+from pyrad2.server_async import ServerAsync
 
 logging.basicConfig(level="DEBUG", format="%(asctime)s [%(levelname)-8s] %(message)s")
 
 
 class FakeServer(ServerAsync):
-    def __init__(self, loop, dictionary):
-        ServerAsync.__init__(
-            self, loop=loop, dictionary=dictionary, enable_pkt_verify=True, debug=True
-        )
+    def __init__(self, dictionary):
+        super().__init__(dictionary=dictionary, enable_pkt_verify=True, debug=True)
 
     def handle_auth_packet(self, protocol, pkt, addr):
-        print("Received an authentication request with id ", pkt.id)
-        print("Authenticator ", pkt.authenticator.hex())
-        print("Secret ", pkt.secret)
-        print("Attributes: ")
+        logger.info("Received an authentication request with id {}", pkt.id)
+        logger.info("Authenticator {}", pkt.authenticator.hex())
+        logger.info("Secret {}", pkt.secret)
+        logger.info("Attributes: ")
         for attr in pkt.keys():
-            print("{}: {}".format(attr, pkt[attr]))
+            logger.info("{}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(
             pkt,
@@ -46,28 +39,28 @@ class FakeServer(ServerAsync):
         protocol.send_response(reply, addr)
 
     def handle_acct_packet(self, protocol, pkt, addr):
-        print("Received an accounting request")
-        print("Attributes: ")
+        logger.info("Received an accounting request")
+        logger.info("Attributes: ")
         for attr in pkt.keys():
-            print("{}: {}".format(attr, pkt[attr]))
+            logger.info("{}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(pkt)
         protocol.send_response(reply, addr)
 
     def handle_coa_packet(self, protocol, pkt, addr):
-        print("Received an coa request")
-        print("Attributes: ")
+        logger.info("Received an coa request")
+        logger.info("Attributes: ")
         for attr in pkt.keys():
-            print("{}: {}".format(attr, pkt[attr]))
+            logger.info("{}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(pkt)
         protocol.send_response(reply, addr)
 
     def handle_disconnect_packet(self, protocol, pkt, addr):
-        print("Received an disconnect request")
-        print("Attributes: ")
+        logger.info("Received an disconnect request")
+        logger.info("Attributes: ")
         for attr in pkt.keys():
-            print("{}: {}".format(attr, pkt[attr]))
+            logger.info("{}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(pkt)
         # COA NAK
@@ -78,7 +71,7 @@ class FakeServer(ServerAsync):
 if __name__ == "__main__":
     # create server and read dictionary
     loop = asyncio.get_event_loop()
-    server = FakeServer(loop=loop, dictionary=Dictionary("dictionary"))
+    server = FakeServer(dictionary=Dictionary("dictionary"))
 
     # add clients (address, secret, name)
     server.hosts["127.0.0.1"] = RemoteHost(
@@ -105,8 +98,8 @@ if __name__ == "__main__":
         loop.run_until_complete(asyncio.ensure_future(server.deinitialize_transports()))
 
     except Exception as exc:
-        print("Error: ", exc)
-        print("\n".join(traceback.format_exc().splitlines()))
+        logger.error("Error: {}", exc)
+        logger.error("\n".join(traceback.format_exc().splitlines()))
         # Close transports
         loop.run_until_complete(asyncio.ensure_future(server.deinitialize_transports()))
 
