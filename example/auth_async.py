@@ -100,7 +100,7 @@ def test_auth1():
     except Exception as exc:
         # global client
         logger.error("Error: {}", exc)
-        logger.erorr("\n".join(traceback.format_exc().splitlines()))
+        logger.error("\n".join(traceback.format_exc().splitlines()))
         # Close transports
         loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
 
