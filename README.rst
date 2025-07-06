@@ -1,8 +1,8 @@
 
-.. image:: https://github.com/pyradius/pyrad/workflows/Python%203.X%20test/badge.svg?branch=master
-    :target: https://github.com/pyradius/pyrad/actions?query=workflow
-.. image:: https://coveralls.io/repos/github/pyradius/pyrad/badge.svg?branch=master
-    :target: https://coveralls.io/github/pyradius/pyrad?branch=master
+.. image:: https://github.com/nicholasamorim/pyrad2/workflows/Python%203.X%20test/badge.svg?branch=master
+    :target: https://github.com/nicholasamorim/pyrad2/actions?query=workflow
+.. image:: https://coveralls.io/repos/github/nicholasamorim/pyrad2/badge.svg?branch=master
+    :target: https://coveralls.io/github/nicholasamorim/pyrad2?branch=master
 .. image:: https://img.shields.io/pypi/v/pyrad.svg
     :target: https://pypi.python.org/pypi/pyrad
 .. image:: https://img.shields.io/pypi/pyversions/pyrad.svg
@@ -18,7 +18,12 @@
 Introduction
 ============
 
-pyrad is an implementation of a RADIUS client/server as described in RFC2865.
+This is a fork of pyrad aiming to make it compatible with Python 3.12+ and introduce bug fixes and features.
+
+The documentation below is from pyrad.
+
+
+pyrad2 is an implementation of a RADIUS client/server as described in RFC2865.
 It takes care of all the details like building RADIUS packets, sending
 them and decoding responses.
 
@@ -53,12 +58,13 @@ Here is an example of doing a authentication request::
 Requirements & Installation
 ===========================
 
-pyrad2 requires Python 3.12 or later
+pyrad2 requires Python 3.12 and uses `uv`.
 
-Installing is simple; pyrad uses the standard distutils system for installing
-Python modules::
 
-  python setup.py install
+Tests
+======
+
+Run `make test`
 
 
 Author, Copyright, Availability
@@ -75,4 +81,4 @@ The current version and documentation can be found on pypi:
 https://pypi.org/project/pyrad/
 
 Bugs and wishes can be submitted in the pyrad issue tracker on github:
-https://github.com/pyradius/pyrad/issues
+https://github.com/nicholasamorim/pyrad2/issues
