@@ -1,16 +1,7 @@
-[![image](https://github.com/nicholasamorim/pyrad2/workflows/Python%203.X%20test/badge.svg?branch=master)](https://github.com/nicholasamorim/pyrad2/actions?query=workflow)
-
-[![image](https://coveralls.io/repos/github/nicholasamorim/pyrad2/badge.svg?branch=master)](https://coveralls.io/github/nicholasamorim/pyrad2?branch=master)
-
-[![image](https://img.shields.io/pypi/v/pyrad.svg)](https://pypi.python.org/pypi/pyrad)
-
-[![image](https://img.shields.io/pypi/pyversions/pyrad.svg)](https://pypi.python.org/pypi/pyrad)
-
-[![image](https://img.shields.io/pypi/dm/pyrad.svg)](https://pypi.python.org/pypi/pyrad)
-
-[![Documentation Status](https://readthedocs.org/projects/pyradius-pyrad/badge/?version=latest)](https://pyradius-pyrad.readthedocs.io/en/latest/?badge=latest)
-
-[![image](https://img.shields.io/pypi/l/pyrad.svg)](https://pypi.python.org/pypi/pyrad)
+[![python](https://img.shields.io/badge/Python-3.12+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)]([https://github.com/psf/black](https://github.com/astral-sh/uv))
+[![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
 # Introduction
 
