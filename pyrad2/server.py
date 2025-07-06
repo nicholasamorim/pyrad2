@@ -28,7 +28,7 @@ class RemoteHost:
     """
 
     address: str
-    secret: str
+    secret: bytes
     name: str
     authport: int
     acctport: int
