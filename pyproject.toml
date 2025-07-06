@@ -13,6 +13,7 @@ dev = [
     "mypy>=1.16.1",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
+    "pytest-sugar>=1.0.0",
     "ruff>=0.12.2",
 ]
 
