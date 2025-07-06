@@ -5,6 +5,7 @@ from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
 
 
 def EncodeString(origstr: str) -> bytes:
+    """Encode a string to bytes, ensuring it is UTF-8 encoded."""
     if len(origstr) > 253:
         raise ValueError("Can only encode strings of <= 253 characters")
     if isinstance(origstr, str):
@@ -14,6 +15,7 @@ def EncodeString(origstr: str) -> bytes:
 
 
 def EncodeOctets(octetstring: str) -> str | bytes:
+    """Encode raw octet string (already in bytes)."""
     # Check for max length of the hex encoded with 0x prefix, as a sanity check
     if len(octetstring) > 508:
         raise ValueError("Can only encode strings of <= 253 characters")
@@ -39,12 +41,14 @@ def EncodeOctets(octetstring: str) -> str | bytes:
 
 
 def EncodeAddress(addr: str) -> bytes:
+    """Encode an IPv4 address (dotted string) to 4-byte format."""
     if not isinstance(addr, str):
         raise TypeError("Address has to be a string")
     return IPv4Address(addr).packed
 
 
 def EncodeIPv6Prefix(addr: str) -> bytes:
+    """Encode an IPv6 address and prefix length to 18-byte format."""
     if not isinstance(addr, str):
         raise TypeError("IPv6 Prefix has to be a string")
     ip = IPv6Network(addr, strict=False)
@@ -52,12 +56,14 @@ def EncodeIPv6Prefix(addr: str) -> bytes:
 
 
 def EncodeIPv6Address(addr: str) -> bytes:
+    """Encode an IPv6 address (as string) to 16-byte format."""
     if not isinstance(addr, str):
         raise TypeError("IPv6 Address has to be a string")
     return IPv6Address(addr).packed
 
 
 def EncodeAscendBinary(orig_str: str) -> bytes:
+    """Encode binary data in Ascend-specific format (length prefixed)."""
     """
     Format: List of type=value pairs separated by spaces.
 
@@ -156,6 +162,7 @@ def EncodeAscendBinary(orig_str: str) -> bytes:
 
 
 def EncodeInteger(num: int, format: str = "!I") -> bytes:
+    """Encode a 32-bit unsigned integer to 4-byte big-endian."""
     try:
         num = int(num)
     except (ValueError, TypeError):
@@ -164,6 +171,7 @@ def EncodeInteger(num: int, format: str = "!I") -> bytes:
 
 
 def EncodeInteger64(num: int, format: str = "!Q") -> bytes:
+    """Encode a 64-bit unsigned integer to 8-byte big-endian."""
     try:
         num = int(num)
     except (ValueError, TypeError):
@@ -172,24 +180,29 @@ def EncodeInteger64(num: int, format: str = "!Q") -> bytes:
 
 
 def EncodeDate(num: int) -> bytes:
+    """Encode a UNIX timestamp (int) to 4-byte format."""
     if not isinstance(num, int):
         raise TypeError("Can not encode non-integer as date")
     return struct.pack("!I", num)
 
 
 def DecodeString(orig_str: bytes) -> str:
+    """Decode UTF-8 bytes into a string."""
     return orig_str.decode("utf-8")
 
 
 def DecodeOctets(orig_bytes: bytes) -> bytes:
+    """Return bytes unchanged (octet format)."""
     return orig_bytes
 
 
 def DecodeAddress(addr: Buffer) -> str:
+    """Decode 4-byte data into an IPv4 dotted string."""
     return ".".join(map(str, struct.unpack("BBBB", addr)))
 
 
 def DecodeIPv6Prefix(addr: bytes | bytearray) -> str:
+    """Decode 18-byte IPv6 prefix format into address/prefix tuple."""
     addr = addr + b"\x00" * (18 - len(addr))
     _, length, prefix = ":".join(
         map("{:x}".format, struct.unpack("!BB" + "H" * 8, addr))
@@ -198,28 +211,34 @@ def DecodeIPv6Prefix(addr: bytes | bytearray) -> str:
 
 
 def DecodeIPv6Address(addr: bytes | bytearray) -> str:
+    """Decode 16-byte IPv6 address into a readable string."""
     addr = addr + b"\x00" * (16 - len(addr))
     prefix = ":".join(map("{:x}".format, struct.unpack("!" + "H" * 8, addr)))
     return str(IPv6Address(prefix))
 
 
 def DecodeAscendBinary(orig_bytes: bytes) -> bytes:
+    """Decode Ascend-specific binary format (length-prefixed)."""
     return orig_bytes
 
 
 def DecodeInteger(num: Buffer, format: str = "!I") -> bytes:
+    """Decode 4-byte big-endian unsigned integer."""
     return (struct.unpack(format, num))[0]
 
 
 def DecodeInteger64(num: Buffer, format: str = "!Q") -> bytes:
+    """Decode 8-byte big-endian unsigned integer."""
     return (struct.unpack(format, num))[0]
 
 
 def DecodeDate(num: Buffer) -> bytes:
+    """Decode 4-byte UNIX timestamp into an integer."""
     return (struct.unpack("!I", num))[0]
 
 
 def EncodeAttr(datatype: str, value) -> bytes | str:
+    """Encode a RADIUS attribute (type, value, length) into bytes."""
     if datatype == "string":
         return EncodeString(value)
     elif datatype == "octets":
@@ -249,6 +268,7 @@ def EncodeAttr(datatype: str, value) -> bytes | str:
 
 
 def DecodeAttr(datatype: str, value) -> bytes | str:
+    """Decode a RADIUS attribute from bytes into a type and value."""
     if datatype == "string":
         return DecodeString(value)
     elif datatype == "octets":
