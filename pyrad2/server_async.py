@@ -50,13 +50,10 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
         self.hosts = hosts
         self.server_type = server_type
         self.request_callback = request_callback
+        self.transport: asyncio.DatagramTransport
 
     def connection_made(self, transport: asyncio.BaseTransport):
-        # Keep MyPy happy
-        assert isinstance(transport, asyncio.DatagramTransport), (
-            "Expected DatagramTransport"
-        )
-        self.transport: asyncio.DatagramTransport = transport
+        self.transport = transport  # type: ignore
         logger.info("[{}:{}] Transport created", self.ip, self.port)
 
     def connection_lost(self, exc):
