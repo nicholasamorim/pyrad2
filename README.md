@@ -42,11 +42,11 @@ Here is an example of doing a authentication request:
 
 # Requirements & Installation
 
-pyrad2 requires Python 3.12 and uses [uv]{.title-ref}.
+pyrad2 requires Python 3.12 and uses [uv](https://github.com/astral-sh/uv).
 
 # Tests
 
-Run [make test]{.title-ref}
+Run `make test`
 
 # Author, Copyright, Availability
 
@@ -58,7 +58,7 @@ This project is licensed under a BSD license.
 Copyright and license information can be found in the LICENSE.txt file.
 
 The current version and documentation can be found on pypi:
-<https://pypi.org/project/pyrad/>
+<https://pypi.org/project/pyrad2/>
 
 Bugs and wishes can be submitted in the pyrad issue tracker on github:
 <https://github.com/nicholasamorim/pyrad2/issues>
