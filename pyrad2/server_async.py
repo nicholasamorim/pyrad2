@@ -1,5 +1,5 @@
 import asyncio
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
@@ -167,7 +167,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
         return self
 
 
-class ServerAsync(metaclass=ABCMeta):
+class ServerAsync(ABC):
     def __init__(
         self,
         auth_port: int = 1812,

@@ -44,7 +44,7 @@ class DictFile:
 
     __slots__ = "stack"
 
-    def __init__(self, fil: str | io.TextIOWrapper):
+    def __init__(self, fil: str | io.TextIOWrapper) -> None:
         """
         @param fil: a dictionary file to parse
         @type fil: string or file
@@ -52,7 +52,7 @@ class DictFile:
         self.stack: list[_Node] = []
         self.__ReadNode(fil)
 
-    def __ReadNode(self, fil: str | io.TextIOWrapper):
+    def __ReadNode(self, fil: str | io.TextIOWrapper) -> None:
         parentdir = self.__CurDir()
         if isinstance(fil, str):
             if os.path.isabs(fil):

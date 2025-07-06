@@ -30,9 +30,9 @@ class RemoteHost:
     address: str
     secret: bytes
     name: str
-    authport: int
-    acctport: int
-    coaport: int
+    authport: int = 1812
+    acctport: int = 1813
+    coaport: int = 3799
 
 
 class ServerPacketError(Exception):
@@ -95,11 +95,8 @@ class Server(host.Host):
         :type    coa_enabled: bool
         """
         super().__init__(authport, acctport, coaport, dict)
-        if hosts is None:
-            self.hosts = {}
-        else:
-            self.hosts = hosts
 
+        self.hosts = hosts or {}
         self.auth_enabled = auth_enabled
         self.authfds: list = []
         self.acct_enabled = acct_enabled

@@ -5,8 +5,10 @@ import select
 import socket
 import time
 import struct
+from typing import Optional
 from pyrad2 import host
 from pyrad2 import packet
+from pyrad2.dictionary import Dictionary
 
 EAP_CODE_REQUEST = 1
 EAP_CODE_RESPONSE = 2
@@ -32,14 +34,14 @@ class Client(host.Host):
 
     def __init__(
         self,
-        server,
-        authport=1812,
-        acctport=1813,
-        coaport=3799,
-        secret=b"",
-        dict=None,
-        retries=3,
-        timeout=5,
+        server: str,
+        authport: int = 1812,
+        acctport: int = 1813,
+        coaport: int = 3799,
+        secret: bytes = b"",
+        dict: Optional[Dictionary] = None,
+        retries: int = 3,
+        timeout: int = 5,
     ):
         """Constructor.
 
@@ -56,16 +58,16 @@ class Client(host.Host):
         :param     dict: RADIUS dictionary
         :type      dict: pyrad.dictionary.Dictionary
         """
-        host.Host.__init__(self, authport, acctport, coaport, dict)
+        super().__init__(authport, acctport, coaport, dict)
 
         self.server = server
         self.secret = secret
-        self._socket = None
         self.retries = retries
         self.timeout = timeout
         self._poll = select.poll()
+        self._socket: Optional[socket.socket] = None
 
-    def bind(self, addr):
+    def bind(self, addr: str) -> None:
         """Bind socket to an address.
         Binding the socket used for communicating to an address can be
         usefull when working on a machine with multiple addresses.
@@ -75,7 +77,10 @@ class Client(host.Host):
         """
         self._CloseSocket()
         self._SocketOpen()
-        self._socket.bind(addr)
+        if self._socket:
+            self._socket.bind(addr)
+        else:
+            raise RuntimeError("No socket present")
 
     def _SocketOpen(self) -> None:
         try:
@@ -103,7 +108,7 @@ class Client(host.Host):
         :return: a new empty packet instance
         :rtype:  pyrad.packet.AuthPacket
         """
-        return host.Host.CreateAuthPacket(self, secret=self.secret, **args)
+        return super().CreateAuthPacket(secret=self.secret, **args)
 
     def CreateAcctPacket(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
@@ -115,7 +120,7 @@ class Client(host.Host):
         :return: a new empty packet instance
         :rtype:  pyrad.packet.Packet
         """
-        return host.Host.CreateAcctPacket(self, secret=self.secret, **args)
+        return super().CreateAcctPacket(secret=self.secret, **args)
 
     def CreateCoAPacket(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
@@ -127,7 +132,7 @@ class Client(host.Host):
         :return: a new empty packet instance
         :rtype:  pyrad.packet.Packet
         """
-        return host.Host.CreateCoAPacket(self, secret=self.secret, **args)
+        return super().CreateCoAPacket(secret=self.secret, **args)
 
     def _SendPacket(self, pkt: packet.PacketImplementation, port: int):
         """Send a packet to a RADIUS server.
@@ -151,6 +156,9 @@ class Client(host.Host):
 
             now = time.time()
             waitto = now + self.timeout
+
+            if not self._socket:
+                raise RuntimeError("No socket present")
 
             self._socket.sendto(pkt.RequestPacket(), (self.server, port))
 
