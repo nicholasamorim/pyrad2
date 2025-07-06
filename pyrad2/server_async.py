@@ -1,15 +1,12 @@
-# server_async.py
-#
-# Copyright 2018-2019 Geaaru <geaaru@gmail.com>
-
 import asyncio
-import logging
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from enum import Enum
+from typing import Dict, Optional
 
 from loguru import logger
 
+from pyrad2.dictionary import Dictionary
 from pyrad2.packet import (
     AccessAccept,
     AccessReject,
@@ -28,7 +25,7 @@ from pyrad2.packet import (
     Packet,
     PacketError,
 )
-from pyrad2.server import ServerPacketError
+from pyrad2.server import RemoteHost, ServerPacketError
 
 
 class ServerType(Enum):
@@ -182,21 +179,20 @@ class DatagramProtocolServer(asyncio.Protocol):
 class ServerAsync(metaclass=ABCMeta):
     def __init__(
         self,
-        auth_port=1812,
-        acct_port=1813,
-        coa_port=3799,
-        hosts=None,
-        dictionary=None,
+        auth_port: int = 1812,
+        acct_port: int = 1813,
+        coa_port: int = 3799,
+        hosts: Optional[Dict[str, RemoteHost]] = None,
+        dictionary: Optional[Dictionary] = None,
         loop=None,
-        logger_name="pyrad",
-        enable_pkt_verify=False,
-        debug=False,
+        enable_pkt_verify: bool = False,
+        debug: bool = False,
     ):
         if not loop:
             self.loop = asyncio.get_event_loop()
         else:
             self.loop = loop
-        self.logger = logging.getLogger(logger_name)
+        self.logger = logger
 
         if hosts is None:
             self.hosts = {}
@@ -204,20 +200,22 @@ class ServerAsync(metaclass=ABCMeta):
             self.hosts = hosts
 
         self.auth_port = auth_port
-        self.auth_protocols = []
+        self.auth_protocols: list = []
 
         self.acct_port = acct_port
-        self.acct_protocols = []
+        self.acct_protocols: list = []
 
         self.coa_port = coa_port
-        self.coa_protocols = []
+        self.coa_protocols: list = []
 
         self.dict = dictionary
         self.enable_pkt_verify = enable_pkt_verify
 
         self.debug = debug
 
-    def __request_handler__(self, protocol, req, addr):
+    def __request_handler__(
+        self, protocol: DatagramProtocolServer, req: Packet, addr: str
+    ):
         try:
             if protocol.server_type == ServerType.Acct:
                 self.handle_acct_packet(protocol, req, addr)
@@ -244,7 +242,7 @@ class ServerAsync(metaclass=ABCMeta):
                     "[%s:%s] Unexpected error: %s", protocol.ip, protocol.port, exc
                 )
 
-    def __is_present_proto__(self, ip, port):
+    def __is_present_proto__(self, ip: str, port: int) -> bool:
         if port == self.auth_port:
             for proto in self.auth_protocols:
                 if proto.ip == ip:
@@ -261,7 +259,7 @@ class ServerAsync(metaclass=ABCMeta):
 
     # noinspection PyPep8Naming
     @staticmethod
-    def CreateReplyPacket(pkt, **attributes):
+    def CreateReplyPacket(pkt: Packet, **attributes) -> Packet:
         """Create a reply packet.
         Create a new packet which can be returned as a reply to a received
         packet.
@@ -273,8 +271,12 @@ class ServerAsync(metaclass=ABCMeta):
         return reply
 
     async def initialize_transports(
-        self, enable_acct=False, enable_auth=False, enable_coa=False, addresses=None
-    ):
+        self,
+        enable_acct: bool = False,
+        enable_auth: bool = False,
+        enable_coa: bool = False,
+        addresses: Optional[list[str]] = None,
+    ) -> None:
         task_list = []
 
         if not enable_acct and not enable_auth and not enable_coa:
@@ -345,8 +347,11 @@ class ServerAsync(metaclass=ABCMeta):
 
     # noinspection SpellCheckingInspection
     async def deinitialize_transports(
-        self, deinit_coa=True, deinit_auth=True, deinit_acct=True
-    ):
+        self,
+        deinit_coa: bool = True,
+        deinit_auth: bool = True,
+        deinit_acct: bool = True,
+    ) -> None:
         if deinit_coa:
             for proto in self.coa_protocols:
                 await proto.close_transport()
@@ -369,17 +374,17 @@ class ServerAsync(metaclass=ABCMeta):
             self.acct_protocols = []
 
     @abstractmethod
-    def handle_auth_packet(self, protocol, pkt, addr):
+    def handle_auth_packet(self, protocol, pkt: Packet, addr: str):
         pass
 
     @abstractmethod
-    def handle_acct_packet(self, protocol, pkt, addr):
+    def handle_acct_packet(self, protocol, pkt: Packet, addr: str):
         pass
 
     @abstractmethod
-    def handle_coa_packet(self, protocol, pkt, addr):
+    def handle_coa_packet(self, protocol, pkt: Packet, addr: str):
         pass
 
     @abstractmethod
-    def handle_disconnect_packet(self, protocol, pkt, addr):
+    def handle_disconnect_packet(self, protocol, pkt: Packet, addr: str):
         pass

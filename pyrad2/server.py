@@ -1,38 +1,38 @@
 import select
 import socket
+from dataclasses import dataclass
+from typing import Callable, Dict, Optional
 
 from loguru import logger
 
 from pyrad2 import host, packet
+from pyrad2.dictionary import Dictionary
 
 
+@dataclass
 class RemoteHost:
-    """Remote RADIUS capable host we can talk to."""
+    """Remote RADIUS capable host we can talk to.
 
-    def __init__(
-        self, address, secret, name, authport=1812, acctport=1813, coaport=3799
-    ):
-        """Constructor.
+    :param   address: IP address
+    :type    address: string
+    :param    secret: RADIUS secret
+    :type     secret: string
+    :param      name: short name (used for logging only)
+    :type       name: string
+    :param  authport: port used for authentication packets
+    :type   authport: integer
+    :param  acctport: port used for accounting packets
+    :type   acctport: integer
+    :param   coaport: port used for CoA packets
+    :type    coaport: integer
+    """
 
-        :param   address: IP address
-        :type    address: string
-        :param    secret: RADIUS secret
-        :type     secret: string
-        :param      name: short name (used for logging only)
-        :type       name: string
-        :param  authport: port used for authentication packets
-        :type   authport: integer
-        :param  acctport: port used for accounting packets
-        :type   acctport: integer
-        :param   coaport: port used for CoA packets
-        :type    coaport: integer
-        """
-        self.address = address
-        self.secret = secret
-        self.authport = authport
-        self.acctport = acctport
-        self.coaport = coaport
-        self.name = name
+    address: str
+    secret: str
+    name: str
+    authport: int
+    acctport: int
+    coaport: int
 
 
 class ServerPacketError(Exception):
@@ -63,15 +63,15 @@ class Server(host.Host):
 
     def __init__(
         self,
-        addresses=[],
-        authport=1812,
-        acctport=1813,
-        coaport=3799,
-        hosts=None,
-        dict=None,
-        auth_enabled=True,
-        acct_enabled=True,
-        coa_enabled=False,
+        addresses: list[str] = [],
+        authport: int = 1812,
+        acctport: int = 1813,
+        coaport: int = 3799,
+        hosts: Optional[dict] = None,
+        dict: Optional[Dictionary] = None,
+        auth_enabled: bool = True,
+        acct_enabled: bool = True,
+        coa_enabled: bool = False,
     ):
         """Constructor.
 
@@ -94,23 +94,25 @@ class Server(host.Host):
         :param   coa_enabled: enable coa server (default False)
         :type    coa_enabled: bool
         """
-        host.Host.__init__(self, authport, acctport, coaport, dict)
+        super().__init__(authport, acctport, coaport, dict)
         if hosts is None:
             self.hosts = {}
         else:
             self.hosts = hosts
 
         self.auth_enabled = auth_enabled
-        self.authfds = []
+        self.authfds: list = []
         self.acct_enabled = acct_enabled
-        self.acctfds = []
+        self.acctfds: list = []
         self.coa_enabled = coa_enabled
-        self.coafds = []
+        self.coafds: list = []
 
         for addr in addresses:
             self.BindToAddress(addr)
 
-    def _GetAddrInfo(self, addr):
+    def _GetAddrInfo(
+        self, addr: str
+    ) -> set[tuple[socket.AddressFamily, str | int]] | list:
         """Use getaddrinfo to lookup all addresses for each address.
 
         Returns a list of tuples or an empty list:
@@ -130,7 +132,7 @@ class Server(host.Host):
 
         return results
 
-    def BindToAddress(self, addr):
+    def BindToAddress(self, addr: str) -> None:
         """Add an address to listen on a specific interface.
         String "0.0.0.0" indicates you want to listen on all interfaces.
 
@@ -157,7 +159,7 @@ class Server(host.Host):
                 coafd.bind((address, self.coaport))
                 self.coafds.append(coafd)
 
-    def HandleAuthPacket(self, pkt):
+    def HandleAuthPacket(self, pkt: packet.Packet):
         """Authentication packet handler.
         This is an empty function that is called when a valid
         authentication packet has been received. It can be overriden in
@@ -167,7 +169,7 @@ class Server(host.Host):
         :type  pkt: Packet class instance
         """
 
-    def HandleAcctPacket(self, pkt):
+    def HandleAcctPacket(self, pkt: packet.Packet):
         """Accounting packet handler.
         This is an empty function that is called when a valid
         accounting packet has been received. It can be overriden in
@@ -177,7 +179,7 @@ class Server(host.Host):
         :type  pkt: Packet class instance
         """
 
-    def HandleCoaPacket(self, pkt):
+    def HandleCoaPacket(self, pkt: packet.Packet):
         """CoA packet handler.
         This is an empty function that is called when a valid
         accounting packet has been received. It can be overriden in
@@ -187,7 +189,7 @@ class Server(host.Host):
         :type  pkt: Packet class instance
         """
 
-    def HandleDisconnectPacket(self, pkt):
+    def HandleDisconnectPacket(self, pkt: packet.Packet):
         """CoA packet handler.
         This is an empty function that is called when a valid
         accounting packet has been received. It can be overriden in
@@ -197,7 +199,7 @@ class Server(host.Host):
         :type  pkt: Packet class instance
         """
 
-    def _AddSecret(self, pkt):
+    def _AddSecret(self, pkt: packet.Packet) -> None:
         """Add secret to packets received and raise ServerPacketError
         for unknown hosts.
 
@@ -211,7 +213,7 @@ class Server(host.Host):
         else:
             raise ServerPacketError("Received packet from unknown host")
 
-    def _HandleAuthPacket(self, pkt):
+    def _HandleAuthPacket(self, pkt: packet.Packet) -> None:
         """Process a packet received on the authentication port.
         If this packet should be dropped instead of processed a
         ServerPacketError exception should be raised. The main loop will
@@ -227,7 +229,7 @@ class Server(host.Host):
             )
         self.HandleAuthPacket(pkt)
 
-    def _HandleAcctPacket(self, pkt):
+    def _HandleAcctPacket(self, pkt: packet.Packet) -> None:
         """Process a packet received on the accounting port.
         If this packet should be dropped instead of processed a
         ServerPacketError exception should be raised. The main loop will
@@ -241,7 +243,7 @@ class Server(host.Host):
             raise ServerPacketError("Received non-accounting packet on accounting port")
         self.HandleAcctPacket(pkt)
 
-    def _HandleCoaPacket(self, pkt):
+    def _HandleCoaPacket(self, pkt: packet.Packet) -> None:
         """Process a packet received on the coa port.
         If this packet should be dropped instead of processed a
         ServerPacketError exception should be raised. The main loop will
@@ -258,7 +260,7 @@ class Server(host.Host):
         else:
             raise ServerPacketError("Received non-coa packet on coa port")
 
-    def _GrabPacket(self, pktgen, fd):
+    def _GrabPacket(self, pktgen: Callable, fd: socket.socket) -> packet.Packet:
         """Read a packet from a network connection.
         This method assumes there is data waiting for to be read.
 
@@ -273,7 +275,7 @@ class Server(host.Host):
         pkt.fd = fd
         return pkt
 
-    def _PrepareSockets(self):
+    def _PrepareSockets(self) -> None:
         """Prepare all sockets to receive packets."""
         for fd in self.authfds + self.acctfds + self.coafds:
             self._fdmap[fd.fileno()] = fd
@@ -287,7 +289,7 @@ class Server(host.Host):
         if self.coa_enabled:
             self._realcoafds = list(map(lambda x: x.fileno(), self.coafds))
 
-    def CreateReplyPacket(self, pkt, **attributes):
+    def CreateReplyPacket(self, pkt: packet.Packet, **attributes) -> packet.Packet:
         """Create a reply packet.
         Create a new packet which can be returned as a reply to a received
         packet.
@@ -299,7 +301,7 @@ class Server(host.Host):
         reply.source = pkt.source
         return reply
 
-    def _ProcessInput(self, fd):
+    def _ProcessInput(self, fd: socket.socket) -> None:
         """Process available data.
         If this packet should be dropped instead of processed a
         PacketError exception should be raised. The main loop will
@@ -330,14 +332,14 @@ class Server(host.Host):
         else:
             raise ServerPacketError("Received packet for unknown handler")
 
-    def Run(self):
+    def Run(self) -> None:
         """Main loop.
         This method is the main loop for a RADIUS server. It waits
         for packets to arrive via the network and calls other methods
         to process them.
         """
         self._poll = select.poll()
-        self._fdmap = {}
+        self._fdmap: Dict[int, socket.socket] = {}
         self._PrepareSockets()
 
         while True:

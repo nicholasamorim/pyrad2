@@ -1,19 +1,21 @@
 __docformat__ = "epytext en"
 
-from datetime import datetime
 import asyncio
 import logging
 import random
+from datetime import datetime
 
-from pyrad2.packet import Packet, AuthPacket, AcctPacket, CoAPacket
+from loguru import logger
+
+from pyrad2.packet import AcctPacket, AuthPacket, CoAPacket, Packet
 
 
 class DatagramProtocolClient(asyncio.Protocol):
-    def __init__(self, server, port, logger, client, retries=3, timeout=30):
+    def __init__(self, server, port, client, retries=3, timeout=30):
         self.transport = None
         self.port = port
-        self.server = server
         self.logger = logger
+        self.server = server
         self.retries = retries
         self.timeout = timeout
         self.client = client

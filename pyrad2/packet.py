@@ -100,6 +100,9 @@ class Packet(OrderedDict):
         self.message_authenticator = None
         self.raw_packet = None
 
+        # injected by server when grabbing packet
+        self.source: list[str]
+
         if "dict" in attributes:
             self.dict = attributes["dict"]
 

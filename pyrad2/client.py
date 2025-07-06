@@ -77,7 +77,7 @@ class Client(host.Host):
         self._SocketOpen()
         self._socket.bind(addr)
 
-    def _SocketOpen(self):
+    def _SocketOpen(self) -> None:
         try:
             family = socket.getaddrinfo(self.server, 80)[0][0]
         except Exception:
@@ -87,13 +87,13 @@ class Client(host.Host):
             self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._poll.register(self._socket, select.POLLIN)
 
-    def _CloseSocket(self):
+    def _CloseSocket(self) -> None:
         if self._socket:
             self._poll.unregister(self._socket)
             self._socket.close()
             self._socket = None
 
-    def CreateAuthPacket(self, **args):
+    def CreateAuthPacket(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS packet which can
         be used to communicate with the RADIUS server this client
@@ -105,7 +105,7 @@ class Client(host.Host):
         """
         return host.Host.CreateAuthPacket(self, secret=self.secret, **args)
 
-    def CreateAcctPacket(self, **args):
+    def CreateAcctPacket(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS packet which can
         be used to communicate with the RADIUS server this client
@@ -117,7 +117,7 @@ class Client(host.Host):
         """
         return host.Host.CreateAcctPacket(self, secret=self.secret, **args)
 
-    def CreateCoAPacket(self, **args):
+    def CreateCoAPacket(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS packet which can
         be used to communicate with the RADIUS server this client
@@ -129,7 +129,7 @@ class Client(host.Host):
         """
         return host.Host.CreateCoAPacket(self, secret=self.secret, **args)
 
-    def _SendPacket(self, pkt, port):
+    def _SendPacket(self, pkt: packet.PacketImplementation, port: int):
         """Send a packet to a RADIUS server.
 
         :param pkt:  the packet to send
@@ -174,7 +174,7 @@ class Client(host.Host):
 
         raise Timeout
 
-    def SendPacket(self, pkt):
+    def SendPacket(self, pkt: packet.PacketImplementation):  # type: ignore
         """Send a packet to a RADIUS server.
 
         :param pkt: the packet to send
