@@ -4,11 +4,11 @@
 #
 # A RADIUS proxy as defined in RFC 2138
 
-from pyrad2.server import ServerPacketError
-from pyrad2.server import Server
-from pyrad2 import packet
 import select
 import socket
+
+from pyrad2 import packet
+from pyrad2.server import Server, ServerPacketError
 
 
 class Proxy(Server):
@@ -21,14 +21,14 @@ class Proxy(Server):
     """
 
     def _PrepareSockets(self):
-        Server._PrepareSockets(self)
+        super()._PrepareSockets()
         self._proxyfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._fdmap[self._proxyfd.fileno()] = self._proxyfd
         self._poll.register(
             self._proxyfd.fileno(), (select.POLLIN | select.POLLPRI | select.POLLERR)
         )
 
-    def _HandleProxyPacket(self, pkt):
+    def _HandleProxyPacket(self, pkt: packet.Packet) -> None:
         """Process a packet received on the reply socket.
         If this packet should be dropped instead of processed a
         :obj:`ServerPacketError` exception should be raised. The main loop
@@ -48,7 +48,7 @@ class Proxy(Server):
         ]:
             raise ServerPacketError("Received non-response on proxy socket")
 
-    def _ProcessInput(self, fd):
+    def _ProcessInput(self, fd: socket.socket) -> None:
         """Process available data.
         If this packet should be dropped instead of processed a
         `ServerPacketError` exception should be raised. The main loop
