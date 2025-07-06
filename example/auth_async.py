@@ -1,14 +1,14 @@
 #!/usr/bin/python
 
 import asyncio
-
-import logging
 import traceback
-from pyrad2.dictionary import Dictionary
+
+from loguru import logger
+
 from pyrad2.client_async import ClientAsync
+from pyrad2.dictionary import Dictionary
 from pyrad2.packet import AccessAccept
 
-logging.basicConfig(level="DEBUG", format="%(asctime)s [%(levelname)-8s] %(message)s")
 client = ClientAsync(
     server="localhost",
     secret=b"Kah3choteereethiejeimaeziecumi",
@@ -35,13 +35,13 @@ def create_request(client, user):
 
 def print_reply(reply):
     if reply.code == AccessAccept:
-        print("Access accepted")
+        logger.info("Access accepted")
     else:
-        print("Access denied")
+        logger.info("Access denied")
 
-    print("Attributes returned by server:")
+    logger.info("Attributes returned by server:")
     for i in reply.keys():
-        print("{}: {}".format(i, reply[i]))
+        logger.info("{}: {}", i, reply[i])
 
 
 def test_auth1():
@@ -79,28 +79,28 @@ def test_auth1():
         )
 
         if future.exception():
-            print("EXCEPTION ", future.exception())
+            logger.error("EXCEPTION ", future.exception())
         else:
             reply = future.result()
 
             if reply.code == AccessAccept:
-                print("Access accepted")
+                logger.info("Access accepted")
             else:
-                print("Access denied")
+                logger.info("Access denied")
 
-            print("Attributes returned by server:")
+            logger.info("Attributes returned by server:")
             for i in reply.keys():
-                print("{}: {}".format(i, reply[i]))
+                logger.info("{}: {}", i, reply[i])
 
         # Close transports
         loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
-        print("END")
+        logger.info("END")
 
         del client
     except Exception as exc:
-        global client
-        print("Error: ", exc)
-        print("\n".join(traceback.format_exc().splitlines()))
+        # global client
+        logger.error("Error: {}", exc)
+        logger.erorr("\n".join(traceback.format_exc().splitlines()))
         # Close transports
         loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
 
@@ -108,7 +108,7 @@ def test_auth1():
 
 
 def test_multi_auth():
-    global client
+    # global client
 
     try:
         # Initialize transports
@@ -137,19 +137,19 @@ def test_multi_auth():
 
         for future in reqs:
             if future.exception():
-                print("EXCEPTION ", future.exception())
+                logger.error("EXCEPTION {}", future.exception())
             else:
                 reply = future.result()
                 print_reply(reply)
 
         # Close transports
         loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
-        print("END")
+        logger.info("END")
 
         del client
     except Exception as exc:
-        global client
-        print("Error: ", exc)
+        # global client
+        logger.error("Error: ", exc)
         print("\n".join(traceback.format_exc().splitlines()))
         # Close transports
         loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))

@@ -1,7 +1,6 @@
 __docformat__ = "epytext en"
 
 import asyncio
-import logging
 import random
 from datetime import datetime
 
@@ -14,7 +13,6 @@ class DatagramProtocolClient(asyncio.Protocol):
     def __init__(self, server, port, client, retries=3, timeout=30):
         self.transport = None
         self.port = port
-        self.logger = logger
         self.server = server
         self.retries = retries
         self.timeout = timeout
@@ -40,8 +38,8 @@ class DatagramProtocolClient(asyncio.Protocol):
                     secs = (req["send_date"] - now).seconds
                     if secs > self.timeout:
                         if req["retries"] == self.retries:
-                            self.logger.debug(
-                                "[%s:%d] For request %d execute all retries",
+                            logger.debug(
+                                "[{}:{}] For request {} execute all retries",
                                 self.server,
                                 self.port,
                                 id,
@@ -54,8 +52,8 @@ class DatagramProtocolClient(asyncio.Protocol):
                             # Send again packet
                             req["send_date"] = now
                             req["retries"] += 1
-                            self.logger.debug(
-                                "[%s:%d] For request %d execute retry %d",
+                            logger.debug(
+                                "[{}:{}] For request {} execute retry {}",
                                 self.server,
                                 self.port,
                                 id,
@@ -94,8 +92,8 @@ class DatagramProtocolClient(asyncio.Protocol):
     def connection_made(self, transport):
         self.transport = transport
         socket = transport.get_extra_info("socket")
-        self.logger.info(
-            "[%s:%d] Transport created with binding in %s:%d",
+        logger.info(
+            "[{}:{}] Transport created with binding in {}:{}",
             self.server,
             self.port,
             socket.getsockname()[0],
@@ -109,15 +107,13 @@ class DatagramProtocolClient(asyncio.Protocol):
         asyncio.set_event_loop(loop=pre_loop)
 
     def error_received(self, exc):
-        self.logger.error("[%s:%d] Error received: %s", self.server, self.port, exc)
+        logger.error("[{}:{}] Error received: {}", self.server, self.port, exc)
 
     def connection_lost(self, exc):
         if exc:
-            self.logger.warn(
-                "[%s:%d] Connection lost: %s", self.server, self.port, str(exc)
-            )
+            logger.warn("[{}:{}] Connection lost: {}", self.server, self.port, str(exc))
         else:
-            self.logger.info("[%s:%d] Transport closed", self.server, self.port)
+            logger.info("[{}:{}] Transport closed", self.server, self.port)
 
     # noinspection PyUnusedLocal
     def datagram_received(self, data, addr):
@@ -136,26 +132,26 @@ class DatagramProtocolClient(asyncio.Protocol):
                     # Remove request for map
                     del self.pending_requests[reply.id]
                 else:
-                    self.logger.warn(
-                        "[%s:%d] Ignore invalid reply for id %d: %s",
+                    logger.warn(
+                        "[{}:{}] Ignore invalid reply for id {}: {}",
                         self.server,
                         self.port,
                         reply.id,
                         data,
                     )
             else:
-                self.logger.warn(
-                    "[%s:%d] Ignore invalid reply: %s", self.server, self.port, data
+                logger.warn(
+                    "[{}:{}] Ignore invalid reply: {}", self.server, self.port, data
                 )
 
         except Exception as exc:
-            self.logger.error(
-                "[%s:%d] Error on decode packet: %s", self.server, self.port, exc
+            logger.error(
+                "[{}:{}] Error on decode packet: {}", self.server, self.port, exc
             )
 
     async def close_transport(self):
         if self.transport:
-            self.logger.debug("[%s:%d] Closing transport...", self.server, self.port)
+            logger.debug("[{}:{}] Closing transport...", self.server, self.port)
             self.transport.close()
             self.transport = None
         if self.timeout_future:
@@ -199,7 +195,6 @@ class ClientAsync:
         loop=None,
         retries=3,
         timeout=30,
-        logger_name="pyrad",
     ):
         """Constructor.
 
@@ -222,7 +217,6 @@ class ClientAsync:
             self.loop = asyncio.get_event_loop()
         else:
             self.loop = loop
-        self.logger = logging.getLogger(logger_name)
 
         self.server = server
         self.secret = secret
@@ -258,7 +252,6 @@ class ClientAsync:
             self.protocol_acct = DatagramProtocolClient(
                 self.server,
                 self.acct_port,
-                self.logger,
                 self,
                 retries=self.retries,
                 timeout=self.timeout,
@@ -279,7 +272,6 @@ class ClientAsync:
             self.protocol_auth = DatagramProtocolClient(
                 self.server,
                 self.auth_port,
-                self.logger,
                 self,
                 retries=self.retries,
                 timeout=self.timeout,
@@ -300,7 +292,6 @@ class ClientAsync:
             self.protocol_coa = DatagramProtocolClient(
                 self.server,
                 self.coa_port,
-                self.logger,
                 self,
                 retries=self.retries,
                 timeout=self.timeout,
