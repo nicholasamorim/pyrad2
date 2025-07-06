@@ -44,10 +44,8 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
         hosts: dict[str, RemoteHost],
         request_callback: Callable,
     ):
-        self.transport
         self.ip = ip
         self.port = port
-        self.logger = logger
         self.server = server
         self.hosts = hosts
         self.server_type = server_type
@@ -59,32 +57,32 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
             "Expected DatagramTransport"
         )
         self.transport: asyncio.DatagramTransport = transport
-        self.logger.info("[{}:{}] Transport created", self.ip, self.port)
+        logger.info("[{}:{}] Transport created", self.ip, self.port)
 
     def connection_lost(self, exc):
         if exc:
-            self.logger.warning("[{}:{}] Connection lost: {}", self.ip, self.port, exc)
+            logger.warning("[{}:{}] Connection lost: {}", self.ip, self.port, exc)
         else:
-            self.logger.info("[{}:{}] Transport closed", self.ip, self.port)
+            logger.info("[{}:{}] Transport closed", self.ip, self.port)
 
     def send_response(self, reply: Packet, addr: str):
         self.transport.sendto(reply.ReplyPacket(), addr)
 
     def datagram_received(self, data, addr: tuple[str | Any, int]):
-        self.logger.debug(
+        logger.debug(
             "[{}:{}] Received {} bytes from {}", self.ip, self.port, len(data), addr
         )
         receive_date = datetime.utcnow()
 
         remote_host = self.hosts.get(addr[0], self.hosts.get("0.0.0.0"))
         if not remote_host:
-            self.logger.warning(
+            logger.warning(
                 "[{}:{}] Drop packet from unknown source {}", self.ip, self.port, addr
             )
             return
 
         try:
-            self.logger.debug(
+            logger.debug(
                 "[{}:{}] Received from {} packet: {}",
                 self.ip,
                 self.port,
@@ -134,11 +132,11 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
             self.request_callback(self, req, addr)
         except Exception as exc:
             if self.server.debug:
-                self.logger.exception(
+                logger.exception(
                     "[{}:{}] Error for packet from {}", self.ip, self.port, addr
                 )
             else:
-                self.logger.error(
+                logger.error(
                     "[{}:{}] Error for packet from {}: {}",
                     self.ip,
                     self.port,
@@ -148,7 +146,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
 
         process_date = datetime.utcnow()
         elapsed = (process_date - receive_date).microseconds / 1000
-        self.logger.debug(
+        logger.debug(
             "[{}:{}] Request from {} processed in {} ms",
             self.ip,
             self.port,
@@ -157,11 +155,11 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
         )
 
     def error_received(self, exc):
-        self.logger.error("[{}:{}] Error received: {}", self.ip, self.port, exc)
+        logger.error("[{}:{}] Error received: {}", self.ip, self.port, exc)
 
     async def close_transport(self):
         if self.transport:
-            self.logger.debug("[{}:{}] Close transport...", self.ip, self.port)
+            logger.debug("[{}:{}] Close transport...", self.ip, self.port)
             self.transport.close()
             self.transport = None
 
@@ -180,8 +178,6 @@ class ServerAsync(metaclass=ABCMeta):
         enable_pkt_verify: bool = False,
         debug: bool = False,
     ):
-        self.loop = asyncio.get_running_loop()
-        self.logger = logger
         self.hosts = hosts or {}
         self.dict = dictionary
         self.enable_pkt_verify = enable_pkt_verify
@@ -213,9 +209,9 @@ class ServerAsync(metaclass=ABCMeta):
         except Exception as exc:
             msg = "[{}:{}] Unexpected error: {}".format(protocol.ip, protocol.port, exc)
             if self.debug:
-                self.logger.exception(msg, protocol.ip, protocol.port, exc)
+                logger.exception(msg, protocol.ip, protocol.port, exc)
             else:
-                self.logger.error(msg, protocol.ip, protocol.port, exc)
+                logger.error(msg, protocol.ip, protocol.port, exc)
 
     async def initialize_transports(
         self, *, enable_acct=False, enable_auth=False, enable_coa=False, addresses=None
@@ -254,7 +250,7 @@ class ServerAsync(metaclass=ABCMeta):
         protocol = DatagramProtocolServer(
             ip, port, self, server_type, self.hosts, self._request_handler
         )
-        await self.loop.create_datagram_endpoint(
+        await asyncio.get_running_loop().create_datagram_endpoint(
             lambda: protocol, local_addr=(ip, port), reuse_port=True
         )
         proto_list.append(protocol)
