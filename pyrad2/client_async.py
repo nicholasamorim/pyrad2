@@ -3,15 +3,24 @@ __docformat__ = "epytext en"
 import asyncio
 import random
 from datetime import datetime
+from typing import Optional
 
 from loguru import logger
 
-from pyrad2.packet import AcctPacket, AuthPacket, CoAPacket, Packet
+from pyrad2.dictionary import Dictionary
+from pyrad2.packet import (
+    AcctPacket,
+    AuthPacket,
+    CoAPacket,
+    Packet,
+    PacketImplementation,
+)
 
 
 class DatagramProtocolClient(asyncio.Protocol):
-    def __init__(self, server, port, client, retries=3, timeout=30):
-        self.transport = None
+    def __init__(
+        self, server: str, port: int, client, retries: int = 3, timeout: int = 30
+    ):
         self.port = port
         self.server = server
         self.retries = retries
@@ -19,7 +28,7 @@ class DatagramProtocolClient(asyncio.Protocol):
         self.client = client
 
         # Map of pending requests
-        self.pending_requests = {}
+        self.pending_requests: dict = {}
 
         # Use cryptographic-safe random generator as provided by the OS.
         random_generator = random.SystemRandom()
@@ -73,7 +82,7 @@ class DatagramProtocolClient(asyncio.Protocol):
         except asyncio.CancelledError:
             pass
 
-    def send_packet(self, packet, future):
+    def send_packet(self, packet: PacketImplementation, future):
         if packet.id in self.pending_requests:
             raise Exception("Packet with id %d already present" % packet.id)
 
@@ -89,8 +98,12 @@ class DatagramProtocolClient(asyncio.Protocol):
         # In queue packet raw on socket buffer
         self.transport.sendto(packet.RequestPacket())
 
-    def connection_made(self, transport):
-        self.transport = transport
+    def connection_made(self, transport: asyncio.BaseTransport):
+        assert isinstance(transport, asyncio.DatagramTransport), (
+            "Expected DatagramTransport"
+        )
+        self.transport: asyncio.DatagramTransport = transport
+
         socket = transport.get_extra_info("socket")
         logger.info(
             "[{}:{}] Transport created with binding in {}:{}",
@@ -106,7 +119,7 @@ class DatagramProtocolClient(asyncio.Protocol):
         self.timeout_future = asyncio.ensure_future(self.__timeout_handler__())
         asyncio.set_event_loop(loop=pre_loop)
 
-    def error_received(self, exc):
+    def error_received(self, exc: Exception):
         logger.error("[{}:{}] Error received: {}", self.server, self.port, exc)
 
     def connection_lost(self, exc):
@@ -116,7 +129,7 @@ class DatagramProtocolClient(asyncio.Protocol):
             logger.info("[{}:{}] Transport closed", self.server, self.port)
 
     # noinspection PyUnusedLocal
-    def datagram_received(self, data, addr):
+    def datagram_received(self, data: bytes, addr: str):
         try:
             reply = Packet(packet=data, dict=self.client.dict)
 
@@ -132,7 +145,7 @@ class DatagramProtocolClient(asyncio.Protocol):
                     # Remove request for map
                     del self.pending_requests[reply.id]
                 else:
-                    logger.warn(
+                    logger.warning(
                         "[{}:{}] Ignore invalid reply for id {}: {}",
                         self.server,
                         self.port,
@@ -140,7 +153,7 @@ class DatagramProtocolClient(asyncio.Protocol):
                         data,
                     )
             else:
-                logger.warn(
+                logger.warning(
                     "[{}:{}] Ignore invalid reply: {}", self.server, self.port, data
                 )
 
@@ -149,17 +162,17 @@ class DatagramProtocolClient(asyncio.Protocol):
                 "[{}:{}] Error on decode packet: {}", self.server, self.port, exc
             )
 
-    async def close_transport(self):
+    async def close_transport(self) -> None:
         if self.transport:
             logger.debug("[{}:{}] Closing transport...", self.server, self.port)
             self.transport.close()
-            self.transport = None
+            self.transport = None  # type: ignore
         if self.timeout_future:
             self.timeout_future.cancel()
             await self.timeout_future
             self.timeout_future = None
 
-    def create_id(self):
+    def create_id(self) -> int:
         self.packet_id = (self.packet_id + 1) % 256
         return self.packet_id
 
@@ -183,16 +196,14 @@ class ClientAsync:
     :type timeout: integer
     """
 
-    # noinspection PyShadowingBuiltins
     def __init__(
         self,
-        server,
-        auth_port=1812,
-        acct_port=1813,
-        coa_port=3799,
-        secret=b"",
-        dict=None,
-        loop=None,
+        server: str,
+        auth_port: int = 1812,
+        acct_port: int = 1813,
+        coa_port: int = 3799,
+        secret: bytes = b"",
+        dict: Optional[Dictionary] = None,
         retries=3,
         timeout=30,
     ):
@@ -213,11 +224,6 @@ class ClientAsync:
         :param      loop: Python loop handler
         :type       loop:  asyncio event loop
         """
-        if not loop:
-            self.loop = asyncio.get_event_loop()
-        else:
-            self.loop = loop
-
         self.server = server
         self.secret = secret
         self.retries = retries
@@ -248,6 +254,7 @@ class ClientAsync:
         if not enable_acct and not enable_auth and not enable_coa:
             raise Exception("No transports selected")
 
+        loop = asyncio.get_event_loop()
         if enable_acct and not self.protocol_acct:
             self.protocol_acct = DatagramProtocolClient(
                 self.server,
@@ -260,7 +267,7 @@ class ClientAsync:
             if local_addr and local_acct_port:
                 bind_addr = (local_addr, local_acct_port)
 
-            acct_connect = self.loop.create_datagram_endpoint(
+            acct_connect = loop.create_datagram_endpoint(
                 self.protocol_acct,
                 reuse_port=True,
                 remote_addr=(self.server, self.acct_port),
@@ -280,7 +287,7 @@ class ClientAsync:
             if local_addr and local_auth_port:
                 bind_addr = (local_addr, local_auth_port)
 
-            auth_connect = self.loop.create_datagram_endpoint(
+            auth_connect = loop.create_datagram_endpoint(
                 self.protocol_auth,
                 reuse_port=True,
                 remote_addr=(self.server, self.auth_port),
@@ -300,7 +307,7 @@ class ClientAsync:
             if local_addr and local_coa_port:
                 bind_addr = (local_addr, local_coa_port)
 
-            coa_connect = self.loop.create_datagram_endpoint(
+            coa_connect = loop.create_datagram_endpoint(
                 self.protocol_coa,
                 reuse_port=True,
                 remote_addr=(self.server, self.coa_port),
@@ -313,7 +320,7 @@ class ClientAsync:
                 *task_list,
                 return_exceptions=False,
             ),
-            loop=self.loop,
+            loop=loop,
         )
 
     # noinspection SpellCheckingInspection
@@ -412,7 +419,7 @@ class ClientAsync:
         :rtype:     asyncio.Future
         """
 
-        ans = asyncio.Future(loop=self.loop)
+        ans = asyncio.Future(loop=asyncio.get_event_loop())
 
         if isinstance(pkt, AuthPacket):
             if not self.protocol_auth:

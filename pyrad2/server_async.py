@@ -214,7 +214,12 @@ class ServerAsync(ABC):
                 logger.error(msg, protocol.ip, protocol.port, exc)
 
     async def initialize_transports(
-        self, *, enable_acct=False, enable_auth=False, enable_coa=False, addresses=None
+        self,
+        *,
+        enable_acct: bool = False,
+        enable_auth: bool = False,
+        enable_coa: bool = False,
+        addresses: Optional[list[str]] = None,
     ):
         if not any([enable_acct, enable_auth, enable_coa]):
             raise ValueError("No transports enabled")
@@ -244,7 +249,9 @@ class ServerAsync(ABC):
 
         await asyncio.gather(*tasks)
 
-    async def _start_transport(self, ip, port, server_type, proto_list):
+    async def _start_transport(
+        self, ip: str, port: int, server_type: ServerType, proto_list: list
+    ):
         if any(proto.ip == ip for proto in proto_list):
             return
         protocol = DatagramProtocolServer(
@@ -270,17 +277,25 @@ class ServerAsync(ABC):
         return pkt.CreateReply(**attributes)
 
     @abstractmethod
-    def handle_auth_packet(self, protocol, pkt: Packet, addr: str):
+    def handle_auth_packet(
+        self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
+    ):
         pass
 
     @abstractmethod
-    def handle_acct_packet(self, protocol, pkt: Packet, addr: str):
+    def handle_acct_packet(
+        self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
+    ):
         pass
 
     @abstractmethod
-    def handle_coa_packet(self, protocol, pkt: Packet, addr: str):
+    def handle_coa_packet(
+        self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
+    ):
         pass
 
     @abstractmethod
-    def handle_disconnect_packet(self, protocol, pkt: Packet, addr: str):
+    def handle_disconnect_packet(
+        self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
+    ):
         pass

@@ -3,11 +3,11 @@ __docformat__ = "epytext en"
 import hashlib
 import select
 import socket
-import time
 import struct
+import time
 from typing import Optional
-from pyrad2 import host
-from pyrad2 import packet
+
+from pyrad2 import host, packet
 from pyrad2.dictionary import Dictionary
 
 EAP_CODE_REQUEST = 1
