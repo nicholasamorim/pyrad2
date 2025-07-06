@@ -103,7 +103,9 @@ RadiusAttributeValue = int | str | bytes
 
 
 class ParseError(Exception):
-    """Dictionary parser exceptions.
+    """Exception raised for errors
+    while parsing RADIUS dictionary files.
+
 
     :ivar msg:        Error message
     :type msg:        string
@@ -132,6 +134,18 @@ class ParseError(Exception):
 
 
 class Attribute:
+    """Represents a RADIUS attribute.
+
+    Attributes:
+        name (str): Attribute name
+        code (int): RADIUS code
+        type (str): Data type (e.g., 'string', 'ipaddr')
+        vendor (int): Vendor ID (0 if standard)
+        has_tag (bool): Whether attribute supports tags
+        encrypt (int): Encryption type (0 = none)
+        values (BiDict): Mapping of named values to their codes
+    """
+
     def __init__(
         self,
         name: str,
@@ -162,6 +176,7 @@ class Attribute:
 
 class Dictionary:
     """RADIUS dictionary class.
+
     This class stores all information about vendors, attributes and their
     values as defined in RADIUS dictionary files.
 
@@ -174,7 +189,8 @@ class Dictionary:
     """
 
     def __init__(self, dict: Optional[str] = None, *dicts):
-        """
+        """Initialize a new Dictionary instance and load specified dictionary files.
+
         :param dict:  path of dictionary file or file-like object to read
         :type dict:   string or file
         :param dicts: list of dictionaries
@@ -193,17 +209,21 @@ class Dictionary:
             self.ReadDictionary(i)
 
     def __len__(self) -> int:
+        """Return the number of attributes defined."""
         return len(self.attributes)
 
     def __getitem__(self, key: Hashable):
+        """Retrieve an Attribute by name."""
         return self.attributes[key]
 
     def __contains__(self, key: Hashable) -> bool:
+        """Check if an attribute is defined in the dictionary."""
         return key in self.attributes
 
     has_key = __contains__
 
     def __ParseAttribute(self, state: dict, tokens: list):
+        """Parse an ATTRIBUTE line from a dictionary file."""
         if len(tokens) not in [4, 5]:
             raise ParseError(
                 "Incorrect number of tokens for attribute definition",
@@ -310,6 +330,7 @@ class Dictionary:
             self.attributes[attribute].parent = state["tlvs"][parent_code]
 
     def __ParseValue(self, state: dict, tokens: list, defer: bool) -> None:
+        """Parse a VALUE line from a dictionary file."""
         if len(tokens) != 4:
             raise ParseError(
                 "Incorrect number of tokens for value definition",
@@ -337,6 +358,7 @@ class Dictionary:
         self.attributes[attr].values.Add(key, value)
 
     def __ParseVendor(self, state: dict, tokens: list) -> None:
+        """Parse a VENDOR line, registering a new vendor."""
         if len(tokens) not in [3, 4]:
             raise ParseError(
                 "Incorrect number of tokens for vendor definition",
@@ -373,6 +395,7 @@ class Dictionary:
         self.vendors.Add(vendorname, int(vendor, 0))
 
     def __ParseBeginVendor(self, state: dict, tokens: list) -> None:
+        """Start a block of attributes for a specific vendor."""
         if len(tokens) != 2:
             raise ParseError(
                 "Incorrect number of tokens for begin-vendor statement",
@@ -392,6 +415,7 @@ class Dictionary:
         state["vendor"] = vendor
 
     def __ParseEndVendor(self, state: dict, tokens: list):
+        """End a block of vendor-specific attributes."""
         if len(tokens) != 2:
             raise ParseError(
                 "Incorrect number of tokens for end-vendor statement",

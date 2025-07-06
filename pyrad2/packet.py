@@ -75,7 +75,7 @@ class Packet(OrderedDict):
         """Constructor
 
         :param dict:   RADIUS dictionary
-        :type dict:    pyrad.dictionary.Dictionary class
+        :type dict:    pyrad2.dictionary.Dictionary class
         :param secret: secret needed to communicate with a RADIUS server
         :type secret:  string
         :param id:     packet identification number
@@ -684,7 +684,7 @@ class AuthPacket(Packet):
         :type secret:  string
 
         :param dict:   RADIUS dictionary
-        :type dict:    pyrad.dictionary.Dictionary class
+        :type dict:    pyrad2.dictionary.Dictionary class
 
         :param packet: raw packet to decode
         :type packet:  string
@@ -875,7 +875,7 @@ class AcctPacket(Packet):
         """Constructor
 
         :param dict:   RADIUS dictionary
-        :type dict:    pyrad.dictionary.Dictionary class
+        :type dict:    pyrad2.dictionary.Dictionary class
         :param secret: secret needed to communicate with a RADIUS server
         :type secret:  string
         :param id:     packet identification number
@@ -957,7 +957,7 @@ class CoAPacket(Packet):
         """Constructor
 
         :param dict:   RADIUS dictionary
-        :type dict:    pyrad.dictionary.Dictionary class
+        :type dict:    pyrad2.dictionary.Dictionary class
         :param secret: secret needed to communicate with a RADIUS server
         :type secret:  string
         :param id:     packet identification number

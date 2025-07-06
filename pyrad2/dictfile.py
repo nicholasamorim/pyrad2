@@ -28,7 +28,7 @@ class _Node:
         else:
             self.dir = os.path.join(parentdir, path)
 
-    def Next(self):
+    def Next(self) -> Optional[str]:
         if self.current >= self.length:
             return None
         self.current += 1

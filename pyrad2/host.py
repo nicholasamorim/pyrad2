@@ -5,7 +5,7 @@ class Host:
     """Generic RADIUS capable host.
 
     :ivar     dict: RADIUS dictionary
-    :type     dict: pyrad.dictionary.Dictionary
+    :type     dict: pyrad2.dictionary.Dictionary
     :ivar authport: port to listen on for authentication packets
     :type authport: integer
     :ivar acctport: port to listen on for accounting packets
@@ -22,7 +22,7 @@ class Host:
         :param coaport: port to listen on for CoA packets
         :type  coaport: integer
         :param     dict: RADIUS dictionary
-        :type      dict: pyrad.dictionary.Dictionary
+        :type      dict: pyrad2.dictionary.Dictionary
         """
         self.dict = dict
         self.authport = authport
@@ -37,7 +37,7 @@ class Host:
         the dictionary and secret used for the client.
 
         :return: a new empty packet instance
-        :rtype:  pyrad.packet.Packet
+        :rtype:  pyrad2.packet.Packet
         """
         return packet.Packet(dict=self.dict, **args)
 
@@ -49,7 +49,7 @@ class Host:
         the dictionary and secret used for the client.
 
         :return: a new empty packet instance
-        :rtype:  pyrad.packet.AuthPacket
+        :rtype:  pyrad2.packet.AuthPacket
         """
         return packet.AuthPacket(dict=self.dict, **args)
 
@@ -61,7 +61,7 @@ class Host:
         dictionary and secret used for the client.
 
         :return: a new empty packet instance
-        :rtype:  pyrad.packet.AcctPacket
+        :rtype:  pyrad2.packet.AcctPacket
         """
         return packet.AcctPacket(dict=self.dict, **args)
 
@@ -73,7 +73,7 @@ class Host:
         dictionary and secret used for the client.
 
         :return: a new empty packet instance
-        :rtype:  pyrad.packet.CoAPacket
+        :rtype:  pyrad2.packet.CoAPacket
         """
         return packet.CoAPacket(dict=self.dict, **args)
 
