@@ -7,7 +7,7 @@
 pyrad2 is an implementation of a RADIUS client/server as described in RFC2865. It takes care of all the details like building RADIUS packets,
 sending them and decoding responses.
 
-Documentation can be found [here](https://nicholasamorim.github.io/pyrad2/).
+**Documentation can be found [here](https://nicholasamorim.github.io/pyrad2/).**
 
 # Introduction
 
