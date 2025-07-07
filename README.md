@@ -4,17 +4,14 @@
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)]([https://github.com/psf/black](https://github.com/astral-sh/uv))
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
-# Introduction
-
-This is a fork of pyrad aiming to make it compatible with Python 3.12+ and introduce bug fixes and features. Most of the codebase now has type checking and test coverage has been increased. Legacy compatibility code with (very) older versions of Python have been removed and we only support Python 3.12+.
-
-# Original PyRad README
-
-pyrad2 is an implementation of a RADIUS client/server as described in
-RFC2865. It takes care of all the details like building RADIUS packets,
+pyrad2 is an implementation of a RADIUS client/server as described in RFC2865. It takes care of all the details like building RADIUS packets,
 sending them and decoding responses.
 
-Note that this is not a stand-alone Radius implementation like [FreeRadius](https://www.freeradius.org). You are supposed to inherit the server classes and code your own behind-the-scenes implementation. This package allows you to code your business logic on top of it.
+# Introduction
+
+This is a fork of [pyrad](https://github.com/pyradius/pyrad) aiming to make it compatible with Python 3.12+ and introduce bug fixes and features. Most of the codebase now has type checking and test coverage has been increased. Legacy compatibility code with (very) older versions of Python have been removed and we only support Python 3.12+.
+
+Note that this is _not_ a stand-alone Radius implementation like [FreeRadius](https://www.freeradius.org). You are supposed to inherit the server classes and code your own behind-the-scenes implementation. This package allows you to code your business logic on top of it.
 
 # Requirements & Installation
 
