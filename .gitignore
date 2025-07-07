@@ -16,3 +16,4 @@ coverage.lcov
 env
 .venv
 venv
+pyrad2.log

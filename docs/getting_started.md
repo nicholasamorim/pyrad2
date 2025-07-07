@@ -52,6 +52,8 @@ ATTRIBUTE	CHAP-Password		3	octets
 
 You can find a reference dictionary file [here](https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary). Another dictionary is provided [here](https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary.freeradius) with FreeRADIUS vendor-specific attributes.
 
+For our example, download _both files_ and place it into your project folder.
+
 When you see code like this:
 
 ``` py title="Loading a dictionary"
