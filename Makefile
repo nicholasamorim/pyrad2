@@ -10,5 +10,5 @@ test_server:
 test_server_async:
 	PYTHONPATH=. uv run examples/server_async.py
 
-make test_auth:
+test_auth:
 	PYTHONPATH=. uv run examples/auth_async.py
