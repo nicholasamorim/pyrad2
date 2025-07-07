@@ -1,5 +1,6 @@
 import fcntl
 import os
+
 from pyrad2.packet import PacketError
 
 

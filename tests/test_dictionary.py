@@ -1,14 +1,13 @@
-import unittest
 import operator
 import os
+import unittest
 from io import StringIO
 
-from . import home
-from pyrad2.dictionary import Attribute
-from pyrad2.dictionary import Dictionary
-from pyrad2.dictionary import ParseError
-from pyrad2.tools import DecodeAttr
 from pyrad2.dictfile import DictFile
+from pyrad2.dictionary import Attribute, Dictionary, ParseError
+from pyrad2.tools import DecodeAttr
+
+from .base import TEST_ROOT_PATH
 
 
 class AttributeTests(unittest.TestCase):
@@ -85,7 +84,7 @@ class DictionaryParsingTests(unittest.TestCase):
     ]
 
     def setUp(self):
-        self.path = os.path.join(home, "data")
+        self.path = os.path.join(TEST_ROOT_PATH, "data")
         self.dict = Dictionary(os.path.join(self.path, "simple"))
 
     def testParseEmptyDictionary(self):

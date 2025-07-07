@@ -1,8 +1,5 @@
 import unittest
-from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
-
-from loguru import logger
 
 from pyrad2.packet import (
     AccessRequest,
@@ -17,28 +14,7 @@ from pyrad2.server_async import (
     ServerType,
 )
 
-
-@contextmanager
-def capture_logs(level="INFO", format="{level}:{name}:{message}"):
-    """Capture loguru-based logs."""
-    output = []
-    handler_id = logger.add(output.append, level=level, format=format)
-    yield output
-    logger.remove(handler_id)
-
-
-class DummyServer(ServerAsync):
-    def handle_auth_packet(self, protocol, pkt, addr):
-        self.auth_called = True
-
-    def handle_acct_packet(self, protocol, pkt, addr):
-        self.acct_called = True
-
-    def handle_coa_packet(self, protocol, pkt, addr):
-        self.coa_called = True
-
-    def handle_disconnect_packet(self, protocol, pkt, addr):
-        self.disconnect_called = True
+from .base import DummyServer, capture_logs
 
 
 class DatagramProtocolServerTests(unittest.TestCase):
@@ -81,7 +57,7 @@ class DatagramProtocolServerTests(unittest.TestCase):
         mock_packet = MagicMock()
         mock_packet.ReplyPacket.return_value = b"response"
         self.protocol.send_response(mock_packet, ("127.0.0.1", 12345))
-        self.transport.sendto.assert_called_once()
+        self.transport.sendto.assert_called_once_with(b"response", ("127.0.0.1", 12345))
 
 
 class ServerAsyncTests(unittest.IsolatedAsyncioTestCase):

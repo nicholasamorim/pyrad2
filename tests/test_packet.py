@@ -4,7 +4,7 @@ import struct
 import unittest
 import hashlib
 
-from . import home
+from .base import TEST_ROOT_PATH
 
 from collections import OrderedDict
 from pyrad2 import packet
@@ -24,7 +24,7 @@ class PacketConstructionTests(unittest.TestCase):
     klass = packet.Packet
 
     def setUp(self):
-        self.path = os.path.join(home, "data")
+        self.path = os.path.join(TEST_ROOT_PATH, "data")
         self.dict = Dictionary(os.path.join(self.path, "simple"))
 
     def testBasicConstructor(self):
@@ -74,7 +74,7 @@ class PacketConstructionTests(unittest.TestCase):
 
 class PacketTests(unittest.TestCase):
     def setUp(self):
-        self.path = os.path.join(home, "data")
+        self.path = os.path.join(TEST_ROOT_PATH, "data")
         self.dict = Dictionary(os.path.join(self.path, "full"))
         self.packet = packet.Packet(
             id=0, secret=b"secret", authenticator=b"01234567890ABCDEF", dict=self.dict
@@ -510,7 +510,7 @@ class AuthPacketConstructionTests(PacketConstructionTests):
 
 class AuthPacketTests(unittest.TestCase):
     def setUp(self):
-        self.path = os.path.join(home, "data")
+        self.path = os.path.join(TEST_ROOT_PATH, "data")
         self.dict = Dictionary(os.path.join(self.path, "full"))
         self.packet = packet.AuthPacket(
             id=0, secret=b"secret", authenticator=b"01234567890ABCDEF", dict=self.dict
@@ -565,7 +565,7 @@ class AuthPacketTests(unittest.TestCase):
 
 class AuthPacketChapTests(unittest.TestCase):
     def setUp(self):
-        self.path = os.path.join(home, "data")
+        self.path = os.path.join(TEST_ROOT_PATH, "data")
         self.dict = Dictionary(os.path.join(self.path, "chap"))
         # self.packet = packet.Packet(id=0, secret=b'secret',
         #                             dict=self.dict)
@@ -607,7 +607,7 @@ class AcctPacketConstructionTests(PacketConstructionTests):
 
 class AcctPacketTests(unittest.TestCase):
     def setUp(self):
-        self.path = os.path.join(home, "data")
+        self.path = os.path.join(TEST_ROOT_PATH, "data")
         self.dict = Dictionary(os.path.join(self.path, "full"))
         self.packet = packet.AcctPacket(
             id=0, secret=b"secret", authenticator=b"01234567890ABCDEF", dict=self.dict
