@@ -8,7 +8,18 @@ nav:
   - Getting Started: getting_started.md
   - Releases: releases.md
   - Pyrad Compatibility : compatibility.md
-  - API Reference: api.md
+  - API Reference:
+      - server: api/server.md
+      - server_async: api/server_async.md
+      - client: api/client.md
+      - client_async: api/client_async.md
+      - packet: api/packet.md
+      - dictionary: api/dictionary.md
+      - host: api/host.md
+      - tools: api/tools.md
+      - dictfile: api/dictfile.md
+      - proxy: api/proxy.md
+      - bidict: api/bidict.md
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -20,3 +31,8 @@ markdown_extensions:
   - pymdownx.superfences
   - admonition
   - pymdownx.details
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
