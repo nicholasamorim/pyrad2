@@ -1,14 +1,14 @@
 """Python RADIUS client code.
 
-pyrad is an implementation of a RADIUS client as described in RFC2865.
+pyrad2 is an implementation of a RADIUS client as described in RFC2865.
 It takes care of all the details like building RADIUS packets, sending
 them and decoding responses.
 
 Here is an example of doing a authentication request::
 
   import pyrad.packet
-  from pyrad.client import Client
-  from pyrad.dictionary import Dictionary
+  from pyrad2.client import Client
+  from pyrad2.dictionary import Dictionary
 
   srv = Client(server="radius.my.domain", secret="s3cr3t",
     dict = Dictionary("dicts/dictionary", "dictionary.acc"))
