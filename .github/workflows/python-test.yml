@@ -30,20 +30,4 @@ jobs:
     - name: Run unittest with coverage
       run: |
         uv run pytest tests/
-    - name: Coveralls
-      uses: coverallsapp/github-action@v2
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        flag-name: run-${{ matrix.python-version }}
-        path-to-lcov: coverage.lcov
-        parallel: true
-
-  finish:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-    - name: Coveralls Finished
-      uses: coverallsapp/github-action@v2
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        parallel-finished: true
+    
