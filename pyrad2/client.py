@@ -25,11 +25,6 @@ class Client(host.Host):
     This class implements a basic RADIUS client. It can send requests
     to a RADIUS server, taking care of timeouts and retries, and
     validate its replies.
-
-    :ivar retries: number of times to retry sending a RADIUS request
-    :type retries: integer
-    :ivar timeout: number of seconds to wait for an answer
-    :type timeout: float
     """
 
     def __init__(
@@ -43,20 +38,17 @@ class Client(host.Host):
         retries: int = 3,
         timeout: int = 5,
     ):
-        """Constructor.
+        """Initializes a RADIUS client.
 
-        :param   server: hostname or IP address of RADIUS server
-        :type    server: string
-        :param authport: port to use for authentication packets
-        :type  authport: integer
-        :param acctport: port to use for accounting packets
-        :type  acctport: integer
-        :param coaport: port to use for CoA packets
-        :type  coaport: integer
-        :param   secret: RADIUS secret
-        :type    secret: string
-        :param     dict: RADIUS dictionary
-        :type      dict: pyrad.dictionary.Dictionary
+        Args:
+            server (str): Hostname or IP address of the RADIUS server.
+            authport (int): Port to use for authentication packets.
+            acctport (int): Port to use for accounting packets.
+            coaport (int): Port to use for CoA packets.
+            secret (bytes): RADIUS secret.
+            dict (pyrad.dictionary.Dictionary): RADIUS dictionary.
+            retries (int): Number of times to retry sending a RADIUS request.
+            timeout (int): Number of seconds to wait for an answer.
         """
         super().__init__(authport, acctport, coaport, dict)
 
@@ -67,13 +59,13 @@ class Client(host.Host):
         self._poll = select.poll()
         self._socket: Optional[socket.socket] = None
 
-    def bind(self, addr: str) -> None:
+    def bind(self, addr: str | tuple) -> None:
         """Bind socket to an address.
         Binding the socket used for communicating to an address can be
         usefull when working on a machine with multiple addresses.
 
-        :param addr: network address (hostname or IP) and port to bind to
-        :type  addr: host,port tuple
+        Args:
+            addr (str | tuple): network address (hostname or IP) and port to bind to
         """
         self._CloseSocket()
         self._SocketOpen()
@@ -105,8 +97,8 @@ class Client(host.Host):
         talks to. This is initializing the new packet with the
         dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad.packet.AuthPacket
+        Returns:
+            packet.Packet: A new empty packet instance
         """
         return super().CreateAuthPacket(secret=self.secret, **args)
 
@@ -117,8 +109,8 @@ class Client(host.Host):
         talks to. This is initializing the new packet with the
         dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad.packet.Packet
+        Returns:
+            packet.Packet: A new empty packet instance
         """
         return super().CreateAcctPacket(secret=self.secret, **args)
 
@@ -129,21 +121,23 @@ class Client(host.Host):
         talks to. This is initializing the new packet with the
         dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad.packet.Packet
+        Returns:
+            packet.Packet: A new empty packet instance
         """
         return super().CreateCoAPacket(secret=self.secret, **args)
 
     def _SendPacket(self, pkt: packet.PacketImplementation, port: int):
         """Send a packet to a RADIUS server.
 
-        :param pkt:  the packet to send
-        :type pkt:   pyrad.packet.Packet
-        :param port: UDP port to send packet to
-        :type port:  integer
-        :return:     the reply packet received
-        :rtype:      pyrad.packet.Packet
-        :raise Timeout: RADIUS server does not reply
+        Args:
+            pkt (packet.Packet): The packet to send
+            port (int): UDP port to send packet to
+
+        Returns:
+            packet.Packet: The reply packet received
+
+        Raises:
+            Timeout: RADIUS server does not reply
         """
         self._SocketOpen()
 
@@ -182,14 +176,17 @@ class Client(host.Host):
 
         raise Timeout
 
-    def SendPacket(self, pkt: packet.PacketImplementation):  # type: ignore
+    def SendPacket(self, pkt: packet.PacketImplementation) -> packet.Packet:  # type: ignore
         """Send a packet to a RADIUS server.
 
-        :param pkt: the packet to send
-        :type pkt:  pyrad.packet.Packet
-        :return:    the reply packet received
-        :rtype:     pyrad.packet.Packet
-        :raise Timeout: RADIUS server does not reply
+        Args:
+            pkt (packet.Packet): Packet to send
+
+        Returns:
+            packet.Packet: The reply packet received
+
+        Raises:
+            Timeout: RADIUS server does not reply
         """
         if isinstance(pkt, packet.AuthPacket):
             if pkt.auth_type == "eap-md5":

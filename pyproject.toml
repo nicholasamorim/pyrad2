@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "loguru>=0.7.3",
+    "mkdocs-material>=9.6.15",
+    "mkdocstrings[python]>=0.29.1",
 ]
 
 [dependency-groups]

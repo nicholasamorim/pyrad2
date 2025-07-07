@@ -194,11 +194,6 @@ class ClientAsync:
     This class implements a basic RADIUS client. It can send requests
     to a RADIUS server, taking care of timeouts and retries, and
     validate its replies.
-
-    :ivar retries: number of times to retry sending a RADIUS request
-    :type retries: integer
-    :ivar timeout: number of seconds to wait for an answer
-    :type timeout: integer
     """
 
     def __init__(
@@ -212,22 +207,17 @@ class ClientAsync:
         retries: int = 3,
         timeout: int = 30,
     ):
-        """Constructor.
+        """Initializes an async RADIUS client.
 
-        :param    server: hostname or IP address of RADIUS server
-        :type     server: string
-        :param auth_port: port to use for authentication packets
-        :type  auth_port: integer
-        :param acct_port: port to use for accounting packets
-        :type  acct_port: integer
-        :param  coa_port: port to use for CoA packets
-        :type   coa_port: integer
-        :param    secret: RADIUS secret
-        :type     secret: string
-        :param      dict: RADIUS dictionary
-        :type       dict: pyrad.dictionary.Dictionary
-        :param      loop: Python loop handler
-        :type       loop:  asyncio event loop
+        Args:
+            server (str): Hostname or IP address of the RADIUS server.
+            auth_port (int): Port to use for authentication packets.
+            acct_port (int): Port to use for accounting packets.
+            coa_port (int): Port to use for CoA packets.
+            secret (bytes): RADIUS secret.
+            dict (pyrad.dictionary.Dictionary): RADIUS dictionary.
+            retries (int): Number of times to retry sending a RADIUS request.
+            timeout (int): Number of seconds to wait for an answer.
         """
         self.server = server
         self.secret = secret
@@ -354,8 +344,8 @@ class ClientAsync:
         talks to. This is initializing the new packet with the
         dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad.packet.Packet
+        Returns:
+            packet.Packet: A new empty packet instance
         """
         if not self.protocol_auth:
             raise Exception("Transport not initialized")
@@ -374,8 +364,8 @@ class ClientAsync:
         talks to. This is initializing the new packet with the
         dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad.packet.Packet
+        Returns:
+            packet.Packet: A new empty packet instance
         """
         if not self.protocol_acct:
             raise Exception("Transport not initialized")
@@ -394,8 +384,8 @@ class ClientAsync:
         talks to. This is initializing the new packet with the
         dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad.packet.Packet
+        Returns:
+            packet.Packet: A new empty packet instance
         """
 
         if not self.protocol_coa:
@@ -414,10 +404,11 @@ class ClientAsync:
     def SendPacket(self, pkt: Packet) -> asyncio.Future:
         """Send a packet to a RADIUS server.
 
-        :param pkt: the packet to send
-        :type  pkt: pyrad.packet.Packet
-        :return:    Future related with packet to send
-        :rtype:     asyncio.Future
+        Args:
+            pkt (Packet): The packet to send
+
+        Returns:
+            asyncio.Future: Future related with packet to send
         """
 
         ans: asyncio.Future = asyncio.Future(loop=asyncio.get_event_loop())

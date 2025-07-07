@@ -482,6 +482,8 @@ version = "1.0.1"
 source = { virtual = "." }
 dependencies = [
     { name = "loguru" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
 ]
 
 [package.dev-dependencies]
@@ -500,7 +502,11 @@ docs = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "loguru", specifier = ">=0.7.3" }]
+requires-dist = [
+    { name = "loguru", specifier = ">=0.7.3" },
+    { name = "mkdocs-material", specifier = ">=9.6.15" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.29.1" },
+]
 
 [package.metadata.requires-dev]
 dev = [

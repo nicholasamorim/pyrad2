@@ -2,8 +2,7 @@ from typing import Any, Dict, Hashable
 
 
 class BiDict:
-    """
-    BiDict (Bidirectional Dictionary) provides a one-to-one mapping
+    """BiDict (Bidirectional Dictionary) provides a one-to-one mapping
     between keys and values.
 
     Supports both forward and reverse lookup.

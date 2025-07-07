@@ -12,24 +12,27 @@ lines are ignored.
 
 The commands supported are::
 
-  ATTRIBUTE <attribute> <code> <type> [<vendor>]
-  specify an attribute and its type
+```
+ATTRIBUTE <attribute> <code> <type> [<vendor>]
+specify an attribute and its type
 
-  VALUE <attribute> <valuename> <value>
-  specify a value attribute
+VALUE <attribute> <valuename> <value>
+specify a value attribute
 
-  VENDOR <name> <id>
-  specify a vendor ID
+VENDOR <name> <id>
+specify a vendor ID
 
-  BEGIN-VENDOR <vendorname>
-  begin definition of vendor attributes
+BEGIN-VENDOR <vendorname>
+begin definition of vendor attributes
 
-  END-VENDOR <vendorname>
-  end definition of vendor attributes
+END-VENDOR <vendorname>
+end definition of vendor attributes
+```
 
 
 The datatypes currently supported are:
 
+```
 +---------------+----------------------------------------------+
 | type          | description                                  |
 +===============+==============================================+
@@ -59,9 +62,11 @@ The datatypes currently supported are:
 +---------------+----------------------------------------------+
 | integer64     | 64 bits unsigned number                      |
 +---------------+----------------------------------------------+
+```
 
 These datatypes are parsed but not supported:
 
+```
 +---------------+----------------------------------------------+
 | type          | description                                  |
 +===============+==============================================+
@@ -70,6 +75,7 @@ These datatypes are parsed but not supported:
 | ether         | 6 octets of hh:hh:hh:hh:hh:hh                |
 |               | where 'h' is hex digits, upper or lowercase. |
 +---------------+----------------------------------------------+
+```
 """
 
 from copy import copy
@@ -106,11 +112,9 @@ class ParseError(Exception):
     """Exception raised for errors
     while parsing RADIUS dictionary files.
 
-
-    :ivar msg:        Error message
-    :type msg:        string
-    :ivar linenumber: Line number on which the error occurred
-    :type linenumber: integer
+    Attributes:
+        msg (str): Error message
+        linenumber (int): Line number on which the error occurred
     """
 
     def __init__(self, msg=None, **data):
@@ -143,7 +147,7 @@ class Attribute:
         vendor (int): Vendor ID (0 if standard)
         has_tag (bool): Whether attribute supports tags
         encrypt (int): Encryption type (0 = none)
-        values (BiDict): Mapping of named values to their codes
+        values (bidict.BiDict): Mapping of named values to their codes
     """
 
     def __init__(
@@ -180,21 +184,18 @@ class Dictionary:
     This class stores all information about vendors, attributes and their
     values as defined in RADIUS dictionary files.
 
-    :ivar vendors:    bidict mapping vendor name to vendor code
-    :type vendors:    bidict
-    :ivar attrindex:  bidict mapping
-    :type attrindex:  bidict
-    :ivar attributes: bidict mapping attribute name to attribute class
-    :type attributes: bidict
+    Attributes:
+        vendors (bidict.BiDict): bidict mapping vendor name to vendor code
+        attrindex (bidict.BiDict): bidict mapping
+        attributes (bidict.BiDict): bidict mapping attribute name to attribute class
     """
 
     def __init__(self, dict: Optional[str] = None, *dicts):
         """Initialize a new Dictionary instance and load specified dictionary files.
 
-        :param dict:  path of dictionary file or file-like object to read
-        :type dict:   string or file
-        :param dicts: list of dictionaries
-        :type dicts:  sequence of strings or files
+        Args:
+            dict (str): Path of dictionary file or file-like object to read
+            dicts (list): Sequence of strings or files
         """
         self.vendors = bidict.BiDict()
         self.vendors.Add("", 0)
@@ -438,8 +439,8 @@ class Dictionary:
         Reads a RADIUS dictionary file and merges its contents into the
         class instance.
 
-        :param file: Name of dictionary file to parse or a file-like object
-        :type file:  string or file-like object
+        Args:
+            file (str | io): Name of dictionary file to parse or a file-like object
         """
 
         fil = dictfile.DictFile(file)

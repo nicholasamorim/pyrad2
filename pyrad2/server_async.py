@@ -165,6 +165,14 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
 
 
 class ServerAsync(ABC):
+    """Basic async RADIUS server.
+
+    This class implements the basics of a RADIUS server. It takes care
+    of the details of receiving and decoding requests; processing of
+    the requests should be done by overloading the appropriate methods
+    in derived classes.
+    """
+
     def __init__(
         self,
         auth_port: int = 1812,
@@ -175,6 +183,16 @@ class ServerAsync(ABC):
         enable_pkt_verify: bool = False,
         debug: bool = False,
     ):
+        """Initialize an async server.
+
+        Args:
+            auth_port (int): Port to listen on for authentication packets.
+            acct_port (int): Port to listen on for accounting packets.
+            coa_port (int): Port to listen on for CoA packets.
+            hosts (dict[str, RemoteHost]): Hosts who we can talk to. A dictionary mapping IP to RemoteHost class instances.
+            dictionary (Dictionary): RADIUS dictionary to use.
+            enable_pkt_verify (bool): If true, the packet will be verified against its secret
+        """
         self.hosts = hosts or {}
         self.dict = dictionary
         self.enable_pkt_verify = enable_pkt_verify
@@ -271,28 +289,76 @@ class ServerAsync(ABC):
 
     @staticmethod
     def create_reply_packet(pkt: Packet, **attributes) -> Packet:
+        """Create a reply packet.
+        Create a new packet which can be returned as a reply to a received
+        packet.
+
+        Args:
+            pkt (packet.Packet): Packet to process
+            attributes (dict): Custom attributes to be added to the reply
+        """
         return pkt.CreateReply(**attributes)
 
     @abstractmethod
     def handle_auth_packet(
         self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
     ):
+        """Authentication packet handler.
+        This is an empty function that is called when a valid
+        authentication packet has been received. It can be overriden in
+        derived classes to add custom behaviour.
+
+        Args:
+            protocol (DatagramProtocolServer): The protocol to use when sending responses
+            pkt (packet.Packet): Packet to process
+            addr (str): IP from the client
+        """
         pass
 
     @abstractmethod
     def handle_acct_packet(
         self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
     ):
+        """Accounting packet handler.
+        This is an empty function that is called when a valid
+        accounting packet has been received. It can be overriden in
+        derived classes to add custom behaviour.
+
+        Args:
+            protocol (DatagramProtocolServer): The protocol to use when sending responses
+            pkt (packet.Packet): Packet to process
+            addr (str): IP from the client
+        """
         pass
 
     @abstractmethod
     def handle_coa_packet(
         self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
     ):
+        """CoA packet handler.
+        This is an empty function that is called when a valid
+        accounting packet has been received. It can be overriden in
+        derived classes to add custom behaviour.
+
+        Args:
+            protocol (DatagramProtocolServer): The protocol to use when sending responses
+            pkt (packet.Packet): Packet to process
+            addr (str): IP from the client
+        """
         pass
 
     @abstractmethod
     def handle_disconnect_packet(
         self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
     ):
+        """CoA packet handler.
+        This is an empty function that is called when a valid
+        accounting packet has been received. It can be overriden in
+        derived classes to add custom behaviour.
+
+        Args:
+            protocol (DatagramProtocolServer): The protocol to use when sending responses
+            pkt (packet.Packet): Packet to process
+            addr (str): IP from the client
+        """
         pass

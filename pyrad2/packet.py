@@ -61,7 +61,7 @@ class Packet(OrderedDict):
     raw data.
 
     Normally you will not use this class directly, but one of the
-    :obj:`AuthPacket` or :obj:`AcctPacket` classes.
+    `AuthPacket`, `AcctPacket` or `CoAPacket` classes.
     """
 
     def __init__(
@@ -72,18 +72,14 @@ class Packet(OrderedDict):
         authenticator: Optional[bytes] = None,
         **attributes,
     ):
-        """Constructor
+        """Initializes a Packet instance.
 
-        :param dict:   RADIUS dictionary
-        :type dict:    pyrad2.dictionary.Dictionary class
-        :param secret: secret needed to communicate with a RADIUS server
-        :type secret:  string
-        :param id:     packet identification number
-        :type id:      integer (8 bits)
-        :param code:   packet type code
-        :type code:    integer (8bits)
-        :param packet: raw packet to decode
-        :type packet:  string
+        Args:
+            code (int): Packet type code (8 bits).
+            id (int): Packet identification number (8 bits).
+            secret (str): Secret needed to communicate with a RADIUS server.
+            authenticator (bytes): Optional authenticator
+            attributes (dict): Attributes to set in the packet
         """
         super().__init__()
         self.code = code
@@ -179,8 +175,12 @@ class Packet(OrderedDict):
     ) -> bool:
         """Verify packet Message-Authenticator.
 
-        :return: False if verification failed else True
-        :rtype: boolean
+        Args:
+            secret (bytes): The shared secret
+
+
+        Returns:
+            bool: False if verification failed else True
         """
         if self.message_authenticator is None:
             raise Exception("No Message-Authenticator AVP present")
@@ -321,11 +321,9 @@ class Packet(OrderedDict):
     def AddAttribute(self, key: str, value: RadiusAttributeValue):
         """Add an attribute to the packet.
 
-        :param key:   attribute name or identification
-        :type key:    string, attribute code or (vendor code, attribute code)
-                      tuple
-        :param value: value
-        :type value:  depends on type of attribute
+        Args:
+            key (str): Attribute name or identification.
+            value (Any): The attribute value.
         """
         attr = self.dict.attributes[key.partition(":")[0]]
 
@@ -339,7 +337,7 @@ class Packet(OrderedDict):
 
         encoded.extend(value)
 
-    def get(self, key: str, failobj: Any = None):
+    def get(self, key: str | int, failobj: Any = None) -> Any:
         try:
             res = self.__getitem__(key)
         except KeyError:
@@ -390,36 +388,35 @@ class Packet(OrderedDict):
         return [self._DecodeKey(key) for key in OrderedDict.keys(self)]
 
     @staticmethod
-    def CreateAuthenticator():
+    def CreateAuthenticator() -> bytes:
         """Create a packet authenticator. All RADIUS packets contain a sixteen
         byte authenticator which is used to authenticate replies from the
         RADIUS server and in the password hiding algorithm. This function
         returns a suitable random string that can be used as an authenticator.
 
-        :return: valid packet authenticator
-        :rtype: binary string
+        Returns:
+            bytes: Valid packet authenticator
         """
         return bytes(random_generator.randrange(0, 256) for _ in range(16))
 
-    def CreateID(self):
+    def CreateID(self) -> int:
         """Create a packet ID.  All RADIUS requests have a ID which is used to
         identify a request. This is used to detect retries and replay attacks.
         This function returns a suitable random number that can be used as ID.
 
-        :return: ID number
-        :rtype:  integer
-
+        Returns:
+            int: ID number
         """
         return random_generator.randrange(0, 256)
 
-    def ReplyPacket(self):
+    def ReplyPacket(self) -> bytes:
         """Create a ready-to-transmit authentication reply packet.
         Returns a RADIUS packet which can be directly transmitted
         to a RADIUS server. This differs with Packet() in how
         the authenticator is calculated.
 
-        :return: raw packet
-        :rtype:  string
+        Returns:
+            bytes: Raw packet
         """
         assert self.authenticator
 
@@ -554,13 +551,13 @@ class Packet(OrderedDict):
             sub_attributes.setdefault(atype, []).append(data[loc + 2 : loc + length])
             loc += length
 
-    def DecodePacket(self, packet):
+    def DecodePacket(self, packet: "Packet") -> None:
         """Initialize the object from raw packet data.  Decode a packet as
         received from the network and decode it.
 
-        :param packet: raw packet
-        :type packet:  string"""
-
+        Args:
+            packet packet.Packet: Raw packet
+        """
         try:
             (self.code, self.id, length, self.authenticator) = struct.unpack(
                 "!BBH16s", packet[0:20]
@@ -613,13 +610,14 @@ class Packet(OrderedDict):
             data = data[16:]
         return result
 
-    def SaltCrypt(self, value):
+    def SaltCrypt(self, value) -> bytes:
         """SaltEncrypt
 
-        :param value:    plaintext value
-        :type:           unicode string
-        :return:         obfuscated version of the value
-        :rtype:          binary string
+        Args:
+            value (str): Plaintext value
+
+        Returns:
+            bytes: Obfuscated version of the value
         """
 
         if isinstance(value, str):
@@ -643,13 +641,14 @@ class Packet(OrderedDict):
 
         return salt_raw + self._salt_en_decrypt(value, salt_raw)
 
-    def SaltDecrypt(self, value):
+    def SaltDecrypt(self, value: bytes) -> bytes:
         """SaltDecrypt
 
-        :param value:   encrypted value including salt
-        :type:          binary string
-        :return:        decrypted plaintext string
-        :rtype:         unicode string
+        Args:
+            value (bytes): encrypted value including salt
+
+        Returns:
+            bytes: Decrypted plaintext string
         """
         # extract salt
         salt = value[:2]
@@ -663,11 +662,11 @@ class Packet(OrderedDict):
 
         return value
 
-    def VerifyPacket(self):
+    def VerifyPacket(self) -> bool:
         """Verify request.
 
-        :return: True if verification passed else False
-        :rtype: boolean
+        Returns:
+            bool: True if verification passed else False
         """
         assert self.raw_packet
         hash = hashlib.md5(
@@ -679,27 +678,22 @@ class Packet(OrderedDict):
 class AuthPacket(Packet):
     def __init__(
         self,
-        code=AccessRequest,
-        id=None,
-        secret=b"",
+        code: int = AccessRequest,
+        id: Optional[int] = None,
+        secret: bytes = b"",
         authenticator=None,
-        auth_type="pap",
+        auth_type: str = "pap",
         **attributes,
     ):
-        """Constructor
+        """Initializes an AuthPacket.
 
-        :param code:   packet type code
-        :type code:    integer (8bits)
-        :param id:     packet identification number
-        :type id:      integer (8 bits)
-        :param secret: secret needed to communicate with a RADIUS server
-        :type secret:  string
-
-        :param dict:   RADIUS dictionary
-        :type dict:    pyrad2.dictionary.Dictionary class
-
-        :param packet: raw packet to decode
-        :type packet:  string
+        Args:
+            code (int): Packet type code (8 bits).
+            id (int): Packet identification number (8 bits).
+            secret (str): Secret needed to communicate with a RADIUS server.
+            authenticator (bytes): Optional authenticator
+            auth_type (str): Defaults to `pap`.
+            attributes (dict): Attributes to set in the packet
         """
         super().__init__(code, id, secret, authenticator, **attributes)
         self.auth_type = auth_type
@@ -719,13 +713,13 @@ class AuthPacket(Packet):
             **attributes,
         )
 
-    def RequestPacket(self):
+    def RequestPacket(self) -> bytes:
         """Create a ready-to-transmit authentication request packet.
         Return a RADIUS packet which can be directly transmitted
         to a RADIUS server.
 
-        :return: raw packet
-        :rtype:  string
+        Returns:
+            bytes: Raw packet
         """
         if self.authenticator is None:
             self.authenticator = self.CreateAuthenticator()
@@ -759,7 +753,7 @@ class AuthPacket(Packet):
 
         return header + attr
 
-    def PwDecrypt(self, password):
+    def PwDecrypt(self, password) -> str:
         """De-Obfuscate a RADIUS password. RADIUS hides passwords in packets by
         using an algorithm based on the MD5 hash of the packet authenticator
         and RADIUS secret. This function reverses the obfuscation process.
@@ -767,18 +761,18 @@ class AuthPacket(Packet):
         Although RFC2865 does not explicitly state UTF-8 for the password field,
         the rest of RFC2865 defines UTF-8 as the encoding expected for the decrypted password.
 
+        Args:
+            password (str): obfuscated form of password
 
-        :param password: obfuscated form of password
-        :type password:  binary string
-        :return:         plaintext password
-        :rtype:          unicode string
+        Returns:
+            str: Plaintext passsword
         """
         buf = password
         pw = b""
 
         last = self.authenticator
         while buf:
-            hash = hashlib.md5(self.secret + last).digest()
+            hash = hashlib.md5(self.secret + last).digest()  # type: ignore
             for i in range(16):
                 pw += bytes((hash[i] ^ buf[i],))
             (last, buf) = (buf[:16], buf[16:])
@@ -794,7 +788,7 @@ class AuthPacket(Packet):
         # chosen by the client) we simply ignore un-parsable UTF-8 sequences.
         return pw.decode("utf-8", errors="ignore")
 
-    def PwCrypt(self, password: bytes):
+    def PwCrypt(self, password: bytes) -> bytes:
         """Obfuscate password.
         RADIUS hides passwords in packets by using an algorithm
         based on the MD5 hash of the packet authenticator and RADIUS
@@ -803,10 +797,11 @@ class AuthPacket(Packet):
         setting a password that has been encrypted using this function
         will not work.
 
-        :param password: plaintext password
-        :type password:  unicode string
-        :return:         obfuscated version of the password
-        :rtype:          binary string
+        Args:
+            password (str): Plaintext password
+
+        Returns:
+            bytes: Obfuscated version of the password
         """
         if self.authenticator is None:
             self.authenticator = self.CreateAuthenticator()
@@ -830,13 +825,14 @@ class AuthPacket(Packet):
 
         return result
 
-    def VerifyChapPasswd(self, userpwd):
+    def VerifyChapPasswd(self, userpwd) -> bool:
         """Verify RADIUS ChapPasswd
 
-        :param userpwd: plaintext password
-        :type userpwd:  str
-        :return:        is verify ok
-        :rtype:         bool
+        Args:
+            userpwd (str): Plaintext password
+
+        Returns:
+            bool: True if verification is ok else False
         """
 
         if not self.authenticator:
@@ -861,8 +857,8 @@ class AuthPacket(Packet):
     def VerifyAuthRequest(self) -> bool:
         """Verify request authenticator.
 
-        :return: True if verification passed else False
-        :rtype: boolean
+        Returns:
+            bool: True if verification passed else False
         """
         if not self.raw_packet:
             raise ValueError("Raw packet not present")
@@ -886,18 +882,14 @@ class AcctPacket(Packet):
         authenticator: Optional[bytes] = None,
         **attributes,
     ):
-        """Constructor
+        """Initializes an Accounting packet.
 
-        :param dict:   RADIUS dictionary
-        :type dict:    pyrad2.dictionary.Dictionary class
-        :param secret: secret needed to communicate with a RADIUS server
-        :type secret:  string
-        :param id:     packet identification number
-        :type id:      integer (8 bits)
-        :param code:   packet type code
-        :type code:    integer (8bits)
-        :param packet: raw packet to decode
-        :type packet:  string
+        Args:
+            code (int): Packet type code (8 bits).
+            id (int): Packet identification number (8 bits).
+            secret (str): Secret needed to communicate with a RADIUS server.
+            authenticator (bytes): Optional authenticator
+            attributes (dict): Attributes to set in the packet
         """
         super().__init__(code, id, secret, authenticator, **attributes)
 
@@ -918,8 +910,8 @@ class AcctPacket(Packet):
     def VerifyAcctRequest(self) -> bool:
         """Verify request authenticator.
 
-        :return: True if verification passed else False
-        :rtype: boolean
+        Returns:
+            bool: True if verification passed else False
         """
         return self.VerifyPacket()
 
@@ -928,8 +920,8 @@ class AcctPacket(Packet):
         Return a RADIUS packet which can be directly transmitted
         to a RADIUS server.
 
-        :return: raw packet
-        :rtype:  string
+        Returns:
+            bytes: Raw packet
         """
 
         if self.id is None:
@@ -962,18 +954,14 @@ class CoAPacket(Packet):
         authenticator: Optional[bytes] = None,
         **attributes,
     ):
-        """Constructor
+        """Initializes a CoA packet.
 
-        :param dict:   RADIUS dictionary
-        :type dict:    pyrad2.dictionary.Dictionary class
-        :param secret: secret needed to communicate with a RADIUS server
-        :type secret:  string
-        :param id:     packet identification number
-        :type id:      integer (8 bits)
-        :param code:   packet type code
-        :type code:    integer (8bits)
-        :param packet: raw packet to decode
-        :type packet:  string
+        Args:
+            code (int): Packet type code (8 bits).
+            id (int): Packet identification number (8 bits).
+            secret (str): Secret needed to communicate with a RADIUS server.
+            authenticator (bytes): Optional authenticator
+            attributes (dict): Attributes to set in the packet
         """
         super().__init__(code, id, secret, authenticator, **attributes)
 

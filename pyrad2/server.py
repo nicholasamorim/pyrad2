@@ -13,18 +13,13 @@ from pyrad2.dictionary import Dictionary
 class RemoteHost:
     """Remote RADIUS capable host we can talk to.
 
-    :param   address: IP address
-    :type    address: string
-    :param    secret: RADIUS secret
-    :type     secret: string
-    :param      name: short name (used for logging only)
-    :type       name: string
-    :param  authport: port used for authentication packets
-    :type   authport: integer
-    :param  acctport: port used for accounting packets
-    :type   acctport: integer
-    :param   coaport: port used for CoA packets
-    :type    coaport: integer
+    Args:
+        address (str): IP address.
+        secret (bytes): RADIUS secret.
+        name (str): Short name (used for logging only).
+        authport (int): Port used for authentication packets.
+        acctport (int): Port used for accounting packets.
+        coaport (int): Port used for CoA packets.
     """
 
     address: str
@@ -49,14 +44,11 @@ class Server(host.Host):
     the requests should be done by overloading the appropriate methods
     in derived classes.
 
-    :ivar  hosts: hosts who are allowed to talk to us
-    :type  hosts: dictionary of Host class instances
-    :ivar  _poll: poll object for network sockets
-    :type  _poll: select.poll class instance
-    :ivar _fdmap: map of filedescriptors to network sockets
-    :type _fdmap: dictionary
-    :cvar MaxPacketSize: maximum size of a RADIUS packet
-    :type MaxPacketSize: integer
+    Attributes:
+        hosts (dict): Hosts who are allowed to talk to us. Dictionary of Host class instances.
+        _poll (select.poll): Poll object for network sockets.
+        _fdmap (dict): Map of file descriptors to network sockets.
+        MaxPacketSize (int): Maximum size of a RADIUS packet. (class variable)
     """
 
     MaxPacketSize = 8192
@@ -73,26 +65,18 @@ class Server(host.Host):
         acct_enabled: bool = True,
         coa_enabled: bool = False,
     ):
-        """Constructor.
+        """Initializes a sync server.
 
-        :param     addresses: IP addresses to listen on
-        :type      addresses: sequence of strings
-        :param      authport: port to listen on for authentication packets
-        :type       authport: integer
-        :param      acctport: port to listen on for accounting packets
-        :type       acctport: integer
-        :param       coaport: port to listen on for CoA packets
-        :type        coaport: integer
-        :param         hosts: hosts who we can talk to
-        :type          hosts: dictionary mapping IP to RemoteHost class instances
-        :param          dict: RADIUS dictionary to use
-        :type           dict: Dictionary class instance
-        :param  auth_enabled: enable auth server (default True)
-        :type   auth_enabled: bool
-        :param  acct_enabled: enable accounting server (default True)
-        :type   acct_enabled: bool
-        :param   coa_enabled: enable coa server (default False)
-        :type    coa_enabled: bool
+        Args:
+            addresses (Sequence[str]): IP addresses to listen on.
+            authport (int): Port to listen on for authentication packets.
+            acctport (int): Port to listen on for accounting packets.
+            coaport (int): Port to listen on for CoA packets.
+            hosts (dict[str, RemoteHost]): Hosts who we can talk to. A dictionary mapping IP to RemoteHost class instances.
+            dict (Dictionary): RADIUS dictionary to use.
+            auth_enabled (bool): Enable auth server (default: True).
+            acct_enabled (bool): Enable accounting server (default: True).
+            coa_enabled (bool): Enable CoA server (default: False).
         """
         super().__init__(authport, acctport, coaport, dict)
 
@@ -116,8 +100,8 @@ class Server(host.Host):
         Returns a list of tuples or an empty list:
           [(family, address)]
 
-        :param addr: IP address to lookup
-        :type  addr: string
+        Args:
+            adddr (str): IP address to lookup
         """
         results = set()
         try:
@@ -134,8 +118,8 @@ class Server(host.Host):
         """Add an address to listen on a specific interface.
         String "0.0.0.0" indicates you want to listen on all interfaces.
 
-        :param addr: IP address to listen on
-        :type  addr: string
+        Args:
+            addr (str): IP address to listen on
         """
         addrFamily = self._GetAddrInfo(addr)
         for family, address in addrFamily:
@@ -163,8 +147,8 @@ class Server(host.Host):
         authentication packet has been received. It can be overriden in
         derived classes to add custom behaviour.
 
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
 
     def HandleAcctPacket(self, pkt: packet.Packet):
@@ -173,8 +157,8 @@ class Server(host.Host):
         accounting packet has been received. It can be overriden in
         derived classes to add custom behaviour.
 
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
 
     def HandleCoaPacket(self, pkt: packet.Packet):
@@ -183,8 +167,8 @@ class Server(host.Host):
         accounting packet has been received. It can be overriden in
         derived classes to add custom behaviour.
 
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
 
     def HandleDisconnectPacket(self, pkt: packet.Packet):
@@ -193,16 +177,16 @@ class Server(host.Host):
         accounting packet has been received. It can be overriden in
         derived classes to add custom behaviour.
 
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
 
     def _AddSecret(self, pkt: packet.Packet) -> None:
         """Add secret to packets received and raise ServerPacketError
         for unknown hosts.
 
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
         if pkt.source[0] in self.hosts:
             pkt.secret = self.hosts[pkt.source[0]].secret
@@ -217,8 +201,8 @@ class Server(host.Host):
         ServerPacketError exception should be raised. The main loop will
         drop the packet and log the reason.
 
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
         self._AddSecret(pkt)
         if pkt.code != packet.AccessRequest:
@@ -233,8 +217,8 @@ class Server(host.Host):
         ServerPacketError exception should be raised. The main loop will
         drop the packet and log the reason.
 
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
         self._AddSecret(pkt)
         if pkt.code not in [packet.AccountingRequest, packet.AccountingResponse]:
@@ -247,8 +231,8 @@ class Server(host.Host):
         ServerPacketError exception should be raised. The main loop will
         drop the packet and log the reason.
 
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
         self._AddSecret(pkt)
         if pkt.code == packet.CoARequest:
@@ -262,10 +246,11 @@ class Server(host.Host):
         """Read a packet from a network connection.
         This method assumes there is data waiting for to be read.
 
-        :param fd: socket to read packet from
-        :type  fd: socket class instance
-        :return: RADIUS packet
-        :rtype:  Packet class instance
+        Args:
+            fd (socket.socket): Socket to read packet from
+
+        Returns:
+            packet.Packet: RADIUS packet
         """
         (data, source) = fd.recvfrom(self.MaxPacketSize)
         pkt = pktgen(data)
@@ -292,8 +277,8 @@ class Server(host.Host):
         Create a new packet which can be returned as a reply to a received
         packet.
 
-        :param pkt:   original packet
-        :type pkt:    Packet instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
         reply = pkt.CreateReply(**attributes)
         reply.source = pkt.source
@@ -309,8 +294,8 @@ class Server(host.Host):
         HandleAcctPacket() depending on which socket is being
         processed.
 
-        :param  fd: socket to read packet from
-        :type   fd: socket class instance
+        Args:
+            fd (socket.socket): Socket to read the packet from
         """
         if self.auth_enabled and fd.fileno() in self._realauthfds:
             pkt = self._GrabPacket(

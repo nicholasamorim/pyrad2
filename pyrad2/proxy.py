@@ -16,8 +16,8 @@ class Proxy(Server):
     This class extends tha RADIUS server class with the capability to
     handle communication with other RADIUS servers as well.
 
-    :ivar _proxyfd: network socket used to communicate with other servers
-    :type _proxyfd: socket class instance
+    Attributes:
+        _proxyfd (socket.socket): network socket used to communicate with other servers
     """
 
     def _PrepareSockets(self):
@@ -34,8 +34,8 @@ class Proxy(Server):
         :obj:`ServerPacketError` exception should be raised. The main loop
         will drop the packet and log the reason.
 
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            pkt (packet.Packet): Packet to process
         """
         if pkt.source[0] not in self.hosts:
             raise ServerPacketError("Received packet from unknown host")
@@ -58,10 +58,8 @@ class Proxy(Server):
         :obj:`HandleAcctPacket` or :obj:`_HandleProxyPacket` depending on
         which socket is being processed.
 
-        :param  fd: socket to read packet from
-        :type   fd: socket class instance
-        :param pkt: packet to process
-        :type  pkt: Packet class instance
+        Args:
+            fd (socket.socket): socket to read packet from
         """
         if fd.fileno() == self._proxyfd.fileno():
             pkt = self._GrabPacket(lambda data, s=self: s.CreatePacket(packet=data), fd)

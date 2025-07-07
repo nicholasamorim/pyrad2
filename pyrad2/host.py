@@ -1,98 +1,95 @@
+import socket
+from typing import Optional
+
 from pyrad2 import packet
+from pyrad2.dictionary import Dictionary
 
 
 class Host:
-    """Generic RADIUS capable host.
+    """Generic RADIUS capable host."""
 
-    :ivar     dict: RADIUS dictionary
-    :type     dict: pyrad2.dictionary.Dictionary
-    :ivar authport: port to listen on for authentication packets
-    :type authport: integer
-    :ivar acctport: port to listen on for accounting packets
-    :type acctport: integer
-    """
+    def __init__(
+        self,
+        authport: int = 1812,
+        acctport: int = 1813,
+        coaport: int = 3799,
+        dict: Optional[Dictionary] = None,
+    ):
+        """Initializes a host.
 
-    def __init__(self, authport=1812, acctport=1813, coaport=3799, dict=None):
-        """Constructor
-
-        :param authport: port to listen on for authentication packets
-        :type  authport: integer
-        :param acctport: port to listen on for accounting packets
-        :type  acctport: integer
-        :param coaport: port to listen on for CoA packets
-        :type  coaport: integer
-        :param     dict: RADIUS dictionary
-        :type      dict: pyrad2.dictionary.Dictionary
+        Args:
+            authport (int): port to listen on for authentication packets
+            acctport (int): port to listen on for accounting packets
+            coaport (int): port to listen on for CoA packets
+            dict (Dictionary): RADIUS dictionary
         """
         self.dict = dict
         self.authport = authport
         self.acctport = acctport
         self.coaport = coaport
 
-    def CreatePacket(self, **args):
+    def CreatePacket(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS authentication
         packet which can be used to communicate with the RADIUS server
         this client talks to. This is initializing the new packet with
         the dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad2.packet.Packet
+        Returns:
+            pyrad2.packet.Packet: A new empty packet instance.
         """
         return packet.Packet(dict=self.dict, **args)
 
-    def CreateAuthPacket(self, **args):
+    def CreateAuthPacket(self, **args) -> packet.Packet:
         """Create a new authentication RADIUS packet.
         This utility function creates a new RADIUS authentication
         packet which can be used to communicate with the RADIUS server
         this client talks to. This is initializing the new packet with
         the dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad2.packet.AuthPacket
+        Returns:
+            pyrad2.packet.Packet: A new empty packet instance.
         """
         return packet.AuthPacket(dict=self.dict, **args)
 
-    def CreateAcctPacket(self, **args):
+    def CreateAcctPacket(self, **args) -> packet.Packet:
         """Create a new accounting RADIUS packet.
         This utility function creates a new accounting RADIUS packet
         which can be used to communicate with the RADIUS server this
         client talks to. This is initializing the new packet with the
         dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad2.packet.AcctPacket
+        Returns:
+            packet.Packet: A new empty packet instance.
         """
         return packet.AcctPacket(dict=self.dict, **args)
 
-    def CreateCoAPacket(self, **args):
+    def CreateCoAPacket(self, **args) -> packet.Packet:
         """Create a new CoA RADIUS packet.
         This utility function creates a new CoA RADIUS packet
         which can be used to communicate with the RADIUS server this
         client talks to. This is initializing the new packet with the
         dictionary and secret used for the client.
 
-        :return: a new empty packet instance
-        :rtype:  pyrad2.packet.CoAPacket
+        Returns:
+            packet.Packet: A new empty packet instance.
         """
         return packet.CoAPacket(dict=self.dict, **args)
 
-    def SendPacket(self, fd, pkt):
+    def SendPacket(self, fd: socket.socket, pkt) -> None:
         """Send a packet.
 
-        :param fd: socket to send packet with
-        :type  fd: socket class instance
-        :param pkt: packet to send
-        :type  pkt: Packet class instance
+        Args:
+            fd (socket.socket): Socket to send packet with
+            pkt (packet.Packet): The packet instance
         """
         fd.sendto(pkt.Packet(), pkt.source)
 
-    def SendReplyPacket(self, fd, pkt):
+    def SendReplyPacket(self, fd: socket.socket, pkt: packet.Packet) -> None:
         """Send a packet.
 
-        :param fd: socket to send packet with
-        :type  fd: socket class instance
-        :param pkt: packet to send
-        :type  pkt: Packet class instance
+        Args:
+            fd (socket.socket): Socket to send packet with
+            pkt (packet.Packet): The packet instance
         """
-        fd.sendto(pkt.ReplyPacket(), pkt.source)
+        fd.sendto(pkt.ReplyPacket(), pkt.source)  # type: ignore
