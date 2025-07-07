@@ -6,50 +6,35 @@
 
 # Introduction
 
-This is a fork of pyrad aiming to make it compatible with Python 3.12+
-and introduce bug fixes and features.
+This is a fork of pyrad aiming to make it compatible with Python 3.12+ and introduce bug fixes and features. Most of the codebase now has type checking and test coverage has been increased. Legacy compatibility code with (very) older versions of Python have been removed and we only support Python 3.12+.
 
-The documentation below is from pyrad.
+# Original PyRad README
 
 pyrad2 is an implementation of a RADIUS client/server as described in
 RFC2865. It takes care of all the details like building RADIUS packets,
 sending them and decoding responses.
 
-Here is an example of doing a authentication request:
-
-    from pyrad2.client import Client
-    from pyrad2.dictionary import Dictionary
-    import pyrad.packet
-
-    srv = Client(server="localhost", secret=b"Kah3choteereethiejeimaeziecumi",
-                 dict=Dictionary("dictionary"))
-
-    # create request
-    req = srv.CreateAuthPacket(code=pyrad2.packet.AccessRequest,
-                               User_Name="wichert", NAS_Identifier="localhost")
-    req["User-Password"] = req.PwCrypt("password")
-
-    # send request
-    reply = srv.SendPacket(req)
-
-    if reply.code == pyrad2.packet.AccessAccept:
-        print("access accepted")
-    else:
-        print("access denied")
-
-    print("Attributes returned by server:")
-    for i in reply.keys():
-        print("%s: %s" % (i, reply[i]))
+Note that this is not a stand-alone Radius implementation like [FreeRadius](https://www.freeradius.org). You are supposed to inherit the server classes and code your own behind-the-scenes implementation. This package allows you to code your business logic on top of it.
 
 # Requirements & Installation
 
-pyrad2 requires Python 3.12 and uses [uv](https://github.com/astral-sh/uv).
+pyrad2 requires Python 3.12 and uses [uv](https://github.com/astral-sh/uv). On a Mac, you can simply run `brew install uv`.
+
+# Examples
+
+There are a few examples in the `examples` folder. 
+
+The easiest way to start a server is by running `make test_server_async`. This will run the example server in `examples/server_async.py`.
+
+If you want to see a request in action, leave the server running, open another terminal and type `make test_auth`.
 
 # Tests
 
-Run `make test`
+Run `make test`.
 
 # Author, Copyright, Availability
+
+pyrad2 is currently maintaned by Nicholas Amorim \<<nicholas@santos.ee\>.
 
 pyrad was written by Wichert Akkerman \<<wichert@wiggy.net>\> and is
 maintained by Christian Giese (GIC-de) and Istvan Ruzman (Istvan91).
