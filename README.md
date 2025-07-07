@@ -23,6 +23,8 @@ pyrad2 requires Python 3.12 and uses [uv](https://github.com/astral-sh/uv). On a
 
 # Examples
 
+See the [Getting Started]([https://nicholasamorim.github.io/pyrad2/](https://nicholasamorim.github.io/pyrad2/getting_started/) for a better overview.
+
 There are a few examples in the `examples` folder. 
 
 The easiest way to start a server is by running `make test_server_async`. This will run the example server in `examples/server_async.py`.
