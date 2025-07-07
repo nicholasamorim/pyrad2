@@ -6,7 +6,7 @@ theme:
 nav:
   - Home: index.md
   - Getting Started: getting_started.md
-  - Releases: relases.md
+  - Releases: releases.md
   - Pyrad Compatibility : compatibility.md
   - API Reference: api.md
 
