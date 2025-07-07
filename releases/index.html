@@ -9,10 +9,6 @@
       
       
       
-        <link rel="prev" href="../getting_started/">
-      
-      
-        <link rel="next" href="../api/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -20,7 +16,7 @@
     
     
       
-        <title>Pyrad Compatibility - pyrad2</title>
+        <title>Releases - pyrad2</title>
       
     
     
@@ -62,7 +58,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pyrad-compatibility" class="md-skip">
+        <a href="#releases" class="md-skip">
           Skip to content
         </a>
       
@@ -98,7 +94,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Pyrad Compatibility
+              Releases
             
           </span>
         </div>
@@ -257,32 +253,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Pyrad Compatibility
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../compatibility/" class="md-nav__link">
         
   
   
@@ -293,35 +267,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#list-of-breaking-changes" class="md-nav__link">
-    <span class="md-ellipsis">
-      List of breaking changes
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -375,9 +320,9 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#list-of-breaking-changes" class="md-nav__link">
+  <a href="#10-2025-07-07" class="md-nav__link">
     <span class="md-ellipsis">
-      List of breaking changes
+      1.0 (2025-07-07)
     </span>
   </a>
   
@@ -399,11 +344,19 @@
 
 
 
-<h1 id="pyrad-compatibility">Pyrad Compatibility</h1>
-<p>In so far, there is near full-compatibility with pyrad and you can just replace your imports with <code>pyrad2</code>.</p>
-<h2 id="list-of-breaking-changes">List of breaking changes</h2>
+<h1 id="releases">Releases</h1>
+<h2 id="10-2025-07-07">1.0 (2025-07-07)</h2>
 <ul>
-<li>Removed <a href="https://twisted.org">twisted</a> support.</li>
+<li>Extensively refactored code</li>
+<li>Remove legacy Python 2.x/3.x and support only Python 3.12</li>
+<li>Add typing support to the whole codebase using mypy.</li>
+<li>Poetry phased out in favour of uv</li>
+<li><a href="https://github.com/pyradius/pyrad/pull/213">#213</a> in PyRad fixed.</li>
+<li><a href="https://github.com/pyradius/pyrad/pull/210">#210</a> in PyRad merged.</li>
+<li>Remove <code>nose</code> as it's unmaintained and replace it with pytest. <code>pytest-sugar</code> being used for pretty test output.</li>
+<li>Added loguru dependency for better log formatting.</li>
+<li>Modernize AsyncIO code.</li>
+<li>Update README.md</li>
 </ul>
 
 
