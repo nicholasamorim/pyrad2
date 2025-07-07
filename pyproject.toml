@@ -18,6 +18,10 @@ dev = [
     "ruff>=0.12.2",
     "types-setuptools>=80.9.0.20250529",
 ]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.15",
+]
 
 # [build-system]
 # requires = ["setuptools>=61.0", "wheel"]

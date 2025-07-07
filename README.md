@@ -7,6 +7,8 @@
 pyrad2 is an implementation of a RADIUS client/server as described in RFC2865. It takes care of all the details like building RADIUS packets,
 sending them and decoding responses.
 
+Documentation can be found [here](https://nicholasamorim.github.io/pyrad2/).
+
 # Introduction
 
 This is a fork of [pyrad](https://github.com/pyradius/pyrad) aiming to make it compatible with Python 3.12+ and introduce bug fixes and features. Most of the codebase now has type checking and test coverage has been increased. Legacy compatibility code with (very) older versions of Python have been removed and we only support Python 3.12+.

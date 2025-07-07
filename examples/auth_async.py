@@ -33,7 +33,7 @@ def create_request(client, user):
     return req
 
 
-def print_reply(reply):
+def log_reply(reply):
     if reply.code == AccessAccept:
         logger.info("Access accepted")
     else:
@@ -61,16 +61,7 @@ def test_auth1():
             )
         )
 
-        req = client.CreateAuthPacket(User_Name="wichert")
-
-        req["NAS-IP-Address"] = "192.168.1.10"
-        req["NAS-Port"] = 0
-        req["Service-Type"] = "Login-User"
-        req["NAS-Identifier"] = "trillian"
-        req["Called-Station-Id"] = "00-04-5F-00-0F-D1"
-        req["Calling-Station-Id"] = "00-01-24-80-B3-9C"
-        req["Framed-IP-Address"] = "10.0.0.100"
-
+        req = create_request(client, "wichert")
         future = client.SendPacket(req)
 
         #    loop.run_until_complete(future)
@@ -140,7 +131,7 @@ def test_multi_auth():
                 logger.error("EXCEPTION {}", future.exception())
             else:
                 reply = future.result()
-                print_reply(reply)
+                log_reply(reply)
 
         # Close transports
         loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
@@ -157,5 +148,6 @@ def test_multi_auth():
     loop.close()
 
 
-# test_multi_auth()
-test_auth1()
+if __name__ == "__main__":
+    # test_multi_auth()
+    test_auth1()

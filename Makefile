@@ -12,3 +12,9 @@ test_server_async:
 
 test_auth:
 	PYTHONPATH=. uv run examples/auth_async.py
+
+serve_docs:
+	uv run mkdocs serve
+	
+deploy_docs:
+	uv run mkdocs gh-deploy

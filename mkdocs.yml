@@ -1,0 +1,21 @@
+site_name: pyrad2
+theme:
+  name: material
+  features:
+    - content.code.copy
+nav:
+  - Home: index.md
+  - Getting Started: getting_started.md
+  - Pyrad Compatibility : compatibility.md
+  - API Reference: api.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
