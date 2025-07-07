@@ -1,6 +1,7 @@
 import fcntl
 import os
-from pyrad.packet import PacketError
+
+from pyrad2.packet import PacketError
 
 
 class MockPacket:
@@ -25,6 +26,7 @@ class MockPacket:
 
     def __contains__(self, key):
         return key in self.data
+
     has_key = __contains__
 
     def __setitem__(self, key, value):
@@ -76,7 +78,7 @@ class MockFinished(Exception):
 
 
 class MockPoll:
-    results = []
+    results: list[bytes] = []
 
     def __init__(self):
         self.registry = {}
@@ -91,8 +93,7 @@ class MockPoll:
             pass
 
     def poll(self, timeout=None):
-        for result in self.results:
-            yield result
+        yield from self.results
         raise MockFinished
 
 
@@ -120,7 +121,7 @@ def UnmockClassMethods(klass):
     key = origkey(klass)
     if not hasattr(klass, key):
         return
-    for (name, func) in getattr(klass, key).items():
+    for name, func in getattr(klass, key).items():
         setattr(klass, name, func)
 
     delattr(klass, key)
