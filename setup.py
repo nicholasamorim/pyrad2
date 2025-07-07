@@ -8,11 +8,11 @@ setup(
     name="pyrad2",
     version=pyrad2.__version__,
     author="Nicholas Amorim, Istvan Ruzman, Christian Giese",
-    author_email="nicholas@bloomshield.ee, istvan@ruzman.eu, developer@gicnet.de",
+    author_email="nicholas@santos.ee, istvan@ruzman.eu, developer@gicnet.de",
     url="https://github.com/nicholasamorim/pyrad2",
     license="BSD",
     description="RADIUS tools",
-    long_description=open("README.rst").read(),
+    long_description=open("README.md").read(),
     classifiers=[
         "Development Status :: 6 - Mature",
         "Intended Audience :: Developers",
@@ -26,6 +26,5 @@ setup(
     keywords=["radius", "authentication"],
     zip_safe=True,
     include_package_data=True,
-    tests_require="nose>=0.10.0b1",
-    test_suite="nose.collector",
+    tests_require=["pytest>=6.0"],
 )
