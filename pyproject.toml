@@ -14,7 +14,6 @@ dev = [
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
     "pytest-sugar>=1.0.0",
-    "pyupgrade>=3.20.0",
     "ruff>=0.12.2",
     "types-setuptools>=80.9.0.20250529",
 ]
