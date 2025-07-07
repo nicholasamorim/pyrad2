@@ -10,7 +10,7 @@
 - [RADIUS Server](#radius-server)
     - [Handling packets](#handling-packets)
     - [Replying](#replying)
-- [Running a client](#running-a-client)
+- [RADIUS Client](#radius-server)
     - [Sending an authentication packet](#sending-an-authentication-packet)
 - [Setting attributes](#setting-attributes)
   
@@ -152,7 +152,7 @@ CoAACK = 44
 CoANAK = 45
 ```
 
-# Running a client
+# RADIUS Client
 
 To instantiate a client you can use `ClientAsync`. A sync version is also provided in `pyrad2.client`.
 
