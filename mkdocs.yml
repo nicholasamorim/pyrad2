@@ -13,6 +13,9 @@ nav:
       - server_async: api/server_async.md
       - client: api/client.md
       - client_async: api/client_async.md
+      - radsec:
+        - Server: api/radsec_server.md
+        - Client: api/radsec_client.md
       - packet: api/packet.md
       - dictionary: api/dictionary.md
       - host: api/host.md

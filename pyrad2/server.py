@@ -15,7 +15,7 @@ class RemoteHost:
 
     Args:
         address (str): IP address.
-        secret (bytes): RADIUS secret.
+        secret (bytes): RADIUS secret. If connecting to a RadSec server, the secret should be `radsec`.
         name (str): Short name (used for logging only).
         authport (int): Port used for authentication packets.
         acctport (int): Port used for accounting packets.

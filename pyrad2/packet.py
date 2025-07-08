@@ -1,9 +1,3 @@
-# packet.py
-#
-# Copyright 2002-2005,2007 Wichert Akkerman <wichert@wiggy.net>
-#
-# A RADIUS packet as defined in RFC 2138
-
 import hashlib
 import hmac
 import secrets
@@ -12,7 +6,7 @@ from collections import OrderedDict
 from typing import Any, Hashable, Optional, Union
 
 from pyrad2 import tools
-from pyrad2.dictionary import Attribute, RadiusAttributeValue
+from pyrad2.dictionary import Attribute, Dictionary, RadiusAttributeValue
 
 
 def hmac_new(*args, **kwargs):
@@ -1026,3 +1020,19 @@ def CreateID() -> int:
 
     CurrentID = (CurrentID + 1) % 256
     return CurrentID
+
+
+def parse_packet(data: bytes, secret: bytes, dictionary: Optional[Dictionary]):
+    code = data[0]
+    packet_class: type[Packet]
+
+    if code == AccessRequest:
+        packet_class = AuthPacket
+    elif code in (AccountingRequest, AccountingResponse):
+        packet_class = AcctPacket
+    elif code in (CoARequest, DisconnectRequest):
+        packet_class = CoAPacket
+    else:
+        packet_class = Packet
+
+    return packet_class(packet=data, dict=dictionary, secret=secret)
