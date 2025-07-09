@@ -1,27 +1,32 @@
 #!/usr/bin/python
+import sys
+
+from loguru import logger
+
 from pyrad2.client import Client
 from pyrad2.dictionary import Dictionary
-import sys
-import pyrad2.packet
+from pyrad2.exceptions import Timeout
+from pyrad2.constants import PacketType
+
 
 srv = Client(
-    server="localhost", authport=18121, secret=b"test", dict=Dictionary("dictionary")
+    server="127.0.0.1", authport=18121, secret=b"test", dict=Dictionary("dictionary")
 )
 
-req = srv.CreateAuthPacket(code=pyrad2.packet.StatusServer)
+req = srv.CreateAuthPacket(code=PacketType.StatusServer)
 req["FreeRADIUS-Statistics-Type"] = "All"
 req.add_message_authenticator()
 
 try:
-    print("Sending FreeRADIUS status request")
+    logger.info("Sending FreeRADIUS status request")
     reply = srv.SendPacket(req)
-except pyrad2.client.Timeout:
-    print("RADIUS server does not reply")
+except Timeout:
+    logger.error("RADIUS server does not reply")
     sys.exit(1)
 except OSError as error:
-    print("Network error: " + error[1])
+    logger.error("Network error: {}", error[1])
     sys.exit(1)
 
 print("Attributes returned by server:")
 for i in reply.keys():
-    print("{}: {}".format(i, reply[i]))
+    logger.info("{}: {}", i, reply[i])

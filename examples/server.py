@@ -1,20 +1,15 @@
 #!/usr/bin/python
-from pyrad2 import dictionary, packet, server
-import logging
-
-logging.basicConfig(
-    filename="pyrad2.log",
-    level="DEBUG",
-    format="%(asctime)s [%(levelname)-8s] %(message)s",
-)
+from pyrad2 import dictionary, server
+from pyrad2.constants import PacketType
+from loguru import logger
 
 
 class FakeServer(server.Server):
     def HandleAuthPacket(self, pkt):
-        print("Received an authentication request")
-        print("Attributes: ")
+        logger.info("Received an authentication request")
+        logger.info("Attributes: ")
         for attr in pkt.keys():
-            print("{}: {}".format(attr, pkt[attr]))
+            logger.info("{}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(
             pkt,
@@ -25,32 +20,32 @@ class FakeServer(server.Server):
             },
         )
 
-        reply.code = packet.AccessAccept
+        reply.code = PacketType.AccessAccept
         self.SendReplyPacket(pkt.fd, reply)
 
     def HandleAcctPacket(self, pkt):
-        print("Received an accounting request")
-        print("Attributes: ")
+        logger.info("Received an accounting request")
+        logger.info("Attributes: ")
         for attr in pkt.keys():
-            print("{}: {}".format(attr, pkt[attr]))
+            logger.info("{}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(pkt)
         self.SendReplyPacket(pkt.fd, reply)
 
     def HandleCoaPacket(self, pkt):
-        print("Received an coa request")
-        print("Attributes: ")
+        logger.info("Received an coa request")
+        logger.info("Attributes: ")
         for attr in pkt.keys():
-            print("{}: {}".format(attr, pkt[attr]))
+            logger.info("{}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(pkt)
         self.SendReplyPacket(pkt.fd, reply)
 
     def HandleDisconnectPacket(self, pkt):
-        print("Received an disconnect request")
-        print("Attributes: ")
+        logger.info("Received an disconnect request")
+        logger.info("Attributes: ")
         for attr in pkt.keys():
-            print("{}: {}".format(attr, pkt[attr]))
+            logger.info("{}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(pkt)
         # COA NAK

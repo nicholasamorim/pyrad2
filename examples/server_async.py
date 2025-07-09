@@ -6,7 +6,7 @@ import traceback
 from loguru import logger
 
 from pyrad2.dictionary import Dictionary
-from pyrad2.packet import AccessAccept
+from pyrad2.constants import PacketType
 from pyrad2.server import RemoteHost
 from pyrad2.server_async import ServerAsync
 
@@ -32,7 +32,7 @@ class FakeServer(ServerAsync):
             },
         )
 
-        reply.code = AccessAccept
+        reply.code = PacketType.AccessAccept
         protocol.send_response(reply, addr)
 
     def handle_acct_packet(self, protocol, pkt, addr):
@@ -65,39 +65,28 @@ class FakeServer(ServerAsync):
         protocol.send_response(reply, addr)
 
 
-if __name__ == "__main__":
-    # create server and read dictionary
-    loop = asyncio.get_event_loop()
+async def main():
     server = FakeServer(dictionary=Dictionary("dictionary"))
-
-    # add clients (address, secret, name)
     server.hosts["127.0.0.1"] = RemoteHost(
         "127.0.0.1", b"Kah3choteereethiejeimaeziecumi", "localhost"
     )
 
     try:
-        # Initialize transports
-        loop.run_until_complete(
-            asyncio.ensure_future(
-                server.initialize_transports(
-                    enable_auth=True, enable_acct=True, enable_coa=True
-                )
-            )
+        await server.initialize_transports(
+            enable_auth=True, enable_acct=True, enable_coa=True
         )
 
         try:
-            # start server
-            loop.run_forever()
+            await asyncio.Future()  # run forever until cancelled or interrupted
         except KeyboardInterrupt:
             pass
 
-        # Close transports
-        loop.run_until_complete(asyncio.ensure_future(server.deinitialize_transports()))
-
     except Exception as exc:
-        logger.error("Error: {}", exc)
+        logger.error("Error: %s", exc)
         logger.error("\n".join(traceback.format_exc().splitlines()))
-        # Close transports
-        loop.run_until_complete(asyncio.ensure_future(server.deinitialize_transports()))
+    finally:
+        await server.deinitialize_transports()
 
-    loop.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())

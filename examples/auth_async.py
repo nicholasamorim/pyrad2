@@ -7,16 +7,16 @@ from loguru import logger
 
 from pyrad2.client_async import ClientAsync
 from pyrad2.dictionary import Dictionary
-from pyrad2.packet import AccessAccept
+from pyrad2.constants import PacketType
 
-client = ClientAsync(
-    server="localhost",
-    secret=b"Kah3choteereethiejeimaeziecumi",
-    timeout=4,
-    dict=Dictionary("dictionary"),
-)
 
-loop = asyncio.get_event_loop()
+def get_async_client():
+    return ClientAsync(
+        server="localhost",
+        secret=b"Kah3choteereethiejeimaeziecumi",
+        timeout=4,
+        dict=Dictionary("dictionary"),
+    )
 
 
 def create_request(client, user):
@@ -34,120 +34,93 @@ def create_request(client, user):
 
 
 def log_reply(reply):
-    if reply.code == AccessAccept:
+    if reply.code == PacketType.AccessAccept:
         logger.info("Access accepted")
     else:
-        logger.info("Access denied")
+        logger.error("Access denied")
 
     logger.info("Attributes returned by server:")
     for i in reply.keys():
         logger.info("{}: {}", i, reply[i])
 
 
-def test_auth1():
-    global client
-
+async def test_auth1():
+    client = None
     try:
-        # Initialize transports
-        loop.run_until_complete(
-            asyncio.ensure_future(
-                client.initialize_transports(
-                    enable_auth=True,
-                    local_addr="127.0.0.1",
-                    local_auth_port=8000,
-                    enable_acct=True,
-                    enable_coa=True,
-                )
-            )
+        client = get_async_client()
+
+        await client.initialize_transports(
+            enable_auth=True,
+            local_addr="127.0.0.1",
+            local_auth_port=8000,
+            enable_acct=True,
+            enable_coa=True,
         )
 
         req = create_request(client, "wichert")
-        future = client.SendPacket(req)
+        reply = await client.SendPacket(req)
 
-        #    loop.run_until_complete(future)
-        loop.run_until_complete(
-            asyncio.ensure_future(asyncio.gather(future, return_exceptions=True))
-        )
-
-        if future.exception():
-            logger.error("EXCEPTION ", future.exception())
-        else:
-            reply = future.result()
-
-            if reply.code == AccessAccept:
+        try:
+            if reply.code == PacketType.AccessAccept:
                 logger.info("Access accepted")
             else:
-                logger.info("Access denied")
+                logger.error("Access denied")
 
             logger.info("Attributes returned by server:")
-            for i in reply.keys():
-                logger.info("{}: {}", i, reply[i])
+            for key in reply.keys():
+                logger.info("{}: {}", key, reply[key])
 
-        # Close transports
-        loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
+        except Exception as packet_exc:
+            logger.error("EXCEPTION: {}", packet_exc)
+
+        await client.deinitialize_transports()
         logger.info("END")
 
-        del client
     except Exception as exc:
-        # global client
         logger.error("Error: {}", exc)
         logger.error("\n".join(traceback.format_exc().splitlines()))
-        # Close transports
-        loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
 
-    loop.close()
+        if client is not None:
+            await client.deinitialize_transports()
 
 
-def test_multi_auth():
-    # global client
-
+async def test_multi_auth():
+    client = None
     try:
-        # Initialize transports
-        loop.run_until_complete(
-            asyncio.ensure_future(
-                client.initialize_transports(
-                    enable_auth=True,
-                    local_addr="127.0.0.1",
-                    local_auth_port=8000,
-                    enable_acct=True,
-                    enable_coa=True,
-                )
-            )
+        client = get_async_client()
+
+        await client.initialize_transports(
+            enable_auth=True,
+            local_addr="127.0.0.1",
+            local_auth_port=8000,
+            enable_acct=True,
+            enable_coa=True,
         )
 
-        reqs = []
+        tasks = []
         for i in range(255):
-            req = create_request(client, "user%s" % i)
-            future = client.SendPacket(req)
-            reqs.append(future)
+            req = create_request(client, f"user{i}")
+            task = client.SendPacket(req)  # assuming SendPacket is awaitable
+            tasks.append(task)
 
-        #    loop.run_until_complete(future)
-        loop.run_until_complete(
-            asyncio.ensure_future(asyncio.gather(*reqs, return_exceptions=True))
-        )
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for future in reqs:
-            if future.exception():
-                logger.error("EXCEPTION {}", future.exception())
+        for response in responses:
+            if isinstance(response, Exception):
+                logger.error("EXCEPTION: %s", response)
             else:
-                reply = future.result()
-                log_reply(reply)
+                log_reply(response)
 
-        # Close transports
-        loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
-        logger.info("END")
-
-        del client
     except Exception as exc:
-        # global client
-        logger.error("Error: ", exc)
-        print("\n".join(traceback.format_exc().splitlines()))
-        # Close transports
-        loop.run_until_complete(asyncio.ensure_future(client.deinitialize_transports()))
+        logger.error("Unhandled Error: {}", exc)
+        logger.error("\n".join(traceback.format_exc().splitlines()))
 
-    loop.close()
+    finally:
+        if client:
+            await client.deinitialize_transports()
+            logger.info("END")
 
 
 if __name__ == "__main__":
-    # test_multi_auth()
-    test_auth1()
+    asyncio.run(test_auth1())
+    asyncio.run(test_multi_auth())

@@ -1,11 +1,9 @@
-#!/usr/bin/python
-#
-# Copyright 6WIND, 2017
-#
-
-from pyrad2 import dictionary, packet, server
 import sys
-import prctl
+
+from loguru import logger
+
+from pyrad2 import dictionary, server
+from pyrad2.constants import PacketType
 
 
 class FakeCoA(server.Server):
@@ -17,32 +15,29 @@ class FakeCoA(server.Server):
         :param pkt: packet to process
         :type  pkt: Packet class instance
         """
-        print("Received a coa request %d" % pkt.code)
-        print("  Attributes: ")
+        logger.info("Received a coa request {}", pkt.code)
+        logger.info("  Attributes: ")
         for attr in pkt.keys():
-            print("  {}: {}".format(attr, pkt[attr]))
+            logger.info("  {}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(pkt)
-        # try ACK or NACK
-        # reply.code = packet.CoANAK
-        reply.code = packet.CoAACK
+        reply.code = PacketType.CoAACK
         self.SendReplyPacket(pkt.fd, reply)
 
     def HandleDisconnectPacket(self, pkt):
-        print("Received a disconnect request %d" % pkt.code)
-        print("  Attributes: ")
+        logger.info("Received a disconnect request {}", pkt.code)
+        logger.info("  Attributes: ")
         for attr in pkt.keys():
-            print("  {}: {}".format(attr, pkt[attr]))
+            logger.info("  {}: {}", attr, pkt[attr])
 
         reply = self.CreateReplyPacket(pkt)
         # try ACK or NACK
-        # reply.code = packet.DisconnectNAK
-        reply.code = packet.DisconnectACK
+        reply.code = PacketType.DisconnectACK
         self.SendReplyPacket(pkt.fd, reply)
 
 
 if __name__ == "__main__":
-    prctl.set_name("radius-FakeCoA-client")
+    # prctl.set_name("radius-FakeCoA-client")
 
     if len(sys.argv) != 2:
         print("usage: client-coa.py 3799")
