@@ -1,6 +1,43 @@
 # Releases
 
-## 1.0 (2025-07-07)
+
+# 1.1.1 (2025-07-09)
+
+## Fixes
+
+- `ssl.CERT_REQUIRED` is enabled by default.
+
+
+# 1.1.0 (2025-07-09)
+
+## Features
+
+- Add RadSec (RFC 6614) support. _Experimental_
+- Ensure all examples in the `examples` folder are working.
+
+## Refactors
+
+- Move constants to `pyrad2.constants`
+- Move several global variables into `pyrad2.constants`.
+- EAP and Packet types are now acessed via PacketType enum in `constants` module. 
+- `DATATYPES` has moved to `constants.py`
+- Consolidate all exceptions under `exceptions.py`. All of the libraries exceptions inherit from `RadiusException` now.
+
+## Testing
+
+- Improve typing and testing coverage.
+
+## Documentation
+
+- Improve navigation.
+- Add RadSec pages.
+
+## Chore
+
+- Add several testing options to Makefile.
+- Add test/example SSL certificates for server and client.
+
+# 1.0 (2025-07-07)
 
 - Extensively refactored code
 - Remove legacy Python 2.x/3.x and support only Python 3.12

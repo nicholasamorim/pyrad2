@@ -1,8 +1,13 @@
 Changelog
 =========
 
+1.1.1 - Jul 9, 2025
 
-1.1 - Jul 9, 2025
+# Fixes
+
+- `ssl.CERT_REQUIRED` is enabled by default.
+
+1.1.0 - Jul 9, 2025
 
 # Features
 
