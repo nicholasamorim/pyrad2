@@ -1,5 +1,6 @@
 import asyncio
 import os
+import ssl
 
 from loguru import logger
 
@@ -8,6 +9,8 @@ from pyrad2.dictionary import Dictionary
 from pyrad2.packet import AcctPacket, AuthPacket, CoAPacket
 from pyrad2.radsec.server import RadSecServer as BaseRadSecServer
 from pyrad2.server import RemoteHost
+
+THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
 
 
 class RadSecServer(BaseRadSecServer):
@@ -62,13 +65,13 @@ async def main():
         "127.0.0.1": RemoteHost(name="localhost", address="127.0.0.1", secret=b"radsec")
     }
 
-    THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
     server = RadSecServer(
         hosts=hosts,
         dictionary=Dictionary(THIS_FOLDER + "/dictionary"),
         certfile=THIS_FOLDER + "/certs/server/server.cert.pem",
         keyfile=THIS_FOLDER + "/certs/server/server.key.pem",
         ca_certfile=THIS_FOLDER + "/certs/ca/ca.cert.pem",
+        verify_mode=ssl.CERT_REQUIRED,
     )
 
     await server.run()

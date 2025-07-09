@@ -312,15 +312,6 @@ def get_cert_fingerprint(cert: bytes) -> str:
     return hash.hex()  # or base64.b64encode(sha256).decode()
 
 
-def get_client_fingerprint(ssl_object: ssl.SSLSocket) -> str | None:
-    """Returns SHA-256 fingerprint of the client certificate."""
-    cert = ssl_object.getpeercert(binary_form=True)
-    if cert:
-        fingerprint = sha256(cert).hexdigest()
-        return fingerprint
-    return None
-
-
 async def read_radius_packet(reader: StreamReader) -> bytes:
     """Read a full RADIUS packet from the stream.
 

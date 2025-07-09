@@ -16,7 +16,10 @@ from pyrad2.packet import (
     parse_packet,
 )
 from pyrad2.server import RemoteHost, ServerPacketError
-from pyrad2.tools import get_client_fingerprint, read_radius_packet
+from pyrad2.tools import (
+    get_cert_fingerprint,
+    read_radius_packet,
+)
 
 
 class UnknownHost(Exception):
@@ -124,10 +127,12 @@ class RadSecServer:
 
         client_id = None
         if cert_bin:
-            cert = writer.get_extra_info("ssl_object").getpeercert(binary_form=True)
-            # fingerprint = hashlib.sha256(cert).hexdigest()
-            client_id = get_client_fingerprint(cert)
-            logger.info("Client {} fingerprint: {}", peername, client_id)
+            client_id = writer.get_extra_info("ssl_object").getpeercert(
+                binary_form=True
+            )
+            logger.info(
+                "Client {} fingerprint: {}", peername, get_cert_fingerprint(client_id)
+            )
         else:
             logger.warning("No certificate from client {}", peername)
 
