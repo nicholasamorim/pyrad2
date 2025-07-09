@@ -32,7 +32,7 @@ class RemoteHostTests(unittest.TestCase):
         )
         self.assertEqual(host.name, "name")
         self.assertEqual(host.address, "127.0.0.1")
-        self.assertEqual(host.secret, "radsec")
+        self.assertEqual(host.secret, b"radsec")
 
 
 class RadSecServer(BaseRadSecServer):
