@@ -12,12 +12,12 @@
 
 What this fork does:
    
+- Adds RadSec (RFC 6614) support (Experimental)
 - Supports only Python 3.12+
 - Extensive typing
 - Increased test coverage
 - New bug fixes
-- Experimental RadSec support
     
-PRs are _very_ welcome. For more information on what has changed, see our [releases](https://github.com/nicholasamorim/pyrad2/releases) page.
+PRs are very welcome. For more information on what has changed, see our [releases](https://github.com/nicholasamorim/pyrad2/releases) page.
 
 See the [Getting Started](/getting_started) guide for a tutorial on how to get started.

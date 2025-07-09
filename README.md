@@ -6,14 +6,21 @@
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)]([https://github.com/psf/black](https://github.com/astral-sh/uv))
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
-pyrad2 is an implementation of a RADIUS client/server as described in RFC2865. It takes care of all the details like building RADIUS packets,
-sending them and decoding responses.
+pyrad2 is an implementation of a RADIUS client/server as described in RFC2865 and of RADSEC client/server as described in RFC6614. It takes care of all the details like building RADIUS packets,sending them and decoding responses.
 
 **Documentation can be found [here](https://nicholasamorim.github.io/pyrad2/).**
 
 # Introduction
 
-This is a fork of [pyrad](https://github.com/pyradius/pyrad) aiming to make it compatible with Python 3.12+ and introduce bug fixes and features. Most of the codebase now has type checking and test coverage has been increased. Legacy compatibility code with (very) older versions of Python have been removed and we only support Python 3.12+.
+[pyrad2](https://github.com/nicholasamorim/pyrad2) is an implementation of a RADIUS client/server as described in RFC2865. It takes care of all the details like building RADIUS packets, sending them and decoding responses.
+
+What this fork does:
+   
+- Adds RadSec (RFC 6614) support (Experimental)
+- Supports only Python 3.12+
+- Extensive typing
+- Increased test coverage
+- New bug fixes
 
 Note that this is _not_ a stand-alone Radius implementation like [FreeRadius](https://www.freeradius.org). You are supposed to inherit the server classes and code your own behind-the-scenes implementation. This package allows you to code your business logic on top of it.
 
@@ -25,11 +32,11 @@ pyrad2 requires Python 3.12 and uses [uv](https://github.com/astral-sh/uv). On a
 
 See the [Getting Started guide](https://nicholasamorim.github.io/pyrad2/getting_started/) for a better overview.
 
-There are a few examples in the `examples` folder. 
+There are a few examples in the `examples` folder. You can either install pyrad2 and use the examples or clone the repo. If you clone the repo, make commands are useful.
 
-The easiest way to start a server is by running `make test_server_async`. This will run the example server in `examples/server_async.py`.
+The easiest way to start a server is by running `make server`. This will run the example server in `examples/server_async.py`.
 
-If you want to see a request in action, leave the server running, open another terminal and type `make test_auth`.
+If you want to see a request in action, leave the server running, open another terminal and type `make auth`. Several other commands are available such as `make server_radsec`, `make server_coa`, `make_acct`, etc.
 
 # Tests
 
