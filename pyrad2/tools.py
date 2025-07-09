@@ -5,8 +5,6 @@ from asyncio import StreamReader
 from collections.abc import Buffer
 from hashlib import sha256
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
-from pathlib import Path
-from typing import IO, Union
 
 
 def EncodeString(origstr: str) -> bytes:
@@ -350,16 +348,3 @@ async def read_radius_packet(reader: StreamReader) -> bytes:
 
     body = await reader.readexactly(length - 4)
     return header + body
-
-
-def read_content(source: Union[str, Path, IO[str]]) -> str:
-    """Read contents of a path or a file-like object"""
-    if isinstance(source, (str, Path)):
-        with open(source, "r", encoding="utf-8") as f:
-            return f.read()
-    elif hasattr(source, "read"):
-        return source.read()
-    else:
-        raise TypeError(
-            "source must be a path string, Path object, or a file-like object."
-        )
