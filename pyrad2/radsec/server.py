@@ -49,9 +49,9 @@ class RadSecServer:
         hosts: Optional[dict[str, RemoteHost]] = None,
         dictionary: Optional[Dictionary] = None,
         verify_packet: bool = False,
-        certfile: str = "certs/server/server.crt",
-        keyfile: str = "certs/server/server.key",
-        ca_certfile: str = "certs/client/server.crt",
+        certfile: str = "certs/server/server.cert.pem",
+        keyfile: str = "certs/server/server.key.pem",
+        ca_certfile: str = "certs/ca/ca.cert.pem",
         verify_mode: ssl.VerifyMode = ssl.CERT_NONE,
     ):
         """Initializes a RadSec server.
