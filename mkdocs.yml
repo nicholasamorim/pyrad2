@@ -3,9 +3,14 @@ theme:
   name: material
   features:
     - content.code.copy
+    - navigation.expand
+    
 nav:
   - Home: index.md
-  - Getting Started: getting_started.md
+  - Getting Started:
+    - Setup and Concepts: setup.md
+    - Running a RADIUS Server: server.md
+    - Making RADIUS Requests: client.md
   - Releases: releases.md
   - Pyrad Compatibility : compatibility.md
   - API Reference:
