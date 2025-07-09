@@ -1,8 +1,10 @@
 #!/usr/bin/python
-from pyrad2.client import Client
-from pyrad2 import dictionary
-from pyrad2 import packet
 import sys
+
+from loguru import logger
+
+from pyrad2 import dictionary, packet
+from pyrad2.client import Client
 
 if len(sys.argv) != 3:
     print("usage: coa.py {coa|dis} daemon-1234")
@@ -34,5 +36,5 @@ else:
 
 # send request
 result = client.SendPacket(request)
-print(result)
-print(result.code)
+logger.info(result)
+logger.info("Result code: {}", result.code)

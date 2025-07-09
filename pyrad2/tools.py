@@ -1,6 +1,9 @@
 import binascii
+import ssl
 import struct
+from asyncio import StreamReader
 from collections.abc import Buffer
+from hashlib import sha256
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
 
 
@@ -299,3 +302,49 @@ def DecodeAttr(datatype: str, value) -> bytes | str:
         return DecodeInteger64(value)
     else:
         raise ValueError("Unknown attribute type %s" % datatype)
+
+
+def get_cert_fingerprint(cert: bytes) -> str:
+    """Generate SHA-256 fingerprint from a certificate."""
+    der_bytes = ssl.PEM_cert_to_DER_cert(ssl.DER_cert_to_PEM_cert(cert))
+    hash = sha256(der_bytes).digest()
+    # Return in base64 or hex
+    return hash.hex()  # or base64.b64encode(sha256).decode()
+
+
+def get_client_fingerprint(ssl_object: ssl.SSLSocket) -> str | None:
+    """Returns SHA-256 fingerprint of the client certificate."""
+    cert = ssl_object.getpeercert(binary_form=True)
+    if cert:
+        fingerprint = sha256(cert).hexdigest()
+        return fingerprint
+    return None
+
+
+async def read_radius_packet(reader: StreamReader) -> bytes:
+    """Read a full RADIUS packet from the stream.
+
+    There's no built-in framing in RadSec, so we can't read a fixed-size packet.
+    Instead, we read the header first to determine the length of the packet,
+    and then read the rest of the packet based on that length.
+
+    RADIUS packets are prefixed with a 4-byte header:
+        - Code (1 byte)
+        - Identifier (1 byte)
+        - Length (2 bytes)
+
+    The length includes the header, so the minimum length is 20 bytes
+    (4-byte header + 16-byte Authenticator).
+    If the length is less than 20, it is considered invalid.
+
+    :param reader: asyncio StreamReader to read from
+    :return: Full RADIUS packet as bytes
+    """
+    header = await reader.readexactly(4)
+    code, identifier, length = struct.unpack("!BBH", header)
+
+    if length < 20:
+        raise ValueError("Invalid RADIUS packet length")
+
+    body = await reader.readexactly(length - 4)
+    return header + body

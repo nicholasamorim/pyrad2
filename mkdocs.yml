@@ -3,9 +3,14 @@ theme:
   name: material
   features:
     - content.code.copy
+    - navigation.expand
+    
 nav:
   - Home: index.md
-  - Getting Started: getting_started.md
+  - Getting Started:
+    - Setup and Concepts: setup.md
+    - Running a RADIUS Server: server.md
+    - Making RADIUS Requests: client.md
   - Releases: releases.md
   - Pyrad Compatibility : compatibility.md
   - API Reference:
@@ -13,6 +18,9 @@ nav:
       - server_async: api/server_async.md
       - client: api/client.md
       - client_async: api/client_async.md
+      - radsec:
+        - Server: api/radsec_server.md
+        - Client: api/radsec_client.md
       - packet: api/packet.md
       - dictionary: api/dictionary.md
       - host: api/host.md

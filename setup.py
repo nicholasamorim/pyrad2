@@ -23,7 +23,7 @@ setup(
         "Topic :: System :: Systems Administration :: Authentication/Directory",
     ],
     packages=find_packages(exclude=["tests"]),
-    keywords=["radius", "authentication"],
+    keywords=["radius", "radsec", "authentication", "aaa"],
     zip_safe=True,
     include_package_data=True,
     tests_require=["pytest>=6.0"],

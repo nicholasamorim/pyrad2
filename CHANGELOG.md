@@ -1,6 +1,37 @@
 Changelog
 =========
 
+
+1.1 - Jul 9, 2025
+
+# Features
+
+- add RadSec (RFC 6614) support. _Experimental_
+- Ensure all examples in the `examples` folder are working.
+
+# Refactors
+
+- Move constants to `pyrad2.constants`
+- Move several global variables into `pyrad2.constants`.
+- EAP and Packet types are now acessed via PacketType enum in `constants` module. 
+- `DATATYPES` has moved to `constants.py`
+- Consolidate all exceptions under `exceptions.py`. All of the libraries exceptions inherit from `RadiusException` now.
+
+# Testing
+
+- Improve typing and testing coverage.
+
+
+# Documentation
+
+- Improve navigation.
+- Add RadSec pages.
+
+# Chore
+
+- Add several testing options to Makefile.
+- Add test/example SSL certificates for server and client.
+
 1.0 - Jul 7, 2025
 -------------------
 

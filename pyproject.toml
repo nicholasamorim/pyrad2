@@ -1,6 +1,6 @@
 [project]
 name = "pyrad2"
-version = "1.0.1"
+version = "1.1.0"
 description = "RADIUS Server"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,7 +24,3 @@ docs = [
     "mkdocs-material>=9.6.15",
     "mkdocstrings[python]>=0.29.1",
 ]
-
-# [build-system]
-# requires = ["setuptools>=61.0", "wheel"]
-# build-backend = "setuptools.build_meta"

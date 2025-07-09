@@ -40,6 +40,6 @@ __docformat__ = "epytext en"
 
 __author__ = "Nicholas Amorim <nicholas@bloomshield.ee>"
 __url__ = "http://pyrad2.readthedocs.io/en/latest/?badge=latest"
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 __all__ = ["client", "dictionary", "packet", "server", "tools", "dictfile"]

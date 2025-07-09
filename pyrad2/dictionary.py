@@ -1,6 +1,3 @@
-# dictionary.py
-#
-# Copyright 2002,2005,2007,2016 Wichert Akkerman <wichert@wiggy.net>
 """
 RADIUS uses dictionaries to define the attributes that can
 be used in packets. The Dictionary class stores the attribute
@@ -79,62 +76,13 @@ These datatypes are parsed but not supported:
 """
 
 from copy import copy
-from typing import Any, Hashable, Optional, Dict
+from typing import Any, Dict, Hashable, Optional
 
 from pyrad2 import bidict, dictfile, tools
+from pyrad2.constants import DATATYPES
+from pyrad2.exceptions import ParseError
 
-__docformat__ = "epytext en"
-
-
-DATATYPES = frozenset(
-    [
-        "string",
-        "ipaddr",
-        "integer",
-        "date",
-        "octets",
-        "abinary",
-        "ipv6addr",
-        "ipv6prefix",
-        "short",
-        "byte",
-        "signed",
-        "ifid",
-        "ether",
-        "tlv",
-        "integer64",
-    ]
-)
 RadiusAttributeValue = int | str | bytes
-
-
-class ParseError(Exception):
-    """Exception raised for errors
-    while parsing RADIUS dictionary files.
-
-    Attributes:
-        msg (str): Error message
-        linenumber (int): Line number on which the error occurred
-    """
-
-    def __init__(self, msg=None, **data):
-        self.msg = msg
-        self.file = data.get("file", "")
-        self.line = data.get("line", -1)
-
-    def __str__(self):
-        str = ""
-        if self.file:
-            str += self.file
-        if self.line > -1:
-            str += "(%d)" % self.line
-        if self.file or self.line > -1:
-            str += ": "
-        str += "Parse error"
-        if self.msg:
-            str += ": %s" % self.msg
-
-        return str
 
 
 class Attribute:
