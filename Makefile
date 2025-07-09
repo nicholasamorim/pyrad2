@@ -45,6 +45,9 @@ auth_async:
 acct:
 	PYTHONPATH=. uv run examples/acct.py
 
+acct_radsec:
+	PYTHONPATH=. uv run examples/acct_radsec.py
+
 coa:
 	PYTHONPATH=. uv run examples/client_coa.py coa daemon-1234
 
