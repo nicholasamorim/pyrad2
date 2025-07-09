@@ -62,13 +62,13 @@ async def main():
         "127.0.0.1": RemoteHost(name="localhost", address="127.0.0.1", secret=b"radsec")
     }
 
-    current_folder = os.path.dirname(os.path.abspath(__file__))
+    THIS_FOLDER = os.path.dirname(os.path.abspath(__file__))
     server = RadSecServer(
         hosts=hosts,
-        dictionary=Dictionary("dictionary"),
-        certfile=current_folder + "/certs/server/server.cert.pem",
-        keyfile=current_folder + "/certs/server/server.key.pem",
-        ca_certfile=current_folder + "/certs/ca/ca.cert.pem",
+        dictionary=Dictionary(THIS_FOLDER + "/dictionary"),
+        certfile=THIS_FOLDER + "/certs/server/server.cert.pem",
+        keyfile=THIS_FOLDER + "/certs/server/server.key.pem",
+        ca_certfile=THIS_FOLDER + "/certs/ca/ca.cert.pem",
     )
 
     await server.run()

@@ -33,16 +33,19 @@ server_coa:
 #
 # RADIUS Client 
 #
-client_auth:
+auth:
 	PYTHONPATH=. uv run examples/auth.py
 
-client_auth_async:
+auth_radsec:
+	PYTHONPATH=. uv run examples/auth_radsec.py
+
+auth_async:
 	PYTHONPATH=. uv run examples/auth_async.py
 
-client_acct:
+acct:
 	PYTHONPATH=. uv run examples/acct.py
 
-client_coa:
+coa:
 	PYTHONPATH=. uv run examples/client_coa.py coa daemon-1234
 
 
