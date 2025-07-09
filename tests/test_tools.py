@@ -1,6 +1,7 @@
-from ipaddress import AddressValueError
-from pyrad2 import tools
 import unittest
+from ipaddress import AddressValueError
+
+from pyrad2 import tools
 
 
 class EncodingTests(unittest.TestCase):

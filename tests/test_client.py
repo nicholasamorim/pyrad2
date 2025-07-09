@@ -8,8 +8,7 @@ from pyrad2.client import Client
 from pyrad2.client import Timeout
 from pyrad2.packet import AuthPacket
 from pyrad2.packet import AcctPacket
-from pyrad2.packet import AccessRequest
-from pyrad2.packet import AccountingRequest
+from pyrad2.constants import PacketType
 
 BIND_IP = "127.0.0.1"
 BIND_PORT = 53535
@@ -104,7 +103,7 @@ class SocketTests(unittest.TestCase):
     def testSingleRetry(self):
         self.client.retries = 1
         self.client.timeout = 0
-        packet = MockPacket(AccessRequest)
+        packet = MockPacket(PacketType.AccessRequest)
         self.assertRaises(Timeout, self.client._SendPacket, packet, 432)
         self.assertEqual(
             self.client._socket.output, [("request packet", (self.server, 432))]
@@ -113,7 +112,7 @@ class SocketTests(unittest.TestCase):
     def testDoubleRetry(self):
         self.client.retries = 2
         self.client.timeout = 0
-        packet = MockPacket(AccessRequest)
+        packet = MockPacket(PacketType.AccessRequest)
         self.assertRaises(Timeout, self.client._SendPacket, packet, 432)
         self.assertEqual(
             self.client._socket.output,
@@ -127,7 +126,7 @@ class SocketTests(unittest.TestCase):
         self.client.retries = 2
         self.client.timeout = 1
         self.client._socket = MockSocket(1, 2, b"valid reply")
-        packet = MockPacket(AccessRequest)
+        packet = MockPacket(PacketType.AccessRequest)
         self.assertRaises(Timeout, self.client._SendPacket, packet, 432)
         self.assertFalse("Acct-Delay-Time" in packet)
 
@@ -135,7 +134,7 @@ class SocketTests(unittest.TestCase):
         self.client.retries = 2
         self.client.timeout = 1
         self.client._socket = MockSocket(1, 2, b"valid reply")
-        packet = MockPacket(AccountingRequest)
+        packet = MockPacket(PacketType.AccountingRequest)
         self.assertRaises(Timeout, self.client._SendPacket, packet, 432)
         self.assertEqual(packet["Acct-Delay-Time"], [1])
 
@@ -143,7 +142,7 @@ class SocketTests(unittest.TestCase):
         self.client.retries = 3
         self.client.timeout = 1
         self.client._socket = MockSocket(1, 2, b"valid reply")
-        packet = MockPacket(AccountingRequest)
+        packet = MockPacket(PacketType.AccountingRequest)
         self.assertRaises(Timeout, self.client._SendPacket, packet, 432)
         self.assertEqual(packet["Acct-Delay-Time"], [2])
 
@@ -151,7 +150,7 @@ class SocketTests(unittest.TestCase):
         self.client.retries = 1
         self.client.timeout = 1
         self.client._socket = MockSocket(1, 2, b"valid reply")
-        packet = MockPacket(AccountingRequest, verify=True, error=True)
+        packet = MockPacket(PacketType.AccountingRequest, verify=True, error=True)
         self.assertRaises(Timeout, self.client._SendPacket, packet, 432)
 
     def testValidReply(self):
@@ -160,7 +159,7 @@ class SocketTests(unittest.TestCase):
         self.client._socket = MockSocket(1, 2, b"valid reply")
         self.client._poll = MockPoll()
         MockPoll.results = [(1, select.POLLIN)]
-        packet = MockPacket(AccountingRequest, verify=True)
+        packet = MockPacket(PacketType.AccountingRequest, verify=True)
         reply = self.client._SendPacket(packet, 432)
         self.assertTrue(reply is packet.reply)
 
@@ -169,7 +168,7 @@ class SocketTests(unittest.TestCase):
         self.client.timeout = 1
         self.client._socket = MockSocket(1, 2, b"invalid reply")
         MockPoll.results = [(1, select.POLLIN)]
-        packet = MockPacket(AccountingRequest, verify=False)
+        packet = MockPacket(PacketType.AccountingRequest, verify=False)
         self.assertRaises(Timeout, self.client._SendPacket, packet, 432)
 
 

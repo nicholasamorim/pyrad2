@@ -1,7 +1,8 @@
 from loguru import logger
 
-from pyrad2.packet import AccessAccept, AcctPacket, AuthPacket, CoAPacket
-from pyrad2.server_radsec import RadSecServer
+from pyrad2.packet import AcctPacket, AuthPacket, CoAPacket
+from pyrad2.constants import PacketType
+from pyrad2.radsec.server import RadSecServer
 
 
 class RadiusServer(RadSecServer):
@@ -16,8 +17,7 @@ class RadiusServer(RadSecServer):
         for attr in packet.keys():
             logger.info("{}: {}", attr, packet[attr])
 
-        reply = packet.create_reply(
-            packet,
+        reply = packet.CreateReply(
             **{
                 "Service-Type": "Framed-User",
                 "Framed-IP-Address": "192.168.0.1",
@@ -25,7 +25,7 @@ class RadiusServer(RadSecServer):
             },
         )
 
-        reply.code = AccessAccept
+        reply.code = PacketType.AccessAccept
         return reply
 
     async def handle_accounting(self, packet: AcctPacket):
@@ -33,14 +33,14 @@ class RadiusServer(RadSecServer):
         for attr in packet.keys():
             logger.info("{}: {}", attr, packet[attr])
 
-        return packet.create_reply()
+        return packet.CreateReply()
 
     async def handle_disconnect(self, packet: CoAPacket):
         logger.info("Received an disconnect request. Attributes below")
         for attr in packet.keys():
             logger.info("{}: {}", attr, packet[attr])
 
-        reply = packet.create_reply()
+        reply = packet.CreateReply()
         reply.code = 45  # COA NAK
         return reply
 
@@ -49,4 +49,4 @@ class RadiusServer(RadSecServer):
         for attr in packet.keys():
             logger.info("{}: {}", attr, packet[attr])
 
-        return packet.create_reply()
+        return packet.CreateReply()

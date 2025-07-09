@@ -7,6 +7,8 @@ from loguru import logger
 
 from pyrad2 import host, packet
 from pyrad2.dictionary import Dictionary
+from pyrad2.exceptions import ServerPacketError
+from pyrad2.constants import PacketType
 
 
 @dataclass
@@ -28,13 +30,6 @@ class RemoteHost:
     authport: int = 1812
     acctport: int = 1813
     coaport: int = 3799
-
-
-class ServerPacketError(Exception):
-    """Exception class for bogus packets.
-    ServerPacketError exceptions are only used inside the Server class to
-    abort processing of a packet.
-    """
 
 
 class Server(host.Host):
@@ -205,7 +200,7 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
         self._AddSecret(pkt)
-        if pkt.code != packet.AccessRequest:
+        if pkt.code != PacketType.AccessRequest:
             raise ServerPacketError(
                 "Received non-authentication packet on authentication port"
             )
@@ -221,7 +216,10 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
         self._AddSecret(pkt)
-        if pkt.code not in [packet.AccountingRequest, packet.AccountingResponse]:
+        if pkt.code not in [
+            PacketType.AccountingRequest,
+            PacketType.AccountingResponse,
+        ]:
             raise ServerPacketError("Received non-accounting packet on accounting port")
         self.HandleAcctPacket(pkt)
 
@@ -235,9 +233,9 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
         self._AddSecret(pkt)
-        if pkt.code == packet.CoARequest:
+        if pkt.code == PacketType.CoARequest:
             self.HandleCoaPacket(pkt)
-        elif pkt.code == packet.DisconnectRequest:
+        elif pkt.code == PacketType.DisconnectRequest:
             self.HandleDisconnectPacket(pkt)
         else:
             raise ServerPacketError("Received non-coa packet on coa port")

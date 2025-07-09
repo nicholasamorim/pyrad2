@@ -1,5 +1,3 @@
-__docformat__ = "epytext en"
-
 import hashlib
 import select
 import socket
@@ -8,16 +6,9 @@ import time
 from typing import Optional
 
 from pyrad2 import host, packet
+from pyrad2.constants import PacketType, EAPPacketType, EAPType
 from pyrad2.dictionary import Dictionary
-
-EAP_CODE_REQUEST = 1
-EAP_CODE_RESPONSE = 2
-EAP_TYPE_IDENTITY = 1
-
-
-class Timeout(Exception):
-    """Simple exception class which is raised when a timeout occurs
-    while waiting for a RADIUS server to respond."""
+from pyrad2.exceptions import Timeout
 
 
 class Client(host.Host):
@@ -142,7 +133,7 @@ class Client(host.Host):
         self._SocketOpen()
 
         for attempt in range(self.retries):
-            if attempt and pkt.code == packet.AccountingRequest:
+            if attempt and pkt.code == PacketType.AccountingRequest:
                 if "Acct-Delay-Time" in pkt:
                     pkt["Acct-Delay-Time"] = pkt["Acct-Delay-Time"][0] + self.timeout
                 else:
@@ -195,17 +186,17 @@ class Client(host.Host):
                 pkt[79] = [
                     struct.pack(
                         "!BBHB%ds" % len(password),
-                        EAP_CODE_RESPONSE,
+                        EAPPacketType.RESPONSE,
                         packet.CurrentID,
                         len(password) + 5,
-                        EAP_TYPE_IDENTITY,
+                        EAPType.IDENTITY,
                         password,
                     )
                 ]
             reply = self._SendPacket(pkt, self.authport)
             if (
                 reply
-                and reply.code == packet.AccessChallenge
+                and reply.code == PacketType.AccessChallenge
                 and pkt.auth_type == "eap-md5"
             ):
                 # Got an Access-Challenge

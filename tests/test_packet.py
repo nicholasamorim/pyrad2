@@ -10,6 +10,7 @@ from collections import OrderedDict
 from pyrad2 import packet
 from pyrad2.client import Client
 from pyrad2.dictionary import Dictionary
+from pyrad2.constants import PacketType
 
 
 class UtilityTests(unittest.TestCase):
@@ -97,7 +98,7 @@ class PacketTests(unittest.TestCase):
         attributes += self._get_attribute_bytes("Message-Authenticator", 16 * b"\00")
 
         header = struct.pack(
-            "!BBH", packet.AccessAccept, request.id, (20 + len(attributes))
+            "!BBH", PacketType.AccessAccept, request.id, (20 + len(attributes))
         )
 
         # Calculate the Message-Authenticator and update the attribute
@@ -245,7 +246,7 @@ class PacketTests(unittest.TestCase):
                 "Test-Integer": 3,
             }
         )
-        reply.code = packet.AccessAccept
+        reply.code = PacketType.AccessAccept
         reply.add_message_authenticator()
         reply._refresh_message_authenticator()
         self.assertTrue(
@@ -278,7 +279,7 @@ class PacketTests(unittest.TestCase):
             reply.verify_message_authenticator(
                 secret=b"secret",
                 original_authenticator=self.packet.authenticator,
-                original_code=packet.AccessRequest,
+                original_code=PacketType.AccessRequest,
             )
         )
 
@@ -505,7 +506,7 @@ class AuthPacketConstructionTests(PacketConstructionTests):
 
     def testConstructorDefaults(self):
         pkt = self.klass()
-        self.assertEqual(pkt.code, packet.AccessRequest)
+        self.assertEqual(pkt.code, PacketType.AccessRequest)
 
 
 class AuthPacketTests(unittest.TestCase):
@@ -518,7 +519,7 @@ class AuthPacketTests(unittest.TestCase):
 
     def testCreateReply(self):
         reply = self.packet.CreateReply(**{"Test-Integer": 10})
-        self.assertEqual(reply.code, packet.AccessAccept)
+        self.assertEqual(reply.code, PacketType.AccessAccept)
         self.assertEqual(reply.id, self.packet.id)
         self.assertEqual(reply.secret, self.packet.secret)
         self.assertEqual(reply.authenticator, self.packet.authenticator)
@@ -578,7 +579,7 @@ class AuthPacketChapTests(unittest.TestCase):
             chap_id + hashlib.md5(chap_id + b"test_password" + chap_challenge).digest()
         )
         pkt = self.client.CreateAuthPacket(
-            code=packet.AccessChallenge,
+            code=PacketType.AccessChallenge,
             authenticator=b"ABCDEFG",
             User_Name="test_name",
             CHAP_Challenge=chap_challenge,
@@ -594,7 +595,7 @@ class AcctPacketConstructionTests(PacketConstructionTests):
 
     def testConstructorDefaults(self):
         pkt = self.klass()
-        self.assertEqual(pkt.code, packet.AccountingRequest)
+        self.assertEqual(pkt.code, PacketType.AccountingRequest)
 
     def testConstructorRawPacket(self):
         raw = (
@@ -615,7 +616,7 @@ class AcctPacketTests(unittest.TestCase):
 
     def testCreateReply(self):
         reply = self.packet.CreateReply(**{"Test-Integer": 10})
-        self.assertEqual(reply.code, packet.AccountingResponse)
+        self.assertEqual(reply.code, PacketType.AccountingResponse)
         self.assertEqual(reply.id, self.packet.id)
         self.assertEqual(reply.secret, self.packet.secret)
         self.assertEqual(reply.authenticator, self.packet.authenticator)

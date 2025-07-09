@@ -6,22 +6,12 @@ from typing import Any, Callable, Dict, Optional
 
 from loguru import logger
 
+from pyrad2.constants import PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.packet import (
-    AccessAccept,
-    AccessReject,
-    AccessRequest,
-    AccountingRequest,
-    AccountingResponse,
     AcctPacket,
     AuthPacket,
-    CoAACK,
-    CoANAK,
     CoAPacket,
-    CoARequest,
-    DisconnectACK,
-    DisconnectNAK,
-    DisconnectRequest,
     Packet,
     PacketError,
 )
@@ -89,18 +79,18 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
             req = Packet(packet=data, dict=self.server.dict)
 
             if req.code in (
-                AccountingResponse,
-                AccessAccept,
-                AccessReject,
-                CoANAK,
-                CoAACK,
-                DisconnectNAK,
-                DisconnectACK,
+                PacketType.AccountingResponse,
+                PacketType.AccessAccept,
+                PacketType.AccessReject,
+                PacketType.CoANAK,
+                PacketType.CoAACK,
+                PacketType.DisconnectNAK,
+                PacketType.DisconnectACK,
             ):
                 raise ServerPacketError(f"Invalid response packet {req.code}")
 
             if self.server_type == ServerType.Auth:
-                if req.code != AccessRequest:
+                if req.code != PacketType.AccessRequest:
                     raise ServerPacketError("Received non-auth packet on auth port")
                 req = AuthPacket(
                     secret=remote_host.secret, dict=self.server.dict, packet=data
@@ -109,7 +99,10 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                     raise PacketError("Packet verification failed")
 
             elif self.server_type == ServerType.Coa:
-                if req.code not in (DisconnectRequest, CoARequest):
+                if req.code not in (
+                    PacketType.DisconnectRequest,
+                    PacketType.CoARequest,
+                ):
                     raise ServerPacketError("Received non-coa packet on coa port")
                 req = CoAPacket(
                     secret=remote_host.secret, dict=self.server.dict, packet=data
@@ -118,7 +111,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                     raise PacketError("Packet verification failed")
 
             elif self.server_type == ServerType.Acct:
-                if req.code != AccountingRequest:
+                if req.code != PacketType.AccountingRequest:
                     raise ServerPacketError("Received non-acct packet on acct port")
                 req = AcctPacket(
                     secret=remote_host.secret, dict=self.server.dict, packet=data
@@ -215,9 +208,9 @@ class ServerAsync(ABC):
             elif protocol.server_type == ServerType.Auth:
                 self.handle_auth_packet(protocol, req, addr)
             elif protocol.server_type == ServerType.Coa:
-                if req.code == CoARequest:
+                if req.code == PacketType.CoARequest:
                     self.handle_coa_packet(protocol, req, addr)
-                elif req.code == DisconnectRequest:
+                elif req.code == PacketType.DisconnectRequest:
                     self.handle_disconnect_packet(protocol, req, addr)
                 else:
                     raise ServerPacketError("Unexpected CoA request type")

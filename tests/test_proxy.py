@@ -7,8 +7,7 @@ from .mock import MockSocket
 from .mock import MockClassMethod
 from .mock import UnmockClassMethods
 from pyrad2.proxy import Proxy
-from pyrad2.packet import AccessAccept
-from pyrad2.packet import AccessRequest
+from pyrad2.constants import PacketType
 from pyrad2.server import ServerPacketError
 from pyrad2.server import Server
 
@@ -44,7 +43,7 @@ class ProxyPacketHandlingTests(unittest.TestCase):
         self.proxy.hosts["host"] = TrivialObject()
         self.proxy.hosts["host"].secret = "supersecret"
         self.packet = TrivialObject()
-        self.packet.code = AccessAccept
+        self.packet.code = PacketType.AccessAccept
         self.packet.source = ("host", "port")
 
     def testHandleProxyPacketUnknownHost(self):
@@ -61,7 +60,7 @@ class ProxyPacketHandlingTests(unittest.TestCase):
         self.assertEqual(self.packet.secret, "supersecret")
 
     def testHandleProxyPacketHandlesWrongPacket(self):
-        self.packet.code = AccessRequest
+        self.packet.code = PacketType.AccessRequest
         try:
             self.proxy._HandleProxyPacket(self.packet)
         except ServerPacketError as e:

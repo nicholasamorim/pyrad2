@@ -1,12 +1,8 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from pyrad2.packet import (
-    AccessRequest,
-    AccountingRequest,
-    CoARequest,
-    DisconnectRequest,
-)
+
+from pyrad2.constants import PacketType
 from pyrad2.server import RemoteHost
 from pyrad2.server_async import (
     DatagramProtocolServer,
@@ -86,25 +82,25 @@ class ServerAsyncTests(unittest.IsolatedAsyncioTestCase):
         pkt.CreateReply.assert_called_once_with(Attr1="value")
 
     def test_request_handler_auth(self):
-        mock_pkt = MagicMock(code=AccessRequest)
+        mock_pkt = MagicMock(code=PacketType.AccessRequest)
         proto = MagicMock(server_type=ServerType.Auth, ip="127.0.0.1", port=1812)
         self.server._request_handler(proto, mock_pkt, "127.0.0.1")
         self.assertTrue(self.server.auth_called)
 
     def test_request_handler_acct(self):
-        mock_pkt = MagicMock(code=AccountingRequest)
+        mock_pkt = MagicMock(code=PacketType.AccountingRequest)
         proto = MagicMock(server_type=ServerType.Acct)
         self.server._request_handler(proto, mock_pkt, "127.0.0.1")
         self.assertTrue(self.server.acct_called)
 
     def test_request_handler_coa(self):
-        mock_pkt = MagicMock(code=CoARequest)
+        mock_pkt = MagicMock(code=PacketType.CoARequest)
         proto = MagicMock(server_type=ServerType.Coa)
         self.server._request_handler(proto, mock_pkt, "127.0.0.1")
         self.assertTrue(self.server.coa_called)
 
     def test_request_handler_disconnect(self):
-        mock_pkt = MagicMock(code=DisconnectRequest)
+        mock_pkt = MagicMock(code=PacketType.DisconnectRequest)
         proto = MagicMock(server_type=ServerType.Coa)
         self.server._request_handler(proto, mock_pkt, "127.0.0.1")
         self.assertTrue(self.server.disconnect_called)

@@ -2,13 +2,12 @@ import asyncio
 import ssl
 import struct
 from hashlib import md5
+from typing import Optional
 
 from loguru import logger
 
+from pyrad2.constants import EAPPacketType, EAPType, PacketType
 from pyrad2.packet import (
-    EAP_CODE_RESPONSE,
-    EAP_TYPE_IDENTITY,
-    AccessChallenge,
     AcctPacket,
     AuthPacket,
     CoAPacket,
@@ -29,9 +28,10 @@ class RadSecClient:
         dict=None,
         retries: int = 3,
         timeout: int = 5,
-        certfile: str = "certs/client/client.crt",
-        keyfile: str = "certs/client/client.key",
-        certfile_server: str = "certs/server/server.crt",
+        certfile: str = "certs/client/client.cert.pem",
+        keyfile: str = "certs/client/client.key.pem",
+        certfile_server: str = "certs//ca/ca.cert.pem",
+        check_hostname: bool = False,
     ):
         """Initializes a RadSec client.
 
@@ -55,11 +55,24 @@ class RadSecClient:
         self.timeout = timeout
         self.dict = dict
 
-        self.ssl_ctx = ssl.create_default_context(
-            ssl.Purpose.SERVER_AUTH, cafile=certfile_server
-        )
-        self.ssl_ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
-        self.ssl_ctx.check_hostname = False
+        self.setup_ssl(certfile, keyfile, certfile_server, check_hostname)
+
+    def setup_ssl(
+        self, certfile: str, keyfile: str, certfile_server: str, check_hostname: bool
+    ):
+        try:
+            self.ssl_ctx = ssl.create_default_context(
+                ssl.Purpose.SERVER_AUTH, cafile=certfile_server
+            )
+
+            self.ssl_ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
+        except FileNotFoundError as e:
+            ssl_paths = ", ".join([certfile, keyfile, certfile_server])
+            msg = "One or more SSL files could not be found. Current paths: {}"
+            logger.error(msg, ssl_paths)
+            raise FileNotFoundError(msg.format(ssl_paths)) from e
+
+        self.ssl_ctx.check_hostname = check_hostname
 
     def create_auth_packet(self, **kwargs) -> AuthPacket:
         """Create a new RADIUS packet.
@@ -71,7 +84,7 @@ class RadSecClient:
         Returns:
             Packet: A new AuthPacket instance
         """
-        id = kwargs.pop("id", Packet.create_id())
+        id = kwargs.pop("id", Packet.CreateID())
         return AuthPacket(
             dict=self.dict,
             id=id,
@@ -89,7 +102,7 @@ class RadSecClient:
         Returns:
             Packet: A new AcctPacket instance
         """
-        id = kwargs.pop("id", Packet.create_id())
+        id = kwargs.pop("id", Packet.CreateID())
         return AcctPacket(
             id=id,
             dict=self.dict,
@@ -107,13 +120,13 @@ class RadSecClient:
         Returns:
             Packet: A new CoA packet instance
         """
-        id = kwargs.pop("id", Packet.create_id())
+        id = kwargs.pop("id", Packet.CreateID())
         return CoAPacket(id=id, dict=self.dict, secret=self.secret, **kwargs)
 
     def create_packet(self, id, **kwargs) -> Packet:
         return Packet(id=id, dict=self.dict, secret=self.secret, **kwargs)
 
-    async def _send_packet(self, packet: PacketImplementation) -> None:
+    async def _send_packet(self, packet: PacketImplementation) -> Optional[Packet]:
         """Send a packet to a RADIUS server.
 
         Args:
@@ -129,32 +142,39 @@ class RadSecClient:
             self.port,
         )
 
-        writer.write(packet.request_packet())
+        writer.write(packet.RequestPacket())
         await writer.drain()
+
+        async def close():
+            writer.close()
+            await writer.wait_closed()
 
         try:
             response = await read_radius_packet(reader)
-            if response:
-                logger.info("Received {} bytes from server", len(response))
-                logger.debug("Response: {}", response.hex())
-
-                try:
-                    reply = packet.create_reply(packet=response)
-                    if packet.verify_reply(reply, response):
-                        return reply
-                except PacketError as e:
-                    logger.error("Error creating reply {}", e)
-                    pass
-
-            else:
-                logger.info("No response received")
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for server response")
+            await close()
+            return None
 
-        writer.close()
-        await writer.wait_closed()
+        if not response:
+            logger.info("No response received")
+            await close()
+            return None
 
-    async def send_packet(self, packet: PacketImplementation) -> None:
+        logger.info("Received {} bytes from server", len(response))
+        logger.debug("Response: {}", response.hex())
+
+        try:
+            reply = packet.CreateReply(packet=response)
+            if packet.VerifyReply(reply, response):
+                return reply
+        except PacketError as e:
+            logger.error("Error creating reply {}", e)
+            await close()
+
+        return None
+
+    async def send_packet(self, packet: PacketImplementation) -> Optional[Packet]:
         """Send a packet to a RADIUS server.
 
         Args:
@@ -167,17 +187,17 @@ class RadSecClient:
                 packet[79] = [
                     struct.pack(
                         "!BBHB%ds" % len(password),
-                        EAP_CODE_RESPONSE,
+                        EAPPacketType.RESPONSE,
                         CurrentID,
                         len(password) + 5,
-                        EAP_TYPE_IDENTITY,
+                        EAPType.IDENTITY,
                         password,
                     )
                 ]
             reply = await self._send_packet(packet)
             if (
                 reply
-                and reply.code == AccessChallenge
+                and reply.code == PacketType.AccessChallenge
                 and packet.auth_type == "eap-md5"
             ):
                 # Got an Access-Challenge
@@ -206,6 +226,6 @@ class RadSecClient:
                 reply = await self._send_packet(packet)
             return reply
         elif isinstance(packet, CoAPacket):
-            await self._send_packet(packet)
+            return await self._send_packet(packet)
         else:
-            await self._send_packet(packet)
+            return await self._send_packet(packet)

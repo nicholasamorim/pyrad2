@@ -8,6 +8,7 @@ import select
 import socket
 
 from pyrad2 import packet
+from pyrad2.constants import PacketType
 from pyrad2.server import Server, ServerPacketError
 
 
@@ -42,9 +43,9 @@ class Proxy(Server):
         pkt.secret = self.hosts[pkt.source[0]].secret
 
         if pkt.code not in [
-            packet.AccessAccept,
-            packet.AccessReject,
-            packet.AccountingResponse,
+            PacketType.AccessAccept,
+            PacketType.AccessReject,
+            PacketType.AccountingResponse,
         ]:
             raise ServerPacketError("Received non-response on proxy socket")
 

@@ -5,16 +5,12 @@ from typing import Optional
 
 from loguru import logger
 
+from pyrad2.constants import PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.packet import (
-    AccessRequest,
-    AccountingRequest,
-    AccountingResponse,
     AcctPacket,
     AuthPacket,
     CoAPacket,
-    CoARequest,
-    DisconnectRequest,
     Packet,
     PacketError,
     parse_packet,
@@ -45,9 +41,6 @@ class RadSecServer:
     """
 
     ALLOWED_CIPHERS = "DES-CBC3-SHA:RC4-SHA:AES128-SHA"
-    CERT_FILE = "certs/test/server/server.crt"
-    KEY_FILE = "certs/test/server/server.key"
-    CA_CERT_FILE = "certs/test/client/client_ca.crt"
 
     def __init__(
         self,
@@ -56,15 +49,22 @@ class RadSecServer:
         hosts: Optional[dict[str, RemoteHost]] = None,
         dictionary: Optional[Dictionary] = None,
         verify_packet: bool = False,
+        certfile: str = "certs/server/server.crt",
+        keyfile: str = "certs/server/server.key",
+        ca_certfile: str = "certs/client/server.crt",
+        verify_mode: ssl.VerifyMode = ssl.CERT_NONE,
     ):
         """Initializes a RadSec server.
 
         Args:
-            listen_address (str): IP address to bind to
+            listen_address (str): IP address to bind to, defaults to 0.0.0.0
             listen_port (int): Deafaults to 2083.
             hosts (dict[str, RemoteHost]): Hosts who we can talk to. A dictionary mapping IP to RemoteHost class instances.
             dictionary (Dictionary): RADIUS dictionary to use.
             verify_packet (bool): If true, the packet will be verified against its secret
+            certfile (str): Path to server SSL certificate
+            keyfile (str): Path to server SSL certificate
+            ca_certfile (str): Path to server CA certfificate
         """
         self.listen_address = listen_address
         self.listen_port = listen_port
@@ -72,7 +72,7 @@ class RadSecServer:
         self.dict = dictionary
         self.verify_packet = verify_packet
 
-        self.setup_ssl()
+        self.setup_ssl(certfile, keyfile, ca_certfile, verify_mode)
 
     async def run(self):
         server = await asyncio.start_server(
@@ -98,14 +98,20 @@ class RadSecServer:
             await server.wait_closed()
             logger.info("Server shutdown")
 
-    def setup_ssl(self):
+    def setup_ssl(self, certfile: str, keyfile: str, ca_certfile: str, verify_mode):
         ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        ssl_ctx.load_cert_chain(certfile=self.CERT_FILE, keyfile=self.KEY_FILE)
+        try:
+            ssl_ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
+        except FileNotFoundError as e:
+            ssl_paths = ", ".join([certfile, keyfile, ca_certfile])
+            msg = "One or more SSL files could not be found. Current paths: {}"
+            logger.error(msg, ssl_paths)
+            raise FileNotFoundError(msg.format(ssl_paths)) from e
 
-        ### NOTE: Thsi must be ssl.CERT_VERIFY but I haven't been able to
+        ### NOTE: This must be ssl.CERT_VERIFY but I haven't been able to
         ### to generate proper certificates to make this work.
-        ssl_ctx.verify_mode = ssl.CERT_NONE
-        ssl_ctx.load_verify_locations(cafile=self.CA_CERT_FILE)
+        ssl_ctx.verify_mode = verify_mode
+        ssl_ctx.load_verify_locations(cafile=ca_certfile)
         ssl_ctx.set_ciphers(self.ALLOWED_CIPHERS)
 
         self.ssl_ctx = ssl_ctx
@@ -137,7 +143,7 @@ class RadSecServer:
             logger.warning("Drop package from unknown source {}", peername[0])
             return
 
-        writer.write(reply.reply_packet())
+        writer.write(reply.ReplyPacket())
         await writer.drain()
         logger.info("Sent reply to {}: {}", peername, reply.code)
 
@@ -155,13 +161,16 @@ class RadSecServer:
             if not packet.verify():
                 raise PacketError("Packet verification failed")
 
-        if packet.code == AccessRequest:
+        if packet.code == PacketType.AccessRequest:
             return await self.handle_access_request(packet)
-        elif packet.code in (AccountingRequest, AccountingResponse):
+        elif packet.code in (
+            PacketType.AccountingRequest,
+            PacketType.AccountingResponse,
+        ):
             return await self.handle_accounting(packet)
-        elif packet.code == CoARequest:
+        elif packet.code == PacketType.CoARequest:
             return await self.handle_coa(packet)
-        elif packet.code == DisconnectRequest:
+        elif packet.code == PacketType.DisconnectRequest:
             return await self.handle_disconnect(packet)
         else:
             raise ServerPacketError("Unsupported packet code: {}".format(packet.code))

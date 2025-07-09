@@ -11,12 +11,13 @@ from pyrad2.packet import PacketError
 from pyrad2.server import RemoteHost
 from pyrad2.server import Server
 from pyrad2.server import ServerPacketError
-from pyrad2.packet import AccessRequest
-from pyrad2.packet import AccountingRequest
+from pyrad2.constants import PacketType
 
 
 class TrivialObject:
     """dummy objec"""
+
+    pass
 
 
 class RemoteHostTests(unittest.TestCase):
@@ -166,7 +167,7 @@ class AuthPacketHandlingTests(unittest.TestCase):
         self.server.hosts["host"] = TrivialObject()
         self.server.hosts["host"].secret = "supersecret"
         self.packet = TrivialObject()
-        self.packet.code = AccessRequest
+        self.packet.code = PacketType.AccessRequest
         self.packet.source = ("host", "port")
 
     def testHandleAuthPacketUnknownHost(self):
@@ -179,7 +180,7 @@ class AuthPacketHandlingTests(unittest.TestCase):
             self.fail()
 
     def testHandleAuthPacketWrongPort(self):
-        self.packet.code = AccountingRequest
+        self.packet.code = PacketType.AccountingRequest
         try:
             self.server._HandleAuthPacket(self.packet)
         except ServerPacketError as e:
@@ -206,7 +207,7 @@ class AcctPacketHandlingTests(unittest.TestCase):
         self.server.hosts["host"] = TrivialObject()
         self.server.hosts["host"].secret = "supersecret"
         self.packet = TrivialObject()
-        self.packet.code = AccountingRequest
+        self.packet.code = PacketType.AccountingRequest
         self.packet.source = ("host", "port")
 
     def testHandleAcctPacketUnknownHost(self):
@@ -219,7 +220,7 @@ class AcctPacketHandlingTests(unittest.TestCase):
             self.fail()
 
     def testHandleAcctPacketWrongPort(self):
-        self.packet.code = AccessRequest
+        self.packet.code = PacketType.AccessRequest
         try:
             self.server._HandleAcctPacket(self.packet)
         except ServerPacketError as e:
