@@ -9,18 +9,22 @@
       
       
       
+        <link rel="prev" href="..">
       
       
-      <link rel="icon" href="/assets/images/favicon.png">
+        <link rel="next" href="../server/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.15">
     
     
       
-        <title>pyrad2</title>
+        <title>Setup and Concepts - pyrad2</title>
       
     
     
-      <link rel="stylesheet" href="/assets/stylesheets/main.342714a4.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.342714a4.min.css">
       
       
 
@@ -39,9 +43,9 @@
       
     
     
-      <link rel="stylesheet" href="/assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
-    <script>__md_scope=new URL("/",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -59,6 +63,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#installing" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -71,7 +80,7 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="/." title="pyrad2" class="md-header__button md-logo" aria-label="pyrad2" data-md-component="logo">
+    <a href=".." title="pyrad2" class="md-header__button md-logo" aria-label="pyrad2" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -91,7 +100,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              
+              Setup and Concepts
             
           </span>
         </div>
@@ -169,7 +178,7 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="/." title="pyrad2" class="md-nav__button md-logo" aria-label="pyrad2" data-md-component="logo">
+    <a href=".." title="pyrad2" class="md-nav__button md-logo" aria-label="pyrad2" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -187,7 +196,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -206,20 +215,20 @@
       
   
   
+    
   
   
+  
     
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
@@ -235,7 +244,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Getting Started
@@ -246,10 +255,19 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="/setup/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -260,6 +278,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -272,7 +291,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/server/" class="md-nav__link">
+      <a href="../server/" class="md-nav__link">
         
   
   
@@ -295,7 +314,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/client/" class="md-nav__link">
+      <a href="../client/" class="md-nav__link">
         
   
   
@@ -325,7 +344,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/releases/" class="md-nav__link">
+      <a href="../releases/" class="md-nav__link">
         
   
   
@@ -347,7 +366,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/compatibility/" class="md-nav__link">
+      <a href="../compatibility/" class="md-nav__link">
         
   
   
@@ -409,7 +428,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/server/" class="md-nav__link">
+      <a href="../api/server/" class="md-nav__link">
         
   
   
@@ -432,7 +451,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/server_async/" class="md-nav__link">
+      <a href="../api/server_async/" class="md-nav__link">
         
   
   
@@ -455,7 +474,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/client/" class="md-nav__link">
+      <a href="../api/client/" class="md-nav__link">
         
   
   
@@ -478,7 +497,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/client_async/" class="md-nav__link">
+      <a href="../api/client_async/" class="md-nav__link">
         
   
   
@@ -541,7 +560,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/radsec_server/" class="md-nav__link">
+      <a href="../api/radsec_server/" class="md-nav__link">
         
   
   
@@ -564,7 +583,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/radsec_client/" class="md-nav__link">
+      <a href="../api/radsec_client/" class="md-nav__link">
         
   
   
@@ -595,7 +614,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/packet/" class="md-nav__link">
+      <a href="../api/packet/" class="md-nav__link">
         
   
   
@@ -618,7 +637,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/dictionary/" class="md-nav__link">
+      <a href="../api/dictionary/" class="md-nav__link">
         
   
   
@@ -641,7 +660,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/host/" class="md-nav__link">
+      <a href="../api/host/" class="md-nav__link">
         
   
   
@@ -664,7 +683,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/tools/" class="md-nav__link">
+      <a href="../api/tools/" class="md-nav__link">
         
   
   
@@ -687,7 +706,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/dictfile/" class="md-nav__link">
+      <a href="../api/dictfile/" class="md-nav__link">
         
   
   
@@ -710,7 +729,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/proxy/" class="md-nav__link">
+      <a href="../api/proxy/" class="md-nav__link">
         
   
   
@@ -733,7 +752,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/api/bidict/" class="md-nav__link">
+      <a href="../api/bidict/" class="md-nav__link">
         
   
   
@@ -773,6 +792,8 @@
   
   
   
+    
+  
   
 </nav>
                   </div>
@@ -784,8 +805,51 @@
             <div class="md-content" data-md-component="content">
               <article class="md-content__inner md-typeset">
                 
-  <h1>404 - Not found</h1>
+                  
 
+
+
+<h1 id="installing">Installing</h1>
+<div class="language-bash highlight"><span class="filename">Install with pip</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>$<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>pyrad2
+</span></code></pre></div>
+<div class="language-bash highlight"><span class="filename">Install with uv</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>$<span class="w"> </span>uv<span class="w"> </span>add<span class="w"> </span>pyrad2
+</span></code></pre></div>
+<h1 id="how-does-pyrad2-work">How does pyrad2 work</h1>
+<p>pyrad2 allows you to build servers and clients for the <a href="https://en.wikipedia.org/wiki/RADIUS">RADIUS</a> protocol.</p>
+<p>It is not meant to be a standalone implementation like <a href="https://freeradius.org">FreeRADIUS</a>, but rather as a tool to allow you to build your own server and client.</p>
+<h2 id="radius-concepts">RADIUS Concepts</h2>
+<h3 id="dictionary">Dictionary</h3>
+<p>For the purpose of using pyrad2, the most important concept is the <em>Dictionary</em>. The dictionary is an actual file on the filesystem.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Dictionary files are textfiles with one command per line.</p>
+</div>
+<p>RADIUS uses dictionaries to define the attributes that can
+be used in packets. The Dictionary class stores the attribute definitions from one or more dictionary files and allows Server/Client to understand what an <em>attribute code</em> means.</p>
+<p>Here's an example of how it looks:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ATTRIBUTE   User-Name           1   string
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ATTRIBUTE   User-Password       2   string
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>ATTRIBUTE   CHAP-Password       3   octets
+</span></code></pre></div>
+<p>You can find a reference dictionary file <a href="https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary">here</a>. Another dictionary is provided <a href="https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary.freeradius">here</a> with FreeRADIUS vendor-specific attributes.</p>
+<p>For our example, download <em>both files</em> and place it into your project folder.</p>
+<p>When you see code like this:</p>
+<div class="language-py highlight"><span class="filename">Loading a dictionary</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">dictfile</span> <span class="o">=</span> <span class="n">dictionary</span><span class="o">.</span><span class="n">Dictionary</span><span class="p">(</span><span class="s2">&quot;dictionary&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>You are actually passing a <em>path</em> to a file (or a <a href="https://docs.python.org/3/library/io.html">file-like object</a>) called <code>dictionary</code>, so make sure the file you pass is accessible from your code and it's a valid dictionary file.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
               </article>
             </div>
           
@@ -821,10 +885,10 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "/", "features": ["content.code.copy", "navigation.expand"], "search": "/assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": ["content.code.copy", "navigation.expand"], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="/assets/javascripts/bundle.56ea9cef.min.js"></script>
+      <script src="../assets/javascripts/bundle.56ea9cef.min.js"></script>
       
     
   </body>
