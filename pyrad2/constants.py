@@ -26,24 +26,3 @@ class EAPPacketType(IntEnum):
 
 class EAPType(IntEnum):
     IDENTITY = 1
-
-
-DATATYPES = frozenset(
-    [
-        "string",
-        "ipaddr",
-        "integer",
-        "date",
-        "octets",
-        "abinary",
-        "ipv6addr",
-        "ipv6prefix",
-        "short",
-        "byte",
-        "signed",
-        "ifid",
-        "ether",
-        "tlv",
-        "integer64",
-    ]
-)

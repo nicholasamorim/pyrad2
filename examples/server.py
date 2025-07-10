@@ -16,7 +16,7 @@ class FakeServer(server.Server):
             **{
                 "Service-Type": "Framed-User",
                 "Framed-IP-Address": "192.168.0.1",
-                "Framed-IPv6-Prefix": "fc66::1/64",
+                "Framed-IPv6-Prefix": "fc66::/64",
             },
         )
 
