@@ -16,7 +16,7 @@ from pyrad2.packet import (
     parse_packet,
 )
 from pyrad2.server import RemoteHost, ServerPacketError
-from pyrad2.tools import (
+from pyrad2.utils import (
     get_cert_fingerprint,
     read_radius_packet,
 )
