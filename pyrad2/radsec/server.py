@@ -111,8 +111,6 @@ class RadSecServer:
             logger.error(msg, ssl_paths)
             raise FileNotFoundError(msg.format(ssl_paths)) from e
 
-        ### NOTE: This must be ssl.CERT_VERIFY but I haven't been able to
-        ### to generate proper certificates to make this work.
         ssl_ctx.verify_mode = verify_mode
         ssl_ctx.load_verify_locations(cafile=ca_certfile)
         ssl_ctx.set_ciphers(self.ALLOWED_CIPHERS)
