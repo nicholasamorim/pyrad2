@@ -24,7 +24,7 @@ nav:
       - packet: api/packet.md
       - dictionary: api/dictionary.md
       - host: api/host.md
-      - tools: api/tools.md
+      - utils: api/utils.md
       - dictfile: api/dictfile.md
       - proxy: api/proxy.md
       - bidict: api/bidict.md

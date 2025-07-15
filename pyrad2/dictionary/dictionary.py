@@ -78,52 +78,16 @@ These datatypes are parsed but not supported:
 from copy import copy
 from typing import Any, Dict, Hashable, Optional
 
-from pyrad2 import bidict, dictfile, tools
-from pyrad2.constants import DATATYPES
+from pyrad2 import dictfile
+from pyrad2.bidict import BiDict
+from pyrad2.dictionary.vendor import Vendor
+from pyrad2.dictionary.attribute import AttributeStack
+from pyrad2.datatypes import RADIUS_TYPES
 from pyrad2.exceptions import ParseError
 
+from .attribute import Attribute
+
 RadiusAttributeValue = int | str | bytes
-
-
-class Attribute:
-    """Represents a RADIUS attribute.
-
-    Attributes:
-        name (str): Attribute name
-        code (int): RADIUS code
-        type (str): Data type (e.g., 'string', 'ipaddr')
-        vendor (int): Vendor ID (0 if standard)
-        has_tag (bool): Whether attribute supports tags
-        encrypt (int): Encryption type (0 = none)
-        values (bidict.BiDict): Mapping of named values to their codes
-    """
-
-    def __init__(
-        self,
-        name: str,
-        code: int,
-        datatype: str,
-        is_sub_attribute: bool = False,
-        vendor: str = "",
-        values=None,
-        encrypt: int = 0,
-        has_tag: bool = False,
-    ):
-        if datatype not in DATATYPES:
-            raise ValueError("Invalid data type")
-        self.name = name
-        self.code = code
-        self.type = datatype
-        self.vendor = vendor
-        self.encrypt = encrypt
-        self.has_tag = has_tag
-        self.values = bidict.BiDict()
-        self.sub_attributes: dict = {}
-        self.parent = None
-        self.is_sub_attribute = is_sub_attribute
-        if values:
-            for key, value in values.items():
-                self.values.Add(key, value)
 
 
 class Dictionary:
@@ -133,9 +97,9 @@ class Dictionary:
     values as defined in RADIUS dictionary files.
 
     Attributes:
-        vendors (bidict.BiDict): bidict mapping vendor name to vendor code
-        attrindex (bidict.BiDict): bidict mapping
-        attributes (bidict.BiDict): bidict mapping attribute name to attribute class
+        vendors (BiDict): bidict mapping vendor name to vendor code
+        attrindex (BiDict): bidict mapping
+        attributes (BiDict): bidict mapping attribute name to attribute class
     """
 
     def __init__(self, dict: Optional[str] = None, *dicts):
@@ -145,11 +109,15 @@ class Dictionary:
             dict (str): Path of dictionary file or file-like object to read
             dicts (list): Sequence of strings or files
         """
-        self.vendors = bidict.BiDict()
+        self.vendors = BiDict()
         self.vendors.Add("", 0)
-        self.attrindex = bidict.BiDict()
+        self.attrindex = BiDict()
         self.attributes: Dict[Hashable, Any] = {}
         self.defer_parse: list[tuple[Dict, list]] = []
+
+        self.stack = AttributeStack()
+        # the global attribute namespace is the first layer
+        self.stack.push(self.attributes, self.attrindex)  # type: ignore
 
         if dict:
             self.ReadDictionary(dict)
@@ -163,10 +131,23 @@ class Dictionary:
 
     def __getitem__(self, key: Hashable):
         """Retrieve an Attribute by name."""
+        # allow indexing attributes by number (instead of name).
+        # since the key must be an int, this still allows attribute names like
+        # "1", "2", etc. (which are stored as strings)
+        if isinstance(key, int):
+            # check to see if attribute exists
+            if not self.attrindex.HasBackward(key):
+                raise KeyError(f"Attribute number {key} not defined")
+            # gets attribute name from number using index
+            key = self.attrindex.GetBackward(key)
+
         return self.attributes[key]
 
     def __contains__(self, key: Hashable) -> bool:
         """Check if an attribute is defined in the dictionary."""
+        # allow checks using attribute number
+        if isinstance(key, int):
+            return self.attrindex.HasBackward(key)
         return key in self.attributes
 
     has_key = __contains__
@@ -181,6 +162,7 @@ class Dictionary:
             )
 
         vendor = state["vendor"]
+        inline_vendor = False
         has_tag = False
         encrypt = 0
         if len(tokens) >= 5:
@@ -207,6 +189,7 @@ class Dictionary:
 
             if (not has_tag) and encrypt == 0:
                 vendor = tokens[4]
+                inline_vendor = True
                 if not self.vendors.HasForward(vendor):
                     if vendor == "concat":
                         # ignore attributes with concat (freeradius compat.)
@@ -218,7 +201,7 @@ class Dictionary:
                             line=state["line"],
                         )
 
-        (attribute, code, datatype) = tokens[1:4]
+        (name, code, datatype) = tokens[1:4]
 
         codes = code.split(".")
 
@@ -233,50 +216,47 @@ class Dictionary:
                 tmp.append(int(c, 10))
         codes = tmp
 
-        is_sub_attribute = len(codes) > 1
         if len(codes) == 2:
             code = int(codes[1])
-            parent_code = int(codes[0])
+            parent = self.stack.top_attr()[
+                self.stack.top_namespace().GetBackward(int(codes[0]))
+            ]
+
+            # currently, the presence of a parent attribute means that we are
+            # dealing with a TLV, so push the TLV layer onto the stack
+            self.stack.push(parent, parent.attrindex)
         elif len(codes) == 1:
             code = int(codes[0])
-            parent_code = None
+            parent = None
         else:
             raise ParseError("nested tlvs are not supported")
 
         datatype = datatype.split("[")[0]
 
-        if datatype not in DATATYPES:
+        if datatype not in RADIUS_TYPES:
             raise ParseError(
                 "Illegal type: " + datatype, file=state["file"], line=state["line"]
             )
-        if vendor:
-            if is_sub_attribute:
-                key = (self.vendors.GetForward(vendor), parent_code, code)
-            else:
-                key = (self.vendors.GetForward(vendor), code)
-        else:
-            if is_sub_attribute:
-                key = (parent_code, code)
-            else:
-                key = code
 
-        self.attrindex.Add(attribute, key)
-        self.attributes[attribute] = Attribute(
-            attribute,
-            code,
-            datatype,
-            is_sub_attribute,
-            vendor,
-            encrypt=encrypt,
-            has_tag=has_tag,
+        attribute = Attribute(
+            name, code, datatype, parent, vendor, encrypt=encrypt, has_tag=has_tag
         )
-        if datatype == "tlv":
-            # save attribute in tlvs
-            state["tlvs"][code] = self.attributes[attribute]
-        if is_sub_attribute:
-            # save sub attribute in parent tlv and update their parent field
-            state["tlvs"][parent_code].sub_attributes[code] = attribute
-            self.attributes[attribute].parent = state["tlvs"][parent_code]
+
+        # if detected an inline vendor (vendor in the flags field), set the
+        # attribute under the vendor's attributes
+        # THIS FUNCTION IS NOT SUPPORTED IN FRv4 AND SUPPORT WILL BE REMOVED
+        if inline_vendor:
+            self.attributes["Vendor-Specific"][vendor][name] = attribute
+        else:
+            # add attribute name and number mapping to current namespace
+            self.stack.top_namespace().Add(name, code)
+            # add attribute to current namespace
+            self.stack.top_attr()[name] = attribute
+            if parent:
+                # add attribute to parent
+                parent[name] = attribute
+                # must remove the TLV layer when we are done with it
+                self.stack.pop()
 
     def __ParseValue(self, state: dict, tokens: list, defer: bool) -> None:
         """Parse a VALUE line from a dictionary file."""
@@ -290,7 +270,7 @@ class Dictionary:
         (attr, key, value) = tokens[1:]
 
         try:
-            adef = self.attributes[attr]
+            adef = self.stack.top_attr()[attr]
         except KeyError:
             if defer:
                 self.defer_parse.append((copy(state), copy(tokens)))
@@ -303,8 +283,8 @@ class Dictionary:
 
         if adef.type in ["integer", "signed", "short", "byte", "integer64"]:
             value = int(value, 0)
-        value = tools.EncodeAttr(adef.type, value)
-        self.attributes[attr].values.Add(key, value)
+        value = adef.encode(value)
+        self.stack.top_attr()[attr].values.Add(key, value)
 
     def __ParseVendor(self, state: dict, tokens: list) -> None:
         """Parse a VENDOR line, registering a new vendor."""
@@ -340,8 +320,11 @@ class Dictionary:
                     line=state["line"],
                 )
 
-        (vendorname, vendor) = tokens[1:3]
-        self.vendors.Add(vendorname, int(vendor, 0))
+        (name, number) = tokens[1:3]
+        self.vendors.Add(name, int(number, 0))
+        if "Vendor-Specific" not in self.attributes:
+            self.attributes["Vendor-Specific"] = {}
+        self.attributes["Vendor-Specific"][name] = Vendor(name, int(number))
 
     def __ParseBeginVendor(self, state: dict, tokens: list) -> None:
         """Start a block of attributes for a specific vendor."""
@@ -352,16 +335,18 @@ class Dictionary:
                 line=state["line"],
             )
 
-        vendor = tokens[1]
+        name = tokens[1]
 
-        if not self.vendors.HasForward(vendor):
+        if not self.vendors.HasForward(name):
             raise ParseError(
-                "Unknown vendor %s in begin-vendor statement" % vendor,
+                "Unknown vendor %s in begin-vendor statement" % name,
                 file=state["file"],
                 line=state["line"],
             )
 
-        state["vendor"] = vendor
+        state["vendor"] = name
+        vendor = self.attributes["Vendor-Specific"][name]
+        self.stack.push(vendor, vendor.attrindex)
 
     def __ParseEndVendor(self, state: dict, tokens: list):
         """End a block of vendor-specific attributes."""
@@ -381,6 +366,8 @@ class Dictionary:
                 line=state["line"],
             )
         state["vendor"] = ""
+        # remove the vendor layer
+        self.stack.pop()
 
     def ReadDictionary(self, file: str) -> None:
         """Parse a dictionary file.
