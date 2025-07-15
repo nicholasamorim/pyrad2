@@ -29,7 +29,7 @@ class TLV(AbstractStructural):
     def __init__(self):
         super().__init__("tlv")
 
-    def encode(self, attribute, decoded, *args, **kwargs):
+    def encode(self, attribute: Attribute, decoded: dict, *args, **kwargs):
         encoding = b""
         for key, value in decoded.items():
             encoding += attribute.children[key].encode(
@@ -40,12 +40,12 @@ class TLV(AbstractStructural):
             raise ValueError("TLV length too long for one packet")
 
         return (
-            struct.pack("!B", attribute.number)
+            struct.pack("!B", attribute.code)
             + struct.pack("!B", len(encoding) + 2)
             + encoding
         )
 
-    def get_value(self, attribute: "Attribute", packet, offset):
+    def get_value(self, attribute: Attribute, packet: bytes, offset: int):
         sub_attrs: dict = {}
 
         _, outer_len = struct.unpack("!BB", packet[offset : offset + 2])[0:2]
@@ -69,11 +69,11 @@ class TLV(AbstractStructural):
             cursor += sub_offset
         return sub_attrs, outer_len
 
-    def print(self, attribute, decoded, *args, **kwargs):
+    def print(self, attribute: Attribute, decoded, *args, **kwargs) -> str:
         sub_attr_strings = [sub_attr.print() for sub_attr in attribute.children]
         return f"{attribute.name} = {{ {', '.join(sub_attr_strings)} }}"
 
-    def parse(self, dictionary, string, *args, **kwargs):
+    def parse(self, dictionary, string: str, *args, **kwargs):
         return tlv_name_to_codes(dictionary, parser_tlv.parse(string))
 
 
@@ -88,7 +88,7 @@ class VSA(AbstractStructural):
         #  used for get_value()
         self.tlv = TLV()
 
-    def encode(self, attribute, decoded, *args, **kwargs):
+    def encode(self, attribute: Attribute, decoded: dict, *args, **kwargs):
         encoding = b""
 
         for key, value in decoded.items():
@@ -97,13 +97,13 @@ class VSA(AbstractStructural):
             )
 
         return (
-            struct.pack("!B", attribute.number)
+            struct.pack("!B", attribute.code)
             + struct.pack("!B", len(encoding) + 4)
             + struct.pack("!L", attribute.vendor)
             + encoding
         )
 
-    def get_value(self, attribute: "Attribute", packet, offset):
+    def get_value(self, attribute: Attribute, packet: bytes, offset: int):
         values = {}
 
         # currently, a list of (code, value) pair is returned. with the v4
@@ -127,9 +127,9 @@ class VSA(AbstractStructural):
 
         return {vendor: values}, length
 
-    def print(self, attribute, decoded, *args, **kwargs):
+    def print(self, attribute: Attribute, decoded, *args, **kwargs):
         sub_attr_strings = [sub_attr.print() for sub_attr in attribute.children]
         return f"Vendor-Specific = {{ {attribute.vendor} = {{ {', '.join(sub_attr_strings)} }}"
 
-    def parse(self, dictionary, string, *args, **kwargs):
+    def parse(self, dictionary, string: str, *args, **kwargs):
         return vsa_name_to_codes(dictionary, parser_tlv.parse(string))
