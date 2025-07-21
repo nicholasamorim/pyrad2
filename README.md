@@ -30,7 +30,7 @@ pyrad2 requires Python 3.12 and uses [uv](https://github.com/astral-sh/uv). On a
 
 # Examples
 
-See the [Getting Started guide](https://nicholasamorim.github.io/pyrad2/getting_started/) for a better overview.
+See the [Getting Started guide](https://nicholasamorim.github.io/pyrad2/setup/) for a better overview.
 
 There are a few examples in the `examples` folder. You can either install pyrad2 and use the examples or clone the repo. If you clone the repo, make commands are useful.
 
