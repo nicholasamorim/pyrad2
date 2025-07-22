@@ -4,7 +4,11 @@
 #
 # A RADIUS proxy as defined in RFC 2138
 
-import select
+import os
+if os.name == 'nt':
+    import selectors
+else:
+    import select
 import socket
 
 from pyrad2 import packet
@@ -25,9 +29,12 @@ class Proxy(Server):
         super()._PrepareSockets()
         self._proxyfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._fdmap[self._proxyfd.fileno()] = self._proxyfd
-        self._poll.register(
-            self._proxyfd.fileno(), (select.POLLIN | select.POLLPRI | select.POLLERR)
-        )
+        if os.name == 'nt':
+            self._sel.register(self._proxyfd.fileno(), selectors.EVENT_READ)
+        else:
+            self._poll.register(
+                self._proxyfd.fileno(), (select.POLLIN | select.POLLPRI | select.POLLERR)
+            )
 
     def _HandleProxyPacket(self, pkt: packet.Packet) -> None:
         """Process a packet received on the reply socket.

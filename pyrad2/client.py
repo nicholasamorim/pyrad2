@@ -1,5 +1,9 @@
 import hashlib
-import select
+import os
+if os.name == 'nt':
+    import selectors
+else:
+    import select
 import socket
 import struct
 import time
@@ -47,7 +51,10 @@ class Client(host.Host):
         self.secret = secret
         self.retries = retries
         self.timeout = timeout
-        self._poll = select.poll()
+        if os.name == 'nt':
+            self._sel = selectors.DefaultSelector()
+        else:
+            self._poll = select.poll()
         self._socket: Optional[socket.socket] = None
 
     def bind(self, addr: str | tuple) -> None:
@@ -73,11 +80,17 @@ class Client(host.Host):
         if not self._socket:
             self._socket = socket.socket(family, socket.SOCK_DGRAM)
             self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self._poll.register(self._socket, select.POLLIN)
+            if os.name == 'nt':
+                self._sel.register(self._socket, selectors.EVENT_READ)
+            else:
+                self._poll.register(self._socket, select.POLLIN)
 
     def _CloseSocket(self) -> None:
         if self._socket:
-            self._poll.unregister(self._socket)
+            if os.name == 'nt':
+                self._sel.unregister(self._socket)
+            else:
+                self._poll.unregister(self._socket)
             self._socket.close()
             self._socket = None
 
@@ -148,11 +161,20 @@ class Client(host.Host):
             self._socket.sendto(pkt.RequestPacket(), (self.server, port))
 
             while now < waitto:
-                ready = self._poll.poll((waitto - now) * 1000)
+                rawreply = None
 
-                if ready:
-                    rawreply = self._socket.recv(4096)
+                if os.name == 'nt':
+                    for key, mask in self._sel.select(timeout=(waitto - now)):
+                        if mask & selectors.EVENT_READ:
+                            rawreply = key.fileobj.recv(4096)
+
                 else:
+                    ready = self._poll.poll((waitto - now) * 1000)
+
+                    if ready:
+                        rawreply = self._socket.recv(4096)
+
+                if not rawreply:
                     now = time.time()
                     continue
 

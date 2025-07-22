@@ -1,4 +1,8 @@
-import select
+import os
+if os.name == 'nt':
+    import selectors
+else:
+    import select
 import socket
 from dataclasses import dataclass
 from typing import Callable, Optional
@@ -260,9 +264,12 @@ class Server(host.Host):
         """Prepare all sockets to receive packets."""
         for fd in self.authfds + self.acctfds + self.coafds:
             self._fdmap[fd.fileno()] = fd
-            self._poll.register(
-                fd.fileno(), select.POLLIN | select.POLLPRI | select.POLLERR
-            )
+            if os.name == 'nt':
+                self._sel.register(fd.fileno(), selectors.EVENT_READ)
+            else:
+                self._poll.register(
+                    fd.fileno(), select.POLLIN | select.POLLPRI | select.POLLERR
+                )
         if self.auth_enabled:
             self._realauthfds = list(map(lambda x: x.fileno(), self.authfds))
         if self.acct_enabled:
@@ -319,19 +326,35 @@ class Server(host.Host):
         for packets to arrive via the network and calls other methods
         to process them.
         """
-        self._poll = select.poll()
+        if os.name == 'nt':
+            self._sel = selectors.DefaultSelector()
+        else:
+            self._poll = select.poll()
         self._fdmap: dict[int, socket.socket] = {}
         self._PrepareSockets()
 
         while True:
-            for fd, event in self._poll.poll():
-                if event == select.POLLIN:
-                    try:
-                        fdo = self._fdmap[fd]
-                        self._ProcessInput(fdo)
-                    except ServerPacketError as err:
-                        logger.info("Dropping packet: " + str(err))
-                    except packet.PacketError as err:
-                        logger.info("Received a broken packet: " + str(err))
-                else:
-                    logger.error("Unexpected event in server main loop")
+            if os.name == 'nt':
+                for key, mask in self._sel.select(timeout=1):
+                    if mask & selectors.EVENT_READ:
+                        try:
+                            fdo = self._fdmap[key.fd]
+                            self._ProcessInput(fdo)
+                        except ServerPacketError as err:
+                            logger.info("Dropping packet: " + str(err))
+                        except packet.PacketError as err:
+                            logger.info("Received a broken packet: " + str(err))
+                    else:
+                        logger.error("Unexpected event in server main loop")
+            else:
+                for fd, event in self._poll.poll():
+                    if event == select.POLLIN:
+                        try:
+                            fdo = self._fdmap[fd]
+                            self._ProcessInput(fdo)
+                        except ServerPacketError as err:
+                            logger.info("Dropping packet: " + str(err))
+                        except packet.PacketError as err:
+                            logger.info("Received a broken packet: " + str(err))
+                    else:
+                        logger.error("Unexpected event in server main loop")
