@@ -87,5 +87,5 @@ ATTRIBUTE   FreeRADIUS-Stats-HUP-Time   177 date
 ATTRIBUTE   FreeRADIUS-Queue-PPS-In   181 integer
 ATTRIBUTE   FreeRADIUS-Queue-PPS-In   182 integer
 
-
+ATTRIBUTE Vendor-Specific 26 vsa
 END-VENDOR FreeRADIUS

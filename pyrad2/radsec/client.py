@@ -16,7 +16,7 @@ from pyrad2.packet import (
     PacketError,
     PacketImplementation,
 )
-from pyrad2.tools import read_radius_packet
+from pyrad2.utils import read_radius_packet
 
 
 class RadSecClient:
