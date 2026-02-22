@@ -30,7 +30,7 @@ class RadSecClient:
         timeout: int = 5,
         certfile: str = "certs/client/client.cert.pem",
         keyfile: str = "certs/client/client.key.pem",
-        certfile_server: str = "certs//ca/ca.cert.pem",
+        certfile_server: str = "certs/ca/ca.cert.pem",
         check_hostname: bool = False,
     ):
         """Initializes a RadSec client.
@@ -44,7 +44,7 @@ class RadSecClient:
                 the shared secret must be `radsec`.
             dict (Dictionary): RADIUS dictionary to use.
             certfile (str): Path to client SSL certificate
-            keyfile (str): Path to client SSL certificate
+            keyfile (str): Path to client SSL key
             certfile_server (str): Path to server SSL certificate
 
         """

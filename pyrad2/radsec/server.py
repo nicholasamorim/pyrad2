@@ -1,6 +1,6 @@
 import asyncio
 import ssl
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Optional
 
 from loguru import logger
@@ -26,7 +26,7 @@ class UnknownHost(Exception):
     pass
 
 
-class RadSecServer:
+class RadSecServer(ABC):
     """A RadSec as per RFC6614.
 
     UDP + MD5 has proven to be a combination that has not survived
@@ -61,13 +61,13 @@ class RadSecServer:
 
         Args:
             listen_address (str): IP address to bind to, defaults to 0.0.0.0
-            listen_port (int): Deafaults to 2083.
+            listen_port (int): Defaults to 2083.
             hosts (dict[str, RemoteHost]): Hosts who we can talk to. A dictionary mapping IP to RemoteHost class instances.
             dictionary (Dictionary): RADIUS dictionary to use.
             verify_packet (bool): If true, the packet will be verified against its secret
             certfile (str): Path to server SSL certificate
-            keyfile (str): Path to server SSL certificate
-            ca_certfile (str): Path to server CA certfificate
+            keyfile (str): Path to server SSL key
+            ca_certfile (str): Path to server CA certificate
         """
         self.listen_address = listen_address
         self.listen_port = listen_port

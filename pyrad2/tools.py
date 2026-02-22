@@ -2,7 +2,13 @@ import binascii
 import ssl
 import struct
 from asyncio import StreamReader
-from collections.abc import Buffer
+import sys
+
+if sys.version_info >= (3, 12):
+    from collections.abc import Buffer
+else:
+    from typing import Union
+    Buffer = Union[bytes, bytearray, memoryview]
 from hashlib import sha256
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
 

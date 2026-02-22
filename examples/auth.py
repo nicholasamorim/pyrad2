@@ -31,7 +31,7 @@ except Timeout:
     logger.error("RADIUS server does not reply")
     sys.exit(1)
 except OSError as error:
-    logger.inferroro("Network error: {}", error[1])
+    logger.error("Network error: {}", error[1])
     sys.exit(1)
 
 if reply.code == PacketType.AccessAccept:

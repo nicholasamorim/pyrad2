@@ -30,23 +30,23 @@ class ConstructionTests(unittest.TestCase):
 
     def testParameterOrder(self):
         marker = object()
-        client = Client(self.server, 123, 456, 789, "secret", marker)
+        client = Client(self.server, 123, 456, 789, b"secret", marker)
         self.assertTrue(client.server is self.server)
         self.assertEqual(client.authport, 123)
         self.assertEqual(client.acctport, 456)
         self.assertEqual(client.coaport, 789)
-        self.assertEqual(client.secret, "secret")
+        self.assertEqual(client.secret, b"secret")
         self.assertTrue(client.dict is marker)
 
     def testNamedParameters(self):
         marker = object()
         client = Client(
-            server=self.server, authport=123, acctport=456, secret="secret", dict=marker
+            server=self.server, authport=123, acctport=456, secret=b"secret", dict=marker
         )
         self.assertTrue(client.server is self.server)
         self.assertEqual(client.authport, 123)
         self.assertEqual(client.acctport, 456)
-        self.assertEqual(client.secret, "secret")
+        self.assertEqual(client.secret, b"secret")
         self.assertTrue(client.dict is marker)
 
 
