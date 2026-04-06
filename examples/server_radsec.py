@@ -25,7 +25,7 @@ class RadSecServer(BaseRadSecServer):
         for attr in packet.keys():
             logger.info("{}: {}", attr, packet[attr])
 
-        reply = packet.CreateReply(
+        reply = packet.create_reply(
             **{
                 "Service-Type": "Framed-User",
                 "Framed-IP-Address": "192.168.0.1",
@@ -41,14 +41,14 @@ class RadSecServer(BaseRadSecServer):
         for attr in packet.keys():
             logger.info("{}: {}", attr, packet[attr])
 
-        return packet.CreateReply()
+        return packet.create_reply()
 
     async def handle_disconnect(self, packet: CoAPacket):
         logger.info("Received an disconnect request. Attributes below")
         for attr in packet.keys():
             logger.info("{}: {}", attr, packet[attr])
 
-        reply = packet.CreateReply()
+        reply = packet.create_reply()
         reply.code = 45  # COA NAK
         return reply
 
@@ -57,7 +57,7 @@ class RadSecServer(BaseRadSecServer):
         for attr in packet.keys():
             logger.info("{}: {}", attr, packet[attr])
 
-        return packet.CreateReply()
+        return packet.create_reply()
 
 
 async def main():

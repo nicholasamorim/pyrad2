@@ -15,9 +15,9 @@ from pyrad2.constants import PacketType
 
 class UtilityTests(unittest.TestCase):
     def testGenerateID(self):
-        id = packet.CreateID()
+        id = packet.create_id()
         self.assertTrue(isinstance(id, int))
-        newid = packet.CreateID()
+        newid = packet.create_id()
         self.assertNotEqual(id, newid)
 
 
@@ -118,12 +118,12 @@ class PacketTests(unittest.TestCase):
     def _get_attribute_bytes(self, attr_name, value):
         attr = self.dict.attributes[attr_name]
         attr_key = attr.code
-        attr_value = packet.tools.EncodeAttr(attr.type, value)
+        attr_value = packet.tools.encode_attr(attr.type, value)
         attr_len = len(attr_value) + 2
         return struct.pack("!BB", attr_key, attr_len) + attr_value
 
-    def testCreateReply(self):
-        reply = self.packet.CreateReply(**{"Test-Integer": 10})
+    def test_create_reply(self):
+        reply = self.packet.create_reply(**{"Test-Integer": 10})
         self.assertEqual(reply.id, self.packet.id)
         self.assertEqual(reply.secret, self.packet.secret)
         self.assertEqual(reply.authenticator, self.packet.authenticator)
@@ -195,22 +195,22 @@ class PacketTests(unittest.TestCase):
         OrderedDict.__setitem__(self.packet, 12345, None)
         self.assertEqual(self.packet.keys(), ["Test-String", "Test-Integer", 12345])
 
-    def testCreateAuthenticator(self):
-        a = packet.Packet.CreateAuthenticator()
+    def test_create_authenticator(self):
+        a = packet.Packet.create_authenticator()
         self.assertTrue(isinstance(a, bytes))
         self.assertEqual(len(a), 16)
 
-        b = packet.Packet.CreateAuthenticator()
+        b = packet.Packet.create_authenticator()
         self.assertNotEqual(a, b)
 
     def testGenerateID(self):
-        id = self.packet.CreateID()
+        id = self.packet.create_id()
         self.assertTrue(isinstance(id, int))
-        newid = self.packet.CreateID()
+        newid = self.packet.create_id()
         self.assertNotEqual(id, newid)
 
     def testReplyPacket(self):
-        reply = self.packet.ReplyPacket()
+        reply = self.packet.reply_packet()
         self.assertEqual(
             reply,
             (
@@ -219,28 +219,30 @@ class PacketTests(unittest.TestCase):
             ),
         )
 
-    def testVerifyReply(self):
-        reply = self.packet.CreateReply()
-        self.assertEqual(self.packet.VerifyReply(reply), True)
+    def test_verify_reply(self):
+        reply = self.packet.create_reply()
+        self.assertEqual(self.packet.verify_reply(reply), True)
 
         reply.id += 1
-        self.assertEqual(self.packet.VerifyReply(reply), False)
+        self.assertEqual(self.packet.verify_reply(reply), False)
         reply.id = self.packet.id
 
         reply.secret = b"different"
-        self.assertEqual(self.packet.VerifyReply(reply), False)
+        self.assertEqual(self.packet.verify_reply(reply), False)
         reply.secret = self.packet.secret
 
         reply.authenticator = b"X" * 16
-        self.assertEqual(self.packet.VerifyReply(reply), False)
+        self.assertEqual(self.packet.verify_reply(reply), False)
         reply.authenticator = self.packet.authenticator
 
-    def testVerifyReplyDuplicateAttributes(self):
+    def test_verify_reply_duplicate_attributes(self):
         reply = self._create_reply_with_duplicate_attributes(self.packet)
-        self.assertTrue(self.packet.VerifyReply(reply=reply, rawreply=reply.raw_packet))
+        self.assertTrue(
+            self.packet.verify_reply(reply=reply, rawreply=reply.raw_packet)
+        )
 
-    def testVerifyMessageAuthenticator(self):
-        reply = self.packet.CreateReply(
+    def test_verify_message_authenticator(self):
+        reply = self.packet.create_reply(
             **{
                 "Test-String": "test",
                 "Test-Integer": 3,
@@ -284,7 +286,7 @@ class PacketTests(unittest.TestCase):
         )
 
     def testPktEncodeAttribute(self):
-        encode = self.packet._PktEncodeAttribute
+        encode = self.packet._pkt_encode_attribute
 
         # Encode a normal attribute
         self.assertEqual(encode(1, b"value"), b"\x01\x07value")
@@ -294,7 +296,7 @@ class PacketTests(unittest.TestCase):
         )
 
     def testPktEncodeTlvAttribute(self):
-        encode = self.packet._PktEncodeTlv
+        encode = self.packet._pkt_encode_tlv
 
         # Encode a normal tlv attribute
         self.assertEqual(
@@ -314,7 +316,7 @@ class PacketTests(unittest.TestCase):
         )
 
     def testPktEncodeLongTlvAttribute(self):
-        encode = self.packet._PktEncodeTlv
+        encode = self.packet._pkt_encode_tlv
 
         long_str = b"a" * 245
         # Encode a long tlv attribute - check it is split between AVPs
@@ -335,30 +337,31 @@ class PacketTests(unittest.TestCase):
 
     def testPktEncodeAttributes(self):
         self.packet[1] = [b"value"]
-        self.assertEqual(self.packet._PktEncodeAttributes(), b"\x01\x07value")
+        self.assertEqual(self.packet._pkt_encode_attributes(), b"\x01\x07value")
 
         self.packet.clear()
         self.packet[(16, 2)] = [b"value"]
         self.assertEqual(
-            self.packet._PktEncodeAttributes(), b"\x1a\x0d\x00\x00\x00\x10\x02\x07value"
+            self.packet._pkt_encode_attributes(),
+            b"\x1a\x0d\x00\x00\x00\x10\x02\x07value",
         )
 
         self.packet.clear()
         self.packet[1] = [b"one", b"two", b"three"]
         self.assertEqual(
-            self.packet._PktEncodeAttributes(), b"\x01\x05one\x01\x05two\x01\x07three"
+            self.packet._pkt_encode_attributes(), b"\x01\x05one\x01\x05two\x01\x07three"
         )
 
         self.packet.clear()
         self.packet[1] = [b"value"]
         self.packet[(16, 2)] = [b"value"]
         self.assertEqual(
-            self.packet._PktEncodeAttributes(),
+            self.packet._pkt_encode_attributes(),
             b"\x01\x07value\x1a\x0d\x00\x00\x00\x10\x02\x07value",
         )
 
     def testPktDecodeVendorAttribute(self):
-        decode = self.packet._PktDecodeVendorAttribute
+        decode = self.packet._pkt_decode_vendor_attribute
 
         # Non-RFC2865 recommended form
         self.assertEqual(decode(b""), [(26, b"")])
@@ -376,7 +379,7 @@ class PacketTests(unittest.TestCase):
         )
 
     def testPktDecodeTlvAttribute(self):
-        decode = self.packet._PktDecodeTlvAttribute
+        decode = self.packet._pkt_decode_tlv_attribute
 
         decode(4, b"\x01\x07value")
         self.assertEqual(self.packet[4], {1: [b"value"]})
@@ -393,7 +396,7 @@ class PacketTests(unittest.TestCase):
 
     def testDecodePacketWithEmptyPacket(self):
         try:
-            self.packet.DecodePacket(b"")
+            self.packet.decode_packet(b"")
         except packet.PacketError as e:
             self.assertTrue("header is corrupt" in str(e))
         else:
@@ -401,7 +404,7 @@ class PacketTests(unittest.TestCase):
 
     def testDecodePacketWithInvalidLength(self):
         try:
-            self.packet.DecodePacket(b"\x00\x00\x00\x001234567890123456")
+            self.packet.decode_packet(b"\x00\x00\x00\x001234567890123456")
         except packet.PacketError as e:
             self.assertTrue("invalid length" in str(e))
         else:
@@ -409,7 +412,7 @@ class PacketTests(unittest.TestCase):
 
     def testDecodePacketWithTooBigPacket(self):
         try:
-            self.packet.DecodePacket(b"\x00\x00\x24\x00" + (0x2400 - 4) * b"X")
+            self.packet.decode_packet(b"\x00\x00\x24\x00" + (0x2400 - 4) * b"X")
         except packet.PacketError as e:
             self.assertTrue("too long" in str(e))
         else:
@@ -417,14 +420,14 @@ class PacketTests(unittest.TestCase):
 
     def testDecodePacketWithPartialAttributes(self):
         try:
-            self.packet.DecodePacket(b"\x01\x02\x00\x151234567890123456\x00")
+            self.packet.decode_packet(b"\x01\x02\x00\x151234567890123456\x00")
         except packet.PacketError as e:
             self.assertTrue("header is corrupt" in str(e))
         else:
             self.fail()
 
     def testDecodePacketWithoutAttributes(self):
-        self.packet.DecodePacket(b"\x01\x02\x00\x141234567890123456")
+        self.packet.decode_packet(b"\x01\x02\x00\x141234567890123456")
         self.assertEqual(self.packet.code, 1)
         self.assertEqual(self.packet.id, 2)
         self.assertEqual(self.packet.authenticator, b"1234567890123456")
@@ -432,72 +435,82 @@ class PacketTests(unittest.TestCase):
 
     def testDecodePacketWithBadAttribute(self):
         try:
-            self.packet.DecodePacket(b"\x01\x02\x00\x161234567890123456\x00\x01")
+            self.packet.decode_packet(b"\x01\x02\x00\x161234567890123456\x00\x01")
         except packet.PacketError as e:
             self.assertTrue("too small" in str(e))
         else:
             self.fail()
 
     def testDecodePacketWithEmptyAttribute(self):
-        self.packet.DecodePacket(b"\x01\x02\x00\x161234567890123456\x01\x02")
+        self.packet.decode_packet(b"\x01\x02\x00\x161234567890123456\x01\x02")
         self.assertEqual(self.packet[1], [b""])
 
     def testDecodePacketWithAttribute(self):
-        self.packet.DecodePacket(b"\x01\x02\x00\x1b1234567890123456\x01\x07value")
+        self.packet.decode_packet(b"\x01\x02\x00\x1b1234567890123456\x01\x07value")
         self.assertEqual(self.packet[1], [b"value"])
 
+    def testDecodePacketWithUnknownAttribute(self):
+        self.packet.decode_packet(b"\x01\x02\x00\x1b1234567890123456\x09\x07value")
+        self.assertEqual(self.packet[9], [b"value"])
+
     def testDecodePacketWithTlvAttribute(self):
-        self.packet.DecodePacket(
+        self.packet.decode_packet(
             b"\x01\x02\x00\x1d1234567890123456\x04\x09\x01\x07value"
         )
         self.assertEqual(self.packet[4], {1: [b"value"]})
 
+    def testDecodePacketIsTlvAttribute(self):
+        self.packet.decode_packet(
+            b"\x01\x02\x00\x1d1234567890123456\x04\x09\x01\x07value"
+        )
+        self.assertTrue(self.packet._pkt_is_tlv_attribute(4))
+
     def testDecodePacketWithVendorTlvAttribute(self):
-        self.packet.DecodePacket(
+        self.packet.decode_packet(
             b"\x01\x02\x00\x231234567890123456\x1a\x0f\x00\x00\x00\x10\x03\x09\x01\x07value"
         )
         self.assertEqual(self.packet[(16, 3)], {1: [b"value"]})
 
     def testDecodePacketWithTlvAttributeWith2SubAttributes(self):
-        self.packet.DecodePacket(
+        self.packet.decode_packet(
             b"\x01\x02\x00\x231234567890123456\x04\x0f\x01\x07value\x02\x06\x00\x00\x00\x09"
         )
         self.assertEqual(self.packet[4], {1: [b"value"], 2: [b"\x00\x00\x00\x09"]})
 
     def testDecodePacketWithSplitTlvAttribute(self):
-        self.packet.DecodePacket(
+        self.packet.decode_packet(
             b"\x01\x02\x00\x251234567890123456\x04\x09\x01\x07value\x04\x09\x02\x06\x00\x00\x00\x09"
         )
         self.assertEqual(self.packet[4], {1: [b"value"], 2: [b"\x00\x00\x00\x09"]})
 
     def testDecodePacketWithMultiValuedAttribute(self):
-        self.packet.DecodePacket(
+        self.packet.decode_packet(
             b"\x01\x02\x00\x1e1234567890123456\x01\x05one\x01\x05two"
         )
         self.assertEqual(self.packet[1], [b"one", b"two"])
 
     def testDecodePacketWithTwoAttributes(self):
-        self.packet.DecodePacket(
+        self.packet.decode_packet(
             b"\x01\x02\x00\x1e1234567890123456\x01\x05one\x01\x05two"
         )
         self.assertEqual(self.packet[1], [b"one", b"two"])
 
     def testDecodePacketWithVendorAttribute(self):
-        self.packet.DecodePacket(b"\x01\x02\x00\x1b1234567890123456\x1a\x07value")
+        self.packet.decode_packet(b"\x01\x02\x00\x1b1234567890123456\x1a\x07value")
         self.assertEqual(self.packet[26], [b"value"])
 
     def testEncodeKeyValues(self):
-        self.assertEqual(self.packet._EncodeKeyValues(1, "1234"), (1, "1234"))
+        self.assertEqual(self.packet._encode_key_values(1, "1234"), (1, "1234"))
 
     def testEncodeKey(self):
-        self.assertEqual(self.packet._EncodeKey(1), 1)
+        self.assertEqual(self.packet._encode_key(1), 1)
 
-    def testAddAttribute(self):
-        self.packet.AddAttribute("Test-String", "1")
+    def testadd_attribute(self):
+        self.packet.add_attribute("Test-String", "1")
         self.assertEqual(self.packet["Test-String"], ["1"])
-        self.packet.AddAttribute("Test-String", "1")
+        self.packet.add_attribute("Test-String", "1")
         self.assertEqual(self.packet["Test-String"], ["1", "1"])
-        self.packet.AddAttribute("Test-String", ["2", "3"])
+        self.packet.add_attribute("Test-String", ["2", "3"])
         self.assertEqual(self.packet["Test-String"], ["1", "1", "2", "3"])
 
 
@@ -517,8 +530,8 @@ class AuthPacketTests(unittest.TestCase):
             id=0, secret=b"secret", authenticator=b"01234567890ABCDEF", dict=self.dict
         )
 
-    def testCreateReply(self):
-        reply = self.packet.CreateReply(**{"Test-Integer": 10})
+    def test_create_reply(self):
+        reply = self.packet.create_reply(**{"Test-Integer": 10})
         self.assertEqual(reply.code, PacketType.AccessAccept)
         self.assertEqual(reply.id, self.packet.id)
         self.assertEqual(reply.secret, self.packet.secret)
@@ -527,39 +540,39 @@ class AuthPacketTests(unittest.TestCase):
 
     def testRequestPacket(self):
         self.assertEqual(
-            self.packet.RequestPacket(), b"\x01\x00\x00\x1401234567890ABCDE"
+            self.packet.request_packet(), b"\x01\x00\x00\x1401234567890ABCDE"
         )
 
     def testRequestPacketCreatesAuthenticator(self):
         self.packet.authenticator = None
-        self.packet.RequestPacket()
+        self.packet.request_packet()
         self.assertTrue(self.packet.authenticator is not None)
 
     def testRequestPacketCreatesID(self):
         self.packet.id = None
-        self.packet.RequestPacket()
+        self.packet.request_packet()
         self.assertTrue(self.packet.id is not None)
 
-    def testPwCryptEmptyPassword(self):
-        self.assertEqual(self.packet.PwCrypt(""), b"")
+    def testpw_cryptEmptyPassword(self):
+        self.assertEqual(self.packet.pw_crypt(""), b"")
 
-    def testPwCryptPassword(self):
+    def testpw_cryptPassword(self):
         self.assertEqual(
-            self.packet.PwCrypt("Simplon"),
+            self.packet.pw_crypt("Simplon"),
             b"\xd3U;\xb23\r\x11\xba\x07\xe3\xa8*\xa8x\x14\x01",
         )
 
-    def testPwCryptSetsAuthenticator(self):
+    def testpw_cryptSetsAuthenticator(self):
         self.packet.authenticator = None
-        self.packet.PwCrypt("")
+        self.packet.pw_crypt("")
         self.assertTrue(self.packet.authenticator is not None)
 
-    def testPwDecryptEmptyPassword(self):
-        self.assertEqual(self.packet.PwDecrypt(b""), "")
+    def testpw_decryptEmptyPassword(self):
+        self.assertEqual(self.packet.pw_decrypt(b""), "")
 
-    def testPwDecryptPassword(self):
+    def testpw_decryptPassword(self):
         self.assertEqual(
-            self.packet.PwDecrypt(b"\xd3U;\xb23\r\x11\xba\x07\xe3\xa8*\xa8x\x14\x01"),
+            self.packet.pw_decrypt(b"\xd3U;\xb23\r\x11\xba\x07\xe3\xa8*\xa8x\x14\x01"),
             "Simplon",
         )
 
@@ -578,7 +591,7 @@ class AuthPacketChapTests(unittest.TestCase):
         chap_password = (
             chap_id + hashlib.md5(chap_id + b"test_password" + chap_challenge).digest()
         )
-        pkt = self.client.CreateAuthPacket(
+        pkt = self.client.create_auth_packet(
             code=PacketType.AccessChallenge,
             authenticator=b"ABCDEFG",
             User_Name="test_name",
@@ -587,7 +600,7 @@ class AuthPacketChapTests(unittest.TestCase):
         )
         self.assertEqual(pkt["CHAP-Challenge"][0], chap_challenge)
         self.assertEqual(pkt["CHAP-Password"][0], chap_password)
-        self.assertEqual(pkt.VerifyChapPasswd("test_password"), True)
+        self.assertEqual(pkt.verify_chap_passwd("test_password"), True)
 
 
 class AcctPacketConstructionTests(PacketConstructionTests):
@@ -609,38 +622,103 @@ class AcctPacketConstructionTests(PacketConstructionTests):
 class AcctPacketTests(unittest.TestCase):
     def setUp(self):
         self.path = os.path.join(TEST_ROOT_PATH, "data")
-        self.dict = Dictionary(os.path.join(self.path, "full"))
+        self.dict = self.loadDict()
         self.packet = packet.AcctPacket(
             id=0, secret=b"secret", authenticator=b"01234567890ABCDEF", dict=self.dict
         )
 
-    def testCreateReply(self):
-        reply = self.packet.CreateReply(**{"Test-Integer": 10})
+    def loadDict(self, filename="full"):
+        return Dictionary(os.path.join(self.path, filename))
+
+    def test_create_reply(self):
+        reply = self.packet.create_reply(**{"Test-Integer": 10})
         self.assertEqual(reply.code, PacketType.AccountingResponse)
         self.assertEqual(reply.id, self.packet.id)
         self.assertEqual(reply.secret, self.packet.secret)
         self.assertEqual(reply.authenticator, self.packet.authenticator)
         self.assertEqual(reply["Test-Integer"], [10])
 
-    def testVerifyAcctRequest(self):
-        rawpacket = self.packet.RequestPacket()
+    def test_verify_acct_request(self):
+        rawpacket = self.packet.request_packet()
         pkt = packet.AcctPacket(secret=b"secret", packet=rawpacket)
-        self.assertEqual(pkt.VerifyAcctRequest(), True)
+        self.assertEqual(pkt.verify_acct_request(), True)
 
         pkt.secret = b"different"
-        self.assertEqual(pkt.VerifyAcctRequest(), False)
+        self.assertEqual(pkt.verify_acct_request(), False)
         pkt.secret = b"secret"
 
         pkt.raw_packet = b"X" + pkt.raw_packet[1:]
-        self.assertEqual(pkt.VerifyAcctRequest(), False)
+        self.assertEqual(pkt.verify_acct_request(), False)
 
     def testRequestPacket(self):
         self.assertEqual(
-            self.packet.RequestPacket(),
+            self.packet.request_packet(),
             b"\x04\x00\x00\x14\x95\xdf\x90\xccbn\xfb\x15G!\x13\xea\xfa>6\x0f",
         )
 
     def testRequestPacketSetsId(self):
         self.packet.id = None
-        self.packet.RequestPacket()
+        self.packet.request_packet()
         self.assertTrue(self.packet.id is not None)
+
+    def testRealisticUnknownAttributes(self):
+        """Test a realistic Accounting Packet from raw
+        User-Name: [u'user@example.com']
+        NAS-IP-Address: ['1.2.3.4']
+        Service-Type: ['Framed-User']
+        Framed-Protocol: ['NAS-Prompt-User']
+        Framed-IP-Address: ['1.2.3.4']
+        Acct-Status-Type: ['Interim-Update']
+        Acct-Delay-Time: [0]
+        Acct-Input-Octets: [1290826858]
+        Acct-Output-Octets: [3551101035]
+        Acct-Session-Id: [u'90dbd65a18b0a6c']
+        Acct-Authentic: ['RADIUS']
+        Acct-Session-Time: [769500]
+        Acct-Input-Packets: [7403861]
+        Acct-Output-Packets: [10928170]
+        Acct-Link-Count: [1]
+        Acct-Input-Gigawords: [0]
+        Acct-Output-Gigawords: [2]
+        Event-Timestamp: [1554155989]
+        # vendor specific
+        NAS-Port-Type: ['Virtual']
+        (26, 594, 1): [u'UNKNOWN_PRODUCT']
+        # implementation specific fields
+        224: ['24P\x10\x00\x22\x96\xc9']
+        228: ['\xfe\x99\xd0P']
+        """
+        raw = (
+            b"\x04\x8e\x00\xc4\xb2\xf8z\xdb\xac\xfd9l\x9dI?E\x8c%\xe9"
+            b"\xf5\x01\x12user@example.com\x04\x06\x01\x02\x03\x04\x06\x06"
+            b"\x00\x00\x00\x02\x07\x06\x00\x00\x00\x07\x08\x06\x01\x02\x03"
+            b"\x04(\x06\x00\x00\x00\x03)\x06\x00\x00\x00\x00*\x06L\xf0tj+"
+            b"\x06\xd3\xa9\x80k,\x1190dbd65a18b0a6c-\x06\x00\x00\x00\x01."
+            b"\x06\x00\x0b\xbd\xdc/\x06\x00p\xf9U0\x06\x00\xa6\xc0*3\x06"
+            b"\x00\x00\x00\x014\x06\x00\x00\x00\x005\x06\x00\x00\x00\x027"
+            b"\x06\\\xa2\x89\xd5=\x06\x00\x00\x00\x05\x1a\x17\x00\x00\x02R"
+            b"\x01\x11UNKNOWN_PRODUCT\xe0\n24P\x10\x00\x22\x96\xc9\xe4\x06"
+            b"\xfe\x99\xd0P"
+        )
+        pkt = packet.AcctPacket(dict=self.loadDict("realistic"), packet=raw)
+        self.assertEqual(pkt.raw_packet, raw)
+
+        self.assertEqual(pkt.code, PacketType.AccountingRequest)
+        self.assertEqual(pkt["User-Name"], ["user@example.com"])
+        self.assertEqual(pkt["NAS-IP-Address"], ["1.2.3.4"])
+        self.assertEqual(pkt["Acct-Status-Type"], ["Interim-Update"])
+        self.assertEqual(pkt["Acct-Session-Id"], ["90dbd65a18b0a6c"])
+        self.assertEqual(pkt["Acct-Authentic"], ["RADIUS"])
+
+        # Unknown attributes preserved
+        self.assertEqual(pkt[224][0], b"24P\x10\x00\x22\x96\xc9")
+        self.assertEqual(pkt[228][0], b"\xfe\x99\xd0P")
+
+        # Vendor unknown preserved
+        self.assertEqual(pkt[(594, 1)], [b"UNKNOWN_PRODUCT"])
+
+        raw_no_authenticator = raw[:4] + b"\x00" * 16 + raw[20:]
+        rebuilt = pkt.request_packet()
+        rebuilt_no_authenticator = rebuilt[:4] + b"\x00" * 16 + rebuilt[20:]
+
+        self.assertEqual(raw_no_authenticator, rebuilt_no_authenticator)

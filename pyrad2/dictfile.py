@@ -28,7 +28,7 @@ class _Node:
         else:
             self.dir = os.path.join(parentdir, path)
 
-    def Next(self) -> Optional[str]:
+    def next(self) -> Optional[str]:
         if self.current >= self.length:
             return None
         self.current += 1
@@ -50,10 +50,10 @@ class DictFile:
         @type fil: string or file
         """
         self.stack: list[_Node] = []
-        self.__ReadNode(fil)
+        self.__read_node(fil)
 
-    def __ReadNode(self, fil: str | io.TextIOWrapper) -> None:
-        parentdir = self.__CurDir()
+    def __read_node(self, fil: str | io.TextIOWrapper) -> None:
+        parentdir = self.__cur_dir()
         if isinstance(fil, str):
             if os.path.isabs(fil):
                 fname = fil
@@ -66,13 +66,13 @@ class DictFile:
             node = _Node(fil, "", parentdir)
         self.stack.append(node)
 
-    def __CurDir(self) -> str:
+    def __cur_dir(self) -> str:
         if self.stack:
             return self.stack[-1].dir
         else:
             return os.path.realpath(os.curdir)
 
-    def __GetInclude(self, line: str) -> Optional[str]:
+    def __get_include(self, line: str) -> Optional[str]:
         line = line.split("#", 1)[0].strip()
         tokens = line.split()
         if tokens and tokens[0].upper() == "$INCLUDE":
@@ -80,14 +80,14 @@ class DictFile:
         else:
             return None
 
-    def Line(self) -> int:
+    def line(self) -> int:
         """Returns line number of current file"""
         if self.stack:
             return self.stack[-1].current
         else:
             return -1
 
-    def File(self) -> str:
+    def file(self) -> str:
         """Returns name of current file"""
         if self.stack:
             return self.stack[-1].name
@@ -99,13 +99,13 @@ class DictFile:
 
     def __next__(self) -> str:
         while self.stack:
-            line = self.stack[-1].Next()
+            line = self.stack[-1].next()
             if line is None:
                 self.stack.pop()
             else:
-                inc = self.__GetInclude(line)
+                inc = self.__get_include(line)
                 if inc:
-                    self.__ReadNode(inc)
+                    self.__read_node(inc)
                 else:
                     return line
         raise StopIteration

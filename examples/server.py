@@ -5,13 +5,13 @@ from loguru import logger
 
 
 class FakeServer(server.Server):
-    def HandleAuthPacket(self, pkt):
+    def handle_auth_packet(self, pkt):
         logger.info("Received an authentication request")
         logger.info("Attributes: ")
         for attr in pkt.keys():
             logger.info("{}: {}", attr, pkt[attr])
 
-        reply = self.CreateReplyPacket(
+        reply = self.create_reply_packet(
             pkt,
             **{
                 "Service-Type": "Framed-User",
@@ -21,36 +21,36 @@ class FakeServer(server.Server):
         )
 
         reply.code = PacketType.AccessAccept
-        self.SendReplyPacket(pkt.fd, reply)
+        self.send_reply_packet(pkt.fd, reply)
 
-    def HandleAcctPacket(self, pkt):
+    def handle_acct_packet(self, pkt):
         logger.info("Received an accounting request")
         logger.info("Attributes: ")
         for attr in pkt.keys():
             logger.info("{}: {}", attr, pkt[attr])
 
-        reply = self.CreateReplyPacket(pkt)
-        self.SendReplyPacket(pkt.fd, reply)
+        reply = self.create_reply_packet(pkt)
+        self.send_reply_packet(pkt.fd, reply)
 
-    def HandleCoaPacket(self, pkt):
+    def handle_coa_packet(self, pkt):
         logger.info("Received an coa request")
         logger.info("Attributes: ")
         for attr in pkt.keys():
             logger.info("{}: {}", attr, pkt[attr])
 
-        reply = self.CreateReplyPacket(pkt)
-        self.SendReplyPacket(pkt.fd, reply)
+        reply = self.create_reply_packet(pkt)
+        self.send_reply_packet(pkt.fd, reply)
 
-    def HandleDisconnectPacket(self, pkt):
+    def handle_disconnect_packet(self, pkt):
         logger.info("Received an disconnect request")
         logger.info("Attributes: ")
         for attr in pkt.keys():
             logger.info("{}: {}", attr, pkt[attr])
 
-        reply = self.CreateReplyPacket(pkt)
+        reply = self.create_reply_packet(pkt)
         # COA NAK
         reply.code = 45
-        self.SendReplyPacket(pkt.fd, reply)
+        self.send_reply_packet(pkt.fd, reply)
 
 
 if __name__ == "__main__":
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     srv.hosts["127.0.0.1"] = server.RemoteHost(
         "127.0.0.1", b"Kah3choteereethiejeimaeziecumi", "localhost"
     )
-    srv.BindToAddress("0.0.0.0")
+    srv.bind_to_address("0.0.0.0")
 
     # start server
-    srv.Run()
+    srv.run()

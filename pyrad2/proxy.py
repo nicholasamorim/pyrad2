@@ -5,7 +5,8 @@
 # A RADIUS proxy as defined in RFC 2138
 
 import os
-if os.name == 'nt':
+
+if os.name == "nt":
     import selectors
 else:
     import select
@@ -25,18 +26,19 @@ class Proxy(Server):
         _proxyfd (socket.socket): network socket used to communicate with other servers
     """
 
-    def _PrepareSockets(self):
-        super()._PrepareSockets()
+    def _prepare_sockets(self):
+        super()._prepare_sockets()
         self._proxyfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._fdmap[self._proxyfd.fileno()] = self._proxyfd
-        if os.name == 'nt':
+        if os.name == "nt":
             self._sel.register(self._proxyfd.fileno(), selectors.EVENT_READ)
         else:
             self._poll.register(
-                self._proxyfd.fileno(), (select.POLLIN | select.POLLPRI | select.POLLERR)
+                self._proxyfd.fileno(),
+                (select.POLLIN | select.POLLPRI | select.POLLERR),
             )
 
-    def _HandleProxyPacket(self, pkt: packet.Packet) -> None:
+    def _handle_proxy_packet(self, pkt: packet.Packet) -> None:
         """Process a packet received on the reply socket.
         If this packet should be dropped instead of processed a
         :obj:`ServerPacketError` exception should be raised. The main loop
@@ -56,21 +58,23 @@ class Proxy(Server):
         ]:
             raise ServerPacketError("Received non-response on proxy socket")
 
-    def _ProcessInput(self, fd: socket.socket) -> None:
+    def _process_input(self, fd: socket.socket) -> None:
         """Process available data.
         If this packet should be dropped instead of processed a
         `ServerPacketError` exception should be raised. The main loop
         will drop the packet and log the reason.
 
-        This function calls either :obj:`HandleAuthPacket`,
-        :obj:`HandleAcctPacket` or :obj:`_HandleProxyPacket` depending on
+        This function calls either :obj:`handle_auth_packet`,
+        :obj:`HandleAcctPacket` or :obj:`_handle_proxy_packet` depending on
         which socket is being processed.
 
         Args:
             fd (socket.socket): socket to read packet from
         """
         if fd.fileno() == self._proxyfd.fileno():
-            pkt = self._GrabPacket(lambda data, s=self: s.CreatePacket(packet=data), fd)
-            self._HandleProxyPacket(pkt)
+            pkt = self._grab_packet(
+                lambda data, s=self: s.create_packet(packet=data), fd
+            )
+            self._handle_proxy_packet(pkt)
         else:
-            Server._ProcessInput(self, fd)
+            Server._process_input(self, fd)

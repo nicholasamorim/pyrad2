@@ -37,7 +37,7 @@ class RemoteHostTests(unittest.TestCase):
 
 class RadSecServer(BaseRadSecServer):
     async def handle_access_request(self, packet):
-        reply = packet.CreateReply(
+        reply = packet.create_reply(
             **{
                 "Service-Type": "Framed-User",
                 "Framed-IP-Address": "192.168.0.1",
@@ -49,15 +49,15 @@ class RadSecServer(BaseRadSecServer):
         return reply
 
     async def handle_accounting(self, packet):
-        return packet.CreateReply()
+        return packet.create_reply()
 
     async def handle_disconnect(self, packet):
-        reply = packet.CreateReply()
+        reply = packet.create_reply()
         reply.code = 45  # COA NAK
         return reply
 
     async def handle_coa(self, packet):
-        return packet.CreateReply()
+        return packet.create_reply()
 
 
 class ServerTests(unittest.IsolatedAsyncioTestCase):

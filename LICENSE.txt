@@ -1,3 +1,4 @@
+Copyright 2025 Nicholas Amorim. All rights reserved.
 Copyright 2020 Istvan Ruzman. All rights reserved.
 Copyright 2017-2023 Christian Giese. All rights reserved.
 Copyright 2007-2008 Simplon. All rights reserved.

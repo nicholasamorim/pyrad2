@@ -51,7 +51,7 @@ class DatagramProtocolServerTests(unittest.TestCase):
     def test_send_response(self):
         self.protocol.connection_made(self.transport)
         mock_packet = MagicMock()
-        mock_packet.ReplyPacket.return_value = b"response"
+        mock_packet.reply_packet.return_value = b"response"
         self.protocol.send_response(mock_packet, ("127.0.0.1", 12345))
         self.transport.sendto.assert_called_once_with(b"response", ("127.0.0.1", 12345))
 
@@ -79,7 +79,7 @@ class ServerAsyncTests(unittest.IsolatedAsyncioTestCase):
     def test_create_reply_packet(self):
         pkt = MagicMock()
         ServerAsync.create_reply_packet(pkt, Attr1="value")
-        pkt.CreateReply.assert_called_once_with(Attr1="value")
+        pkt.create_reply.assert_called_once_with(Attr1="value")
 
     def test_request_handler_auth(self):
         mock_pkt = MagicMock(code=PacketType.AccessRequest)

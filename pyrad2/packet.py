@@ -3,7 +3,7 @@ import hmac
 import secrets
 import struct
 from collections import OrderedDict
-from typing import Any, Hashable, Optional, Union
+from typing import Any, Hashable, Optional, Union, Sequence
 
 from pyrad2 import tools
 from pyrad2.constants import PacketType
@@ -18,7 +18,7 @@ def hmac_new(*args, **kwargs):
 random_generator = secrets.SystemRandom()
 
 # Current ID
-CurrentID = random_generator.randrange(1, 255)
+CURRENT_ID = random_generator.randrange(1, 255)
 
 # Used for Typing to indicate you accept only the subclasses
 PacketImplementation = Union["AuthPacket", "AcctPacket", "CoAPacket"]
@@ -62,13 +62,16 @@ class Packet(OrderedDict):
         if id is not None:
             self.id = id
         else:
-            self.id = CreateID()
+            self.id = create_id()
         if not isinstance(secret, bytes):
             raise TypeError("secret must be a binary string")
         self.secret = secret
         if authenticator is not None and not isinstance(authenticator, bytes):
             raise TypeError("authenticator must be a binary string")
         self.authenticator = authenticator
+        self.request_authenticator: bytes | None = (
+            None  # store request authenticator in reply packets
+        )
         self.message_authenticator = None
         self.raw_packet = None
 
@@ -80,7 +83,7 @@ class Packet(OrderedDict):
 
         if "packet" in attributes:
             self.raw_packet = attributes["packet"]
-            self.DecodePacket(self.raw_packet)
+            self.decode_packet(self.raw_packet)
 
         if "message_authenticator" in attributes:
             self.message_authenticator = attributes["message_authenticator"]
@@ -94,7 +97,7 @@ class Packet(OrderedDict):
             ]:
                 continue
             key = key.replace("_", "-")
-            self.AddAttribute(key, value)
+            self.add_attribute(key, value)
 
     def add_message_authenticator(self) -> None:
         self.message_authenticator = True
@@ -102,10 +105,10 @@ class Packet(OrderedDict):
         self["Message-Authenticator"] = 16 * b"\00"
 
         if self.id is None:
-            self.id = self.CreateID()
+            self.id = self.create_id()
 
         if self.authenticator is None and self.code == PacketType.AccessRequest:
-            self.authenticator = self.CreateAuthenticator()
+            self.authenticator = self.create_authenticator()
             self._refresh_message_authenticator()
 
     def get_message_authenticator(self) -> Optional[bool]:
@@ -117,7 +120,7 @@ class Packet(OrderedDict):
 
         # Maintain a zero octets content for md5 and hmac calculation.
         self["Message-Authenticator"] = 16 * b"\00"
-        attr = self._PktEncodeAttributes()
+        attr = self._pkt_encode_attributes()
 
         header = struct.pack("!BBH", self.code, self.id, (20 + len(attr)))
 
@@ -146,8 +149,8 @@ class Packet(OrderedDict):
     def verify_message_authenticator(
         self,
         secret: Optional[bytes] = None,
-        original_authenticator=None,
-        original_code=None,
+        original_authenticator: Optional[bytes] = None,
+        original_code: Optional[PacketType] = None,
     ) -> bool:
         """Verify packet Message-Authenticator.
 
@@ -174,7 +177,7 @@ class Packet(OrderedDict):
         # If there's a raw packet, use that to calculate the expected
         # Message-Authenticator. While the Packet class keeps multiple
         # instances of an attribute grouped together in the attribute list,
-        # other applications may not. Using _PktEncodeAttributes to get
+        # other applications may not. Using _pkt_encode_attributes to get
         # the attributes could therefore end up changing the attribute order
         # because of the grouping Packet does, which would cause
         # Message-Authenticator verification to fail. Using the raw packet
@@ -185,7 +188,7 @@ class Packet(OrderedDict):
             attr = attr.replace(prev_ma[0], 16 * b"\00")
         else:
             self["Message-Authenticator"] = 16 * b"\00"
-            attr = self._PktEncodeAttributes()
+            attr = self._pkt_encode_attributes()
 
         header = struct.pack("!BBH", self.code, self.id, (20 + len(attr)))
 
@@ -222,7 +225,7 @@ class Packet(OrderedDict):
         self["Message-Authenticator"] = prev_ma[0]
         return prev_ma[0] == hmac_constructor.digest()
 
-    def CreateReply(self, **attributes) -> "Packet":
+    def create_reply(self, **attributes) -> "Packet":
         """Create a new packet as a reply to this one. This method
         makes sure the authenticator and secret are copied over
         to the new instance.
@@ -235,29 +238,31 @@ class Packet(OrderedDict):
             **attributes,
         )
 
-    def _DecodeValue(self, attr: Attribute, value: bytes) -> bytes | str:
+    def _decode_value(self, attr: Attribute, value: bytes) -> bytes | str:
         if attr.encrypt == 2:
             # salt decrypt attribute
-            value = self.SaltDecrypt(value)
+            value = self.salt_decrypt(value)
 
-        if attr.values.HasBackward(value):
-            return attr.values.GetBackward(value)
+        if attr.values.has_backward(value):
+            return attr.values.get_backward(value)
         else:
-            return tools.DecodeAttr(attr.type, value)
+            return tools.decode_attr(attr.type, value)
 
-    def _EncodeValue(self, attr: Attribute, value: bytes | str) -> bytes:
-        if attr.values.HasForward(value):
-            result = attr.values.GetForward(value)
+    def _encode_value(self, attr: Attribute, value: bytes | str) -> bytes:
+        if attr.values.has_forward(value):
+            result = attr.values.get_forward(value)
         else:
-            result = tools.EncodeAttr(attr.type, value)
+            result = tools.encode_attr(attr.type, value)
 
         if attr.encrypt == 2:
             # salt encrypt attribute
-            result = self.SaltCrypt(result)
+            result = self.salt_crypt(result)
 
         return result
 
-    def _EncodeKeyValues(self, key: Hashable, values):
+    def _encode_key_values(
+        self, key: Hashable, values: int | bytes | str | Sequence[Any]
+    ):
         if not isinstance(key, str):
             return (key, values)
 
@@ -266,20 +271,20 @@ class Packet(OrderedDict):
 
         key, _, tag = key.partition(":")
         attr = self.dict.attributes[key]
-        key = self._EncodeKey(key)
+        key = self._encode_key(key)
         if tag:
             tag_bytes = struct.pack("B", int(tag))
             if attr.type == "integer":
                 return (
                     key,
-                    [tag_bytes + self._EncodeValue(attr, v)[1:] for v in values],
+                    [tag_bytes + self._encode_value(attr, v)[1:] for v in values],
                 )
             else:
-                return (key, [tag_bytes + self._EncodeValue(attr, v) for v in values])
+                return (key, [tag_bytes + self._encode_value(attr, v) for v in values])
         else:
-            return (key, [self._EncodeValue(attr, v) for v in values])
+            return (key, [self._encode_value(attr, v) for v in values])
 
-    def _EncodeKey(self, key: Hashable):
+    def _encode_key(self, key: Hashable):
         if not isinstance(key, str):
             return key
 
@@ -287,18 +292,18 @@ class Packet(OrderedDict):
         if (
             attr.vendor and not attr.is_sub_attribute
         ):  # sub attribute keys don't need vendor
-            return (self.dict.vendors.GetForward(attr.vendor), attr.code)
+            return (self.dict.vendors.get_forward(attr.vendor), attr.code)
         else:
             return attr.code
 
-    def _DecodeKey(self, key: Hashable) -> Hashable:
+    def _decode_key(self, key: Hashable) -> Hashable:
         """Turn a key into a string if possible"""
 
-        if self.dict.attrindex.HasBackward(key):
-            return self.dict.attrindex.GetBackward(key)
+        if self.dict.attrindex.has_backward(key):
+            return self.dict.attrindex.get_backward(key)
         return key
 
-    def AddAttribute(self, key: str, value: RadiusAttributeValue) -> None:
+    def add_attribute(self, key: str, value: RadiusAttributeValue) -> None:
         """Add an attribute to the packet.
 
         Args:
@@ -307,10 +312,10 @@ class Packet(OrderedDict):
         """
         attr = self.dict.attributes[key.partition(":")[0]]
 
-        (key, value) = self._EncodeKeyValues(key, value)
+        (key, value) = self._encode_key_values(key, value)
 
         if attr.is_sub_attribute:
-            tlv = self.setdefault(self._EncodeKey(attr.parent.name), {})
+            tlv = self.setdefault(self._encode_key(attr.parent.name), {})
             encoded = tlv.setdefault(key, [])
         else:
             encoded = self.setdefault(key, [])
@@ -328,7 +333,7 @@ class Packet(OrderedDict):
         if not isinstance(key, str):
             return super().__getitem__(key)
 
-        values = super().__getitem__(self._EncodeKey(key))
+        values = super().__getitem__(self._encode_key(key))
         attr = self.dict.attributes[key]
         if attr.type == "tlv":  # return map from sub attribute code to its values
             map_result: dict = {}
@@ -337,38 +342,38 @@ class Packet(OrderedDict):
                 sub_attr = self.dict.attributes[sub_attr_name]
                 for v in sub_attr_val:
                     map_result.setdefault(sub_attr_name, []).append(
-                        self._DecodeValue(sub_attr, v)
+                        self._decode_value(sub_attr, v)
                     )
             return map_result
         else:
             list_result: list = []
             for v in values:
-                list_result.append(self._DecodeValue(attr, v))
+                list_result.append(self._decode_value(attr, v))
             return list_result
 
     def __contains__(self, key: Hashable) -> bool:
         try:
-            return super().__contains__(self._EncodeKey(key))
+            return super().__contains__(self._encode_key(key))
         except KeyError:
             return False
 
     has_key = __contains__
 
     def __delitem__(self, key: Hashable) -> None:
-        super().__delitem__(self._EncodeKey(key))
+        super().__delitem__(self._encode_key(key))
 
     def __setitem__(self, key: Hashable, item: Any):
         if isinstance(key, str):
-            (key, item) = self._EncodeKeyValues(key, item)
+            (key, item) = self._encode_key_values(key, item)
             super().__setitem__(key, item)
         else:
             super().__setitem__(key, item)
 
     def keys(self):
-        return [self._DecodeKey(key) for key in OrderedDict.keys(self)]
+        return [self._decode_key(key) for key in OrderedDict.keys(self)]
 
     @staticmethod
-    def CreateAuthenticator() -> bytes:
+    def create_authenticator() -> bytes:
         """Create a packet authenticator. All RADIUS packets contain a sixteen
         byte authenticator which is used to authenticate replies from the
         RADIUS server and in the password hiding algorithm. This function
@@ -380,7 +385,7 @@ class Packet(OrderedDict):
         return bytes(random_generator.randrange(0, 256) for _ in range(16))
 
     @staticmethod
-    def CreateID() -> int:
+    def create_id() -> int:
         """Create a packet ID.  All RADIUS requests have a ID which is used to
         identify a request. This is used to detect retries and replay attacks.
         This function returns a suitable random number that can be used as ID.
@@ -390,7 +395,7 @@ class Packet(OrderedDict):
         """
         return random_generator.randrange(0, 256)
 
-    def ReplyPacket(self) -> bytes:
+    def reply_packet(self) -> bytes:
         """Create a ready-to-transmit authentication reply packet.
         Returns a RADIUS packet which can be directly transmitted
         to a RADIUS server. This differs with Packet() in how
@@ -406,7 +411,7 @@ class Packet(OrderedDict):
         if self.message_authenticator:
             self._refresh_message_authenticator()
 
-        attr = self._PktEncodeAttributes()
+        attr = self._pkt_encode_attributes()
         header = struct.pack("!BBH", self.code, self.id, (20 + len(attr)))
 
         authenticator = hashlib.md5(
@@ -415,14 +420,19 @@ class Packet(OrderedDict):
 
         return header + authenticator + attr
 
-    def VerifyReply(self, reply: "Packet", rawreply: Optional[bytes] = None) -> bool:
+    def verify_reply(
+        self,
+        reply: "Packet",
+        rawreply: Optional[bytes] = None,
+        enforce_ma: bool = False,
+    ) -> bool:
         if reply.id != self.id:
             return False
 
         if rawreply is None:
-            rawreply = reply.ReplyPacket()
+            rawreply = reply.reply_packet()
 
-        reply._PktEncodeAttributes()
+        reply._pkt_encode_attributes()
         # The Authenticator field in an Accounting-Response packet is called
         # the Response Authenticator, and contains a one-way MD5 hash
         # calculated over a stream of octets consisting of the Accounting
@@ -437,17 +447,25 @@ class Packet(OrderedDict):
 
         if hash != rawreply[4:20]:
             return False
+
+        if enforce_ma:
+            if self.message_authenticator is None:
+                return False
+            if not self.verify_message_authenticator():
+                return False
         return True
 
-    def _PktEncodeAttribute(self, key: Hashable, value: Any):
+    def _pkt_encode_attribute(self, key: Hashable, value: Any):
         if isinstance(key, tuple):
-            value = struct.pack("!L", key[0]) + self._PktEncodeAttribute(key[1], value)
+            value = struct.pack("!L", key[0]) + self._pkt_encode_attribute(
+                key[1], value
+            )
             key = 26
 
         return struct.pack("!BB", key, (len(value) + 2)) + value
 
-    def _PktEncodeTlv(self, tlv_key: str, tlv_value: Any) -> bytes:
-        tlv_attr = self.dict.attributes[self._DecodeKey(tlv_key)]
+    def _pkt_encode_tlv(self, tlv_key: str, tlv_value: Any) -> bytes:
+        tlv_attr = self.dict.attributes[self._decode_key(tlv_key)]
         curr_avp = b""
         avps = []
         max_sub_attribute_len = max(map(lambda item: len(item[1]), tlv_value.items()))
@@ -455,7 +473,7 @@ class Packet(OrderedDict):
             sub_attr_encoding = b""
             for code, datalst in tlv_value.items():
                 if i < len(datalst):
-                    sub_attr_encoding += self._PktEncodeAttribute(code, datalst[i])
+                    sub_attr_encoding += self._pkt_encode_attribute(code, datalst[i])
             # split above 255. assuming len of one instance of all sub tlvs is lower than 255
             if (len(sub_attr_encoding) + len(curr_avp)) < 245:
                 curr_avp += sub_attr_encoding
@@ -475,7 +493,7 @@ class Packet(OrderedDict):
                         "!BBL",
                         26,
                         (len(avp) + 6),
-                        self.dict.vendors.GetForward(tlv_attr.vendor),
+                        self.dict.vendors.get_forward(tlv_attr.vendor),
                     )
                     + avp
                 )
@@ -483,29 +501,27 @@ class Packet(OrderedDict):
         else:
             return b"".join(tlv_avps)
 
-    def _PktEncodeAttributes(self) -> bytes:
+    def _pkt_encode_attributes(self) -> bytes:
         result = b""
         for code, datalst in self.items():
-            attribute = self.dict.attributes.get(self._DecodeKey(code))
-            if attribute and attribute.type == "tlv":
-                result += self._PktEncodeTlv(code, datalst)
+            if self._pkt_is_tlv_attribute(code):
+                result += self._pkt_encode_tlv(code, datalst)
             else:
                 for data in datalst:
-                    result += self._PktEncodeAttribute(code, data)
+                    result += self._pkt_encode_attribute(code, data)
         return result
 
-    def _PktDecodeVendorAttribute(self, data: bytes) -> list[tuple]:
+    def _pkt_decode_vendor_attribute(self, data: bytes) -> list[tuple]:
         # Check if this packet is long enough to be in the
         # RFC2865 recommended form
         if len(data) < 6:
             return [(26, data)]
 
         (vendor, atype, length) = struct.unpack("!LBB", data[:6])[0:3]
-        attribute = self.dict.attributes.get(self._DecodeKey((vendor, atype)))
         try:
-            if attribute and attribute.type == "tlv":
-                self._PktDecodeTlvAttribute((vendor, atype), data[6 : length + 4])
-                tlvs = []  # tlv is added to the packet inside _PktDecodeTlvAttribute
+            if self._pkt_is_tlv_attribute((vendor, atype)):
+                self._pkt_decode_tlv_attribute((vendor, atype), data[6 : length + 4])
+                tlvs = []  # tlv is added to the packet inside _pkt_decode_tlv_attribute
             else:
                 tlvs = [((vendor, atype), data[6 : length + 4])]
         except Exception:
@@ -523,7 +539,7 @@ class Packet(OrderedDict):
             sumlength += length
         return tlvs
 
-    def _PktDecodeTlvAttribute(self, code, data):
+    def _pkt_decode_tlv_attribute(self, code, data):
         sub_attributes = self.setdefault(code, {})
         loc = 0
 
@@ -532,7 +548,11 @@ class Packet(OrderedDict):
             sub_attributes.setdefault(atype, []).append(data[loc + 2 : loc + length])
             loc += length
 
-    def DecodePacket(self, packet: bytes) -> None:
+    def _pkt_is_tlv_attribute(self, code):
+        attr = self.dict.attributes.get(self._decode_key(code))
+        return attr is not None and attr.type == "tlv"
+
+    def decode_packet(self, packet: bytes) -> None:
         """Initialize the object from raw packet data.  Decode a packet as
         received from the network and decode it.
 
@@ -564,16 +584,15 @@ class Packet(OrderedDict):
                 raise PacketError("Attribute length is too small (%d)" % attrlen)
 
             value = packet[2:attrlen]
-            attribute = self.dict.attributes.get(self._DecodeKey(key))
             if key == 26:
-                for key, value in self._PktDecodeVendorAttribute(value):
+                for key, value in self._pkt_decode_vendor_attribute(value):
                     self.setdefault(key, []).append(value)
             elif key == 80:
                 # POST: Message Authenticator AVP is present.
                 self.message_authenticator = True
                 self.setdefault(key, []).append(value)
-            elif attribute and attribute.type == "tlv":
-                self._PktDecodeTlvAttribute(key, value)
+            elif self._pkt_is_tlv_attribute(key):
+                self._pkt_decode_tlv_attribute(key, value)
             else:
                 self.setdefault(key, []).append(value)
 
@@ -581,7 +600,12 @@ class Packet(OrderedDict):
 
     def _salt_en_decrypt(self, data, salt):
         result = b""
-        last = self.authenticator + salt
+
+        if self.request_authenticator is not None:
+            last = self.request_authenticator + salt
+        else:
+            last = self.authenticator + salt
+
         while data:
             hash = hashlib.md5(self.secret + last).digest()
             for i in range(16):
@@ -591,7 +615,7 @@ class Packet(OrderedDict):
             data = data[16:]
         return result
 
-    def SaltCrypt(self, value) -> bytes:
+    def salt_crypt(self, value) -> bytes:
         """SaltEncrypt
 
         Args:
@@ -605,7 +629,7 @@ class Packet(OrderedDict):
             value = value.encode("utf-8")
 
         if self.authenticator is None:
-            # self.authenticator = self.CreateAuthenticator()
+            # self.authenticator = self.create_authenticator()
             self.authenticator = 16 * b"\x00"
 
         # create salt
@@ -622,7 +646,7 @@ class Packet(OrderedDict):
 
         return salt_raw + self._salt_en_decrypt(value, salt_raw)
 
-    def SaltDecrypt(self, value: bytes) -> bytes:
+    def salt_decrypt(self, value: bytes) -> bytes:
         """SaltDecrypt
 
         Args:
@@ -643,7 +667,7 @@ class Packet(OrderedDict):
 
         return value
 
-    def VerifyPacket(self) -> bool:
+    def verify_packet(self) -> bool:
         """Verify request.
 
         Returns:
@@ -679,7 +703,7 @@ class AuthPacket(Packet):
         super().__init__(code, id, secret, authenticator, **attributes)
         self.auth_type = auth_type
 
-    def CreateReply(self, **attributes) -> "AuthPacket":
+    def create_reply(self, **attributes) -> "AuthPacket":
         """Create a new packet as a reply to this one. This method
         makes sure the authenticator and secret are copied over
         to the new instance.
@@ -694,7 +718,7 @@ class AuthPacket(Packet):
             **attributes,
         )
 
-    def RequestPacket(self) -> bytes:
+    def request_packet(self) -> bytes:
         """Create a ready-to-transmit authentication request packet.
         Return a RADIUS packet which can be directly transmitted
         to a RADIUS server.
@@ -703,15 +727,15 @@ class AuthPacket(Packet):
             bytes: Raw packet
         """
         if self.authenticator is None:
-            self.authenticator = self.CreateAuthenticator()
+            self.authenticator = self.create_authenticator()
 
         if self.id is None:
-            self.id = self.CreateID()
+            self.id = self.create_id()
 
         if self.message_authenticator:
             self._refresh_message_authenticator()
 
-        attr = self._PktEncodeAttributes()
+        attr = self._pkt_encode_attributes()
         if self.auth_type == "eap-md5":
             header = struct.pack(
                 "!BBH16s", self.code, self.id, (20 + 18 + len(attr)), self.authenticator
@@ -734,7 +758,7 @@ class AuthPacket(Packet):
 
         return header + attr
 
-    def PwDecrypt(self, password: bytes) -> str:
+    def pw_decrypt(self, password: bytes) -> str:
         """De-Obfuscate a RADIUS password. RADIUS hides passwords in packets by
         using an algorithm based on the MD5 hash of the packet authenticator
         and RADIUS secret. This function reverses the obfuscation process.
@@ -769,11 +793,11 @@ class AuthPacket(Packet):
         # chosen by the client) we simply ignore un-parsable UTF-8 sequences.
         return pw.decode("utf-8", errors="ignore")
 
-    def PwCrypt(self, password: bytes) -> bytes:
+    def pw_crypt(self, password: bytes) -> bytes:
         """Obfuscate password.
         RADIUS hides passwords in packets by using an algorithm
         based on the MD5 hash of the packet authenticator and RADIUS
-        secret. If no authenticator has been set before calling PwCrypt
+        secret. If no authenticator has been set before calling pw_crypt
         one is created automatically. Changing the authenticator after
         setting a password that has been encrypted using this function
         will not work.
@@ -785,7 +809,7 @@ class AuthPacket(Packet):
             bytes: Obfuscated version of the password
         """
         if self.authenticator is None:
-            self.authenticator = self.CreateAuthenticator()
+            self.authenticator = self.create_authenticator()
 
         if isinstance(password, str):
             password = password.encode("utf-8")
@@ -806,7 +830,7 @@ class AuthPacket(Packet):
 
         return result
 
-    def VerifyChapPasswd(self, userpwd: bytes) -> bool:
+    def verify_chap_passwd(self, userpwd: bytes) -> bool:
         """Verify RADIUS ChapPasswd
 
         Args:
@@ -817,12 +841,12 @@ class AuthPacket(Packet):
         """
 
         if not self.authenticator:
-            self.authenticator = self.CreateAuthenticator()
+            self.authenticator = self.create_authenticator()
 
         if isinstance(userpwd, str):
             userpwd = userpwd.strip().encode("utf-8")
 
-        chap_password = tools.DecodeOctets(self.get(3)[0])
+        chap_password = tools.decode_octets(self.get(3)[0])
         if len(chap_password) != 17:
             return False
 
@@ -835,7 +859,7 @@ class AuthPacket(Packet):
 
         return password == hashlib.md5(chapid + userpwd + challenge).digest()
 
-    def VerifyAuthRequest(self) -> bool:
+    def verify_auth_request(self) -> bool:
         """Verify request authenticator.
 
         Returns:
@@ -874,7 +898,7 @@ class AcctPacket(Packet):
         """
         super().__init__(code, id, secret, authenticator, **attributes)
 
-    def CreateReply(self, **attributes) -> "AcctPacket":
+    def create_reply(self, **attributes) -> "AcctPacket":
         """Create a new packet as a reply to this one. This method
         makes sure the authenticator and secret are copied over
         to the new instance.
@@ -888,15 +912,15 @@ class AcctPacket(Packet):
             **attributes,
         )
 
-    def VerifyAcctRequest(self) -> bool:
+    def verify_acct_request(self) -> bool:
         """Verify request authenticator.
 
         Returns:
             bool: True if verification passed else False
         """
-        return self.VerifyPacket()
+        return self.verify_packet()
 
-    def RequestPacket(self) -> bytes:
+    def request_packet(self) -> bytes:
         """Create a ready-to-transmit authentication request packet.
         Return a RADIUS packet which can be directly transmitted
         to a RADIUS server.
@@ -906,12 +930,12 @@ class AcctPacket(Packet):
         """
 
         if self.id is None:
-            self.id = self.CreateID()
+            self.id = self.create_id()
 
         if self.message_authenticator:
             self._refresh_message_authenticator()
 
-        attr = self._PktEncodeAttributes()
+        attr = self._pkt_encode_attributes()
         header = struct.pack("!BBH", self.code, self.id, (20 + len(attr)))
         self.authenticator = hashlib.md5(
             header[0:4] + 16 * b"\x00" + attr + self.secret
@@ -946,7 +970,7 @@ class CoAPacket(Packet):
         """
         super().__init__(code, id, secret, authenticator, **attributes)
 
-    def CreateReply(self, **attributes) -> "CoAPacket":
+    def create_reply(self, **attributes) -> "CoAPacket":
         """Create a new packet as a reply to this one. This method
         makes sure the authenticator and secret are copied over
         to the new instance.
@@ -960,15 +984,15 @@ class CoAPacket(Packet):
             **attributes,
         )
 
-    def VerifyCoARequest(self) -> bool:
+    def verify_coa_request(self) -> bool:
         """Verify request authenticator.
 
         :return: True if verification passed else False
         :rtype: boolean
         """
-        return self.VerifyPacket()
+        return self.verify_packet()
 
-    def RequestPacket(self) -> bytes:
+    def request_packet(self) -> bytes:
         """Create a ready-to-transmit CoA request packet.
         Return a RADIUS packet which can be directly transmitted
         to a RADIUS server.
@@ -977,10 +1001,10 @@ class CoAPacket(Packet):
         :rtype:  string
         """
 
-        attr = self._PktEncodeAttributes()
+        attr = self._pkt_encode_attributes()
 
         if self.id is None:
-            self.id = self.CreateID()
+            self.id = self.create_id()
 
         header = struct.pack("!BBH", self.code, self.id, (20 + len(attr)))
         self.authenticator = hashlib.md5(
@@ -989,7 +1013,7 @@ class CoAPacket(Packet):
 
         if self.message_authenticator:
             self._refresh_message_authenticator()
-            attr = self._PktEncodeAttributes()
+            attr = self._pkt_encode_attributes()
             self.authenticator = hashlib.md5(
                 header[0:4] + 16 * b"\x00" + attr + self.secret
             ).digest()
@@ -997,16 +1021,16 @@ class CoAPacket(Packet):
         return header + self.authenticator + attr
 
 
-def CreateID() -> int:
+def create_id() -> int:
     """Generate a packet ID.
 
     :return: packet ID
     :rtype:  8 bit integer
     """
-    global CurrentID
+    global CURRENT_ID
 
-    CurrentID = (CurrentID + 1) % 256
-    return CurrentID
+    CURRENT_ID = (CURRENT_ID + 1) % 256
+    return CURRENT_ID
 
 
 def parse_packet(data: bytes, secret: bytes, dictionary: Optional[Dictionary]):

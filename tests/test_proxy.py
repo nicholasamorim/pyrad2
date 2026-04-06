@@ -26,9 +26,9 @@ class SocketTests(unittest.TestCase):
     def tearDown(self):
         socket.socket = self.orgsocket
 
-    def testProxyFd(self):
+    def test_proxy_fd(self):
         self.proxy._poll = MockPoll()
-        self.proxy._PrepareSockets()
+        self.proxy._prepare_sockets()
         self.assertTrue(isinstance(self.proxy._proxyfd, MockSocket))
         self.assertEqual(list(self.proxy._fdmap.keys()), [1])
         self.assertEqual(
@@ -46,23 +46,23 @@ class ProxyPacketHandlingTests(unittest.TestCase):
         self.packet.code = PacketType.AccessAccept
         self.packet.source = ("host", "port")
 
-    def testHandleProxyPacketUnknownHost(self):
+    def test_handle_proxy_packet_unknownHost(self):
         self.packet.source = ("stranger", "port")
         try:
-            self.proxy._HandleProxyPacket(self.packet)
+            self.proxy._handle_proxy_packet(self.packet)
         except ServerPacketError as e:
             self.assertTrue("unknown host" in str(e))
         else:
             self.fail()
 
-    def testHandleProxyPacketSetsSecret(self):
-        self.proxy._HandleProxyPacket(self.packet)
+    def test_handle_proxy_packet_sets_secret(self):
+        self.proxy._handle_proxy_packet(self.packet)
         self.assertEqual(self.packet.secret, "supersecret")
 
     def testHandleProxyPacketHandlesWrongPacket(self):
         self.packet.code = PacketType.AccessRequest
         try:
-            self.proxy._HandleProxyPacket(self.packet)
+            self.proxy._handle_proxy_packet(self.packet)
         except ServerPacketError as e:
             self.assertTrue("non-response" in str(e))
         else:
@@ -80,16 +80,16 @@ class OtherTests(unittest.TestCase):
 
     def testProcessInputNonProxyPort(self):
         fd = MockFd(fd=111)
-        MockClassMethod(Server, "_ProcessInput")
-        self.proxy._ProcessInput(fd)
-        self.assertEqual(self.proxy.called, [("_ProcessInput", (fd,), {})])
+        MockClassMethod(Server, "_process_input")
+        self.proxy._process_input(fd)
+        self.assertEqual(self.proxy.called, [("_process_input", (fd,), {})])
 
     def testProcessInput(self):
-        MockClassMethod(Proxy, "_GrabPacket")
-        MockClassMethod(Proxy, "_HandleProxyPacket")
-        self.proxy._ProcessInput(self.proxy._proxyfd)
+        MockClassMethod(Proxy, "_grab_packet")
+        MockClassMethod(Proxy, "_handle_proxy_packet")
+        self.proxy._process_input(self.proxy._proxyfd)
         self.assertEqual(
-            [x[0] for x in self.proxy.called], ["_GrabPacket", "_HandleProxyPacket"]
+            [x[0] for x in self.proxy.called], ["_grab_packet", "_handle_proxy_packet"]
         )
 
 

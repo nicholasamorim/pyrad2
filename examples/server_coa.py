@@ -7,7 +7,7 @@ from pyrad2.constants import PacketType
 
 
 class FakeCoA(server.Server):
-    def HandleCoaPacket(self, pkt):
+    def handle_coa_packet(self, pkt):
         """Accounting packet handler.
         Function that is called when a valid
         accounting packet has been received.
@@ -20,20 +20,20 @@ class FakeCoA(server.Server):
         for attr in pkt.keys():
             logger.info("  {}: {}", attr, pkt[attr])
 
-        reply = self.CreateReplyPacket(pkt)
+        reply = self.create_reply_packet(pkt)
         reply.code = PacketType.CoAACK
-        self.SendReplyPacket(pkt.fd, reply)
+        self.send_reply_packet(pkt.fd, reply)
 
-    def HandleDisconnectPacket(self, pkt):
+    def handle_disconnect_packet(self, pkt):
         logger.info("Received a disconnect request {}", pkt.code)
         logger.info("  Attributes: ")
         for attr in pkt.keys():
             logger.info("  {}: {}", attr, pkt[attr])
 
-        reply = self.CreateReplyPacket(pkt)
+        reply = self.create_reply_packet(pkt)
         # try ACK or NACK
         reply.code = PacketType.DisconnectACK
-        self.SendReplyPacket(pkt.fd, reply)
+        self.send_reply_packet(pkt.fd, reply)
 
 
 if __name__ == "__main__":
@@ -62,4 +62,4 @@ if __name__ == "__main__":
     )
 
     # start
-    coa.Run()
+    coa.run()

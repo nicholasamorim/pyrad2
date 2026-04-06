@@ -11,7 +11,7 @@ from pyrad2.packet import (
     AcctPacket,
     AuthPacket,
     CoAPacket,
-    CurrentID,
+    CURRENT_ID,
     Packet,
     PacketError,
     PacketImplementation,
@@ -84,7 +84,7 @@ class RadSecClient:
         Returns:
             Packet: A new AuthPacket instance
         """
-        id = kwargs.pop("id", Packet.CreateID())
+        id = kwargs.pop("id", Packet.create_id())
         return AuthPacket(
             dict=self.dict,
             id=id,
@@ -102,7 +102,7 @@ class RadSecClient:
         Returns:
             Packet: A new AcctPacket instance
         """
-        id = kwargs.pop("id", Packet.CreateID())
+        id = kwargs.pop("id", Packet.create_id())
         return AcctPacket(
             id=id,
             dict=self.dict,
@@ -120,7 +120,7 @@ class RadSecClient:
         Returns:
             Packet: A new CoA packet instance
         """
-        id = kwargs.pop("id", Packet.CreateID())
+        id = kwargs.pop("id", Packet.create_id())
         return CoAPacket(id=id, dict=self.dict, secret=self.secret, **kwargs)
 
     def create_packet(self, id, **kwargs) -> Packet:
@@ -142,7 +142,7 @@ class RadSecClient:
             self.port,
         )
 
-        writer.write(packet.RequestPacket())
+        writer.write(packet.request_packet())
         await writer.drain()
 
         async def close():
@@ -165,8 +165,8 @@ class RadSecClient:
         logger.debug("Response: {}", response.hex())
 
         try:
-            reply = packet.CreateReply(packet=response)
-            if packet.VerifyReply(reply, response):
+            reply = packet.create_reply(packet=response)
+            if packet.verify_reply(reply, response):
                 return reply
         except PacketError as e:
             logger.error("Error creating reply {}", e)
@@ -188,7 +188,7 @@ class RadSecClient:
                     struct.pack(
                         "!BBHB%ds" % len(password),
                         EAPPacketType.RESPONSE,
-                        CurrentID,
+                        CURRENT_ID,
                         len(password) + 5,
                         EAPType.IDENTITY,
                         password,

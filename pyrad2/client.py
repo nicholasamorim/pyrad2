@@ -1,6 +1,7 @@
 import hashlib
 import os
-if os.name == 'nt':
+
+if os.name == "nt":
     import selectors
 else:
     import select
@@ -32,6 +33,7 @@ class Client(host.Host):
         dict: Optional[Dictionary] = None,
         retries: int = 3,
         timeout: int = 5,
+        enforce_ma: bool = False,
     ):
         """Initializes a RADIUS client.
 
@@ -44,6 +46,7 @@ class Client(host.Host):
             dict (pyrad.dictionary.Dictionary): RADIUS dictionary.
             retries (int): Number of times to retry sending a RADIUS request.
             timeout (int): Number of seconds to wait for an answer.
+            enforce_ma(bool): Enforce usage of Message-Authenticator
         """
         super().__init__(authport, acctport, coaport, dict)
 
@@ -51,7 +54,9 @@ class Client(host.Host):
         self.secret = secret
         self.retries = retries
         self.timeout = timeout
-        if os.name == 'nt':
+        self.enforce_ma = enforce_ma
+
+        if os.name == "nt":
             self._sel = selectors.DefaultSelector()
         else:
             self._poll = select.poll()
@@ -65,14 +70,14 @@ class Client(host.Host):
         Args:
             addr (str | tuple): network address (hostname or IP) and port to bind to
         """
-        self._CloseSocket()
-        self._SocketOpen()
+        self._close_socket()
+        self._socket_open()
         if self._socket:
             self._socket.bind(addr)
         else:
             raise RuntimeError("No socket present")
 
-    def _SocketOpen(self) -> None:
+    def _socket_open(self) -> None:
         try:
             family = socket.getaddrinfo(self.server, 80)[0][0]
         except Exception:
@@ -80,21 +85,21 @@ class Client(host.Host):
         if not self._socket:
             self._socket = socket.socket(family, socket.SOCK_DGRAM)
             self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            if os.name == 'nt':
+            if os.name == "nt":
                 self._sel.register(self._socket, selectors.EVENT_READ)
             else:
                 self._poll.register(self._socket, select.POLLIN)
 
-    def _CloseSocket(self) -> None:
+    def _close_socket(self) -> None:
         if self._socket:
-            if os.name == 'nt':
+            if os.name == "nt":
                 self._sel.unregister(self._socket)
             else:
                 self._poll.unregister(self._socket)
             self._socket.close()
             self._socket = None
 
-    def CreateAuthPacket(self, **args) -> packet.Packet:
+    def create_auth_packet(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS packet which can
         be used to communicate with the RADIUS server this client
@@ -104,9 +109,12 @@ class Client(host.Host):
         Returns:
             packet.Packet: A new empty packet instance
         """
-        return super().CreateAuthPacket(secret=self.secret, **args)
+        ma_enabled = True if self.enforce_ma else False
+        return super().create_auth_packet(
+            secret=self.secret, message_authenticator=ma_enabled, **args
+        )
 
-    def CreateAcctPacket(self, **args) -> packet.Packet:
+    def create_acct_packet(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS packet which can
         be used to communicate with the RADIUS server this client
@@ -116,9 +124,9 @@ class Client(host.Host):
         Returns:
             packet.Packet: A new empty packet instance
         """
-        return super().CreateAcctPacket(secret=self.secret, **args)
+        return super().create_acct_packet(secret=self.secret, **args)
 
-    def CreateCoAPacket(self, **args) -> packet.Packet:
+    def create_coa_packet(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS packet which can
         be used to communicate with the RADIUS server this client
@@ -128,9 +136,9 @@ class Client(host.Host):
         Returns:
             packet.Packet: A new empty packet instance
         """
-        return super().CreateCoAPacket(secret=self.secret, **args)
+        return super().create_coa_packet(secret=self.secret, **args)
 
-    def _SendPacket(self, pkt: packet.PacketImplementation, port: int):
+    def _send_packet(self, pkt: packet.PacketImplementation, port: int):
         """Send a packet to a RADIUS server.
 
         Args:
@@ -143,7 +151,7 @@ class Client(host.Host):
         Raises:
             Timeout: RADIUS server does not reply
         """
-        self._SocketOpen()
+        self._socket_open()
 
         for attempt in range(self.retries):
             if attempt and pkt.code == PacketType.AccountingRequest:
@@ -158,15 +166,16 @@ class Client(host.Host):
             if not self._socket:
                 raise RuntimeError("No socket present")
 
-            self._socket.sendto(pkt.RequestPacket(), (self.server, port))
+            self._socket.sendto(pkt.request_packet(), (self.server, port))
 
             while now < waitto:
                 rawreply = None
 
-                if os.name == 'nt':
+                if os.name == "nt":
                     for key, mask in self._sel.select(timeout=(waitto - now)):
                         if mask & selectors.EVENT_READ:
-                            rawreply = key.fileobj.recv(4096)
+                            if isinstance(key.fileobj, socket.socket):
+                                rawreply = key.fileobj.recv(4096)
 
                 else:
                     ready = self._poll.poll((waitto - now) * 1000)
@@ -179,8 +188,11 @@ class Client(host.Host):
                     continue
 
                 try:
-                    reply = pkt.CreateReply(packet=rawreply)
-                    if pkt.VerifyReply(reply, rawreply):
+                    reply = pkt.create_reply(packet=rawreply)
+                    if pkt.verify_reply(reply, rawreply, enforce_ma=self.enforce_ma):
+                        if hasattr(pkt, "authenticator"):
+                            reply.request_authenticator = pkt.authenticator
+
                         return reply
                 except packet.PacketError:
                     pass
@@ -189,7 +201,7 @@ class Client(host.Host):
 
         raise Timeout
 
-    def SendPacket(self, pkt: packet.PacketImplementation) -> packet.Packet:  # type: ignore
+    def send_packet(self, pkt: packet.PacketImplementation) -> packet.Packet:  # type: ignore
         """Send a packet to a RADIUS server.
 
         Args:
@@ -209,13 +221,13 @@ class Client(host.Host):
                     struct.pack(
                         "!BBHB%ds" % len(password),
                         EAPPacketType.RESPONSE,
-                        packet.CurrentID,
+                        packet.CURRENT_ID,
                         len(password) + 5,
                         EAPType.IDENTITY,
                         password,
                     )
                 ]
-            reply = self._SendPacket(pkt, self.authport)
+            reply = self._send_packet(pkt, self.authport)
             if (
                 reply
                 and reply.code == PacketType.AccessChallenge
@@ -244,9 +256,9 @@ class Client(host.Host):
                 ]
                 # Copy over Challenge-State
                 pkt[24] = reply[24]
-                reply = self._SendPacket(pkt, self.authport)
+                reply = self._send_packet(pkt, self.authport)
             return reply
         elif isinstance(pkt, packet.CoAPacket):
-            return self._SendPacket(pkt, self.coaport)
+            return self._send_packet(pkt, self.coaport)
         else:
-            return self._SendPacket(pkt, self.acctport)
+            return self._send_packet(pkt, self.acctport)

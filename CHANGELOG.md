@@ -1,6 +1,23 @@
 Changelog
 =========
 
+2.0 - Apr 6, 2026
+
+- *Breaking Changes*: The entire codebase has been converted from CamaleCase to use Python's snake case.
+- Enforce Message-Authenticator if present
+- Ascend-Data-Filter now supports `delete` keyword
+- Several fixes, more typing
+
+# Breaking Changes
+
+- Converted BiDict to Python standard
+
+1.2.0 - Jul 22, 2025
+
+# Features
+
+- Use selectors in place of select on Windows
+
 1.1.1 - Jul 9, 2025
 
 # Fixes
