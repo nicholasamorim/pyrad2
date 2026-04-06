@@ -46,7 +46,7 @@ class Client(host.Host):
             dict (pyrad.dictionary.Dictionary): RADIUS dictionary.
             retries (int): Number of times to retry sending a RADIUS request.
             timeout (int): Number of seconds to wait for an answer.
-            enforce_ma(bool): Enforce usage of Message-Authenticator
+            enforce_ma (bool): Enforce usage of Message-Authenticator
         """
         super().__init__(authport, acctport, coaport, dict)
 

@@ -1,6 +1,6 @@
-# Running a Radius Server
+ # Running a Radius Server
 
-- [UDP Server](#udp-server)
+- [UDP Server](#udp)
   - [Handling packets](#handling-packets)
   - [Replying](#replying)
 - [RadSec (Radius Over TLS)](#radsec-radius-over-tls)
