@@ -343,19 +343,6 @@
         
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Releases
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -367,34 +354,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#10-2025-07-07" class="md-nav__link">
-    <span class="md-ellipsis">
-      1.0 (2025-07-07)
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
       
     </li>
   
@@ -836,23 +795,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#10-2025-07-07" class="md-nav__link">
-    <span class="md-ellipsis">
-      1.0 (2025-07-07)
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -868,7 +810,52 @@
 
 
 <h1 id="releases">Releases</h1>
-<h2 id="10-2025-07-07">1.0 (2025-07-07)</h2>
+<h1 id="20-2026-04-06">2.0 (2026-04-06)</h1>
+<ul>
+<li><em>Breaking Changes</em>: The entire codebase has been converted from CamaleCase to use Python's snake case.</li>
+<li>Enforce Message-Authenticator if present</li>
+<li>Ascend-Data-Filter now supports <code>delete</code> keyword</li>
+<li>Several fixes, more typing</li>
+</ul>
+<h1 id="120-2025-07-22">1.2.0 (2025-07-22)</h1>
+<h2 id="features">Features</h2>
+<ul>
+<li>Use selectors in place of select on Windows</li>
+</ul>
+<h1 id="111-2025-07-09">1.1.1 (2025-07-09)</h1>
+<h2 id="fixes">Fixes</h2>
+<ul>
+<li><code>ssl.CERT_REQUIRED</code> is enabled by default.</li>
+</ul>
+<h1 id="110-2025-07-09">1.1.0 (2025-07-09)</h1>
+<h2 id="features_1">Features</h2>
+<ul>
+<li>Add RadSec (RFC 6614) support. <em>Experimental</em></li>
+<li>Ensure all examples in the <code>examples</code> folder are working.</li>
+</ul>
+<h2 id="refactors">Refactors</h2>
+<ul>
+<li>Move constants to <code>pyrad2.constants</code></li>
+<li>Move several global variables into <code>pyrad2.constants</code>.</li>
+<li>EAP and Packet types are now acessed via PacketType enum in <code>constants</code> module. </li>
+<li><code>DATATYPES</code> has moved to <code>constants.py</code></li>
+<li>Consolidate all exceptions under <code>exceptions.py</code>. All of the libraries exceptions inherit from <code>RadiusException</code> now.</li>
+</ul>
+<h2 id="testing">Testing</h2>
+<ul>
+<li>Improve typing and testing coverage.</li>
+</ul>
+<h2 id="documentation">Documentation</h2>
+<ul>
+<li>Improve navigation.</li>
+<li>Add RadSec pages.</li>
+</ul>
+<h2 id="chore">Chore</h2>
+<ul>
+<li>Add several testing options to Makefile.</li>
+<li>Add test/example SSL certificates for server and client.</li>
+</ul>
+<h1 id="10-2025-07-07">1.0 (2025-07-07)</h1>
 <ul>
 <li>Extensively refactored code</li>
 <li>Remove legacy Python 2.x/3.x and support only Python 3.12</li>

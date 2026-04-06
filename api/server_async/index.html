@@ -1392,7 +1392,7 @@ in derived classes.</p>
 </span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a><span class="sd">            pkt (packet.Packet): Packet to process</span>
 </span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">            attributes (dict): Custom attributes to be added to the reply</span>
 </span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">        &quot;&quot;&quot;</span>
-</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="k">return</span> <span class="n">pkt</span><span class="o">.</span><span class="n">CreateReply</span><span class="p">(</span><span class="o">**</span><span class="n">attributes</span><span class="p">)</span>
+</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="k">return</span> <span class="n">pkt</span><span class="o">.</span><span class="n">create_reply</span><span class="p">(</span><span class="o">**</span><span class="n">attributes</span><span class="p">)</span>
 </span><span id="__span-0-294"><a id="__codelineno-0-294" name="__codelineno-0-294"></a>
 </span><span id="__span-0-295"><a id="__codelineno-0-295" name="__codelineno-0-295"></a>    <span class="nd">@abstractmethod</span>
 </span><span id="__span-0-296"><a id="__codelineno-0-296" name="__codelineno-0-296"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">handle_auth_packet</span><span class="p">(</span>
@@ -1762,7 +1762,7 @@ packet.</p>
 </span><span id="__span-0-290"><a id="__codelineno-0-290" name="__codelineno-0-290"></a><span class="sd">        pkt (packet.Packet): Packet to process</span>
 </span><span id="__span-0-291"><a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">        attributes (dict): Custom attributes to be added to the reply</span>
 </span><span id="__span-0-292"><a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="k">return</span> <span class="n">pkt</span><span class="o">.</span><span class="n">CreateReply</span><span class="p">(</span><span class="o">**</span><span class="n">attributes</span><span class="p">)</span>
+</span><span id="__span-0-293"><a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="k">return</span> <span class="n">pkt</span><span class="o">.</span><span class="n">create_reply</span><span class="p">(</span><span class="o">**</span><span class="n">attributes</span><span class="p">)</span>
 </span></code></pre></div></td></tr></table></div>
             </details>
     </div>
