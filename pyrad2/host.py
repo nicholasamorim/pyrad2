@@ -28,7 +28,7 @@ class Host:
         self.acctport = acctport
         self.coaport = coaport
 
-    def CreatePacket(self, **args) -> packet.Packet:
+    def create_packet(self, **args) -> packet.Packet:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS authentication
         packet which can be used to communicate with the RADIUS server
@@ -40,7 +40,7 @@ class Host:
         """
         return packet.Packet(dict=self.dict, **args)
 
-    def CreateAuthPacket(self, **args) -> packet.Packet:
+    def create_auth_packet(self, **args) -> packet.Packet:
         """Create a new authentication RADIUS packet.
         This utility function creates a new RADIUS authentication
         packet which can be used to communicate with the RADIUS server
@@ -52,7 +52,7 @@ class Host:
         """
         return packet.AuthPacket(dict=self.dict, **args)
 
-    def CreateAcctPacket(self, **args) -> packet.Packet:
+    def create_acct_packet(self, **args) -> packet.Packet:
         """Create a new accounting RADIUS packet.
         This utility function creates a new accounting RADIUS packet
         which can be used to communicate with the RADIUS server this
@@ -64,7 +64,7 @@ class Host:
         """
         return packet.AcctPacket(dict=self.dict, **args)
 
-    def CreateCoAPacket(self, **args) -> packet.Packet:
+    def create_coa_packet(self, **args) -> packet.Packet:
         """Create a new CoA RADIUS packet.
         This utility function creates a new CoA RADIUS packet
         which can be used to communicate with the RADIUS server this
@@ -76,7 +76,7 @@ class Host:
         """
         return packet.CoAPacket(dict=self.dict, **args)
 
-    def SendPacket(self, fd: socket.socket, pkt) -> None:
+    def send_packet(self, fd: socket.socket, pkt) -> None:
         """Send a packet.
 
         Args:
@@ -85,11 +85,11 @@ class Host:
         """
         fd.sendto(pkt.Packet(), pkt.source)
 
-    def SendReplyPacket(self, fd: socket.socket, pkt: packet.Packet) -> None:
+    def send_reply_packet(self, fd: socket.socket, pkt: packet.Packet) -> None:
         """Send a packet.
 
         Args:
             fd (socket.socket): Socket to send packet with
             pkt (packet.Packet): The packet instance
         """
-        fd.sendto(pkt.ReplyPacket(), pkt.source)  # type: ignore
+        fd.sendto(pkt.reply_packet(), pkt.source)  # type: ignore

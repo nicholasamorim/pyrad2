@@ -19,7 +19,7 @@ req.add_message_authenticator()
 
 try:
     logger.info("Sending FreeRADIUS status request")
-    reply = srv.SendPacket(req)
+    reply = srv.send_packet(req)
 except Timeout:
     logger.error("RADIUS server does not reply")
     sys.exit(1)

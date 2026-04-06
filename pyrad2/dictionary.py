@@ -123,7 +123,7 @@ class Attribute:
         self.is_sub_attribute = is_sub_attribute
         if values:
             for key, value in values.items():
-                self.values.Add(key, value)
+                self.values.add(key, value)
 
 
 class Dictionary:
@@ -146,16 +146,16 @@ class Dictionary:
             dicts (list): Sequence of strings or files
         """
         self.vendors = bidict.BiDict()
-        self.vendors.Add("", 0)
+        self.vendors.add("", 0)
         self.attrindex = bidict.BiDict()
         self.attributes: Dict[Hashable, Any] = {}
         self.defer_parse: list[tuple[Dict, list]] = []
 
         if dict:
-            self.ReadDictionary(dict)
+            self.read_dictionary(dict)
 
         for i in dicts:
-            self.ReadDictionary(i)
+            self.read_dictionary(i)
 
     def __len__(self) -> int:
         """Return the number of attributes defined."""
@@ -171,7 +171,7 @@ class Dictionary:
 
     has_key = __contains__
 
-    def __ParseAttribute(self, state: dict, tokens: list):
+    def __parse_attribute(self, state: dict, tokens: list):
         """Parse an ATTRIBUTE line from a dictionary file."""
         if len(tokens) not in [4, 5]:
             raise ParseError(
@@ -207,7 +207,7 @@ class Dictionary:
 
             if (not has_tag) and encrypt == 0:
                 vendor = tokens[4]
-                if not self.vendors.HasForward(vendor):
+                if not self.vendors.has_forward(vendor):
                     if vendor == "concat":
                         # ignore attributes with concat (freeradius compat.)
                         return None
@@ -251,16 +251,16 @@ class Dictionary:
             )
         if vendor:
             if is_sub_attribute:
-                key = (self.vendors.GetForward(vendor), parent_code, code)
+                key = (self.vendors.get_forward(vendor), parent_code, code)
             else:
-                key = (self.vendors.GetForward(vendor), code)
+                key = (self.vendors.get_forward(vendor), code)
         else:
             if is_sub_attribute:
                 key = (parent_code, code)
             else:
                 key = code
 
-        self.attrindex.Add(attribute, key)
+        self.attrindex.add(attribute, key)
         self.attributes[attribute] = Attribute(
             attribute,
             code,
@@ -278,7 +278,7 @@ class Dictionary:
             state["tlvs"][parent_code].sub_attributes[code] = attribute
             self.attributes[attribute].parent = state["tlvs"][parent_code]
 
-    def __ParseValue(self, state: dict, tokens: list, defer: bool) -> None:
+    def __parse_value(self, state: dict, tokens: list, defer: bool) -> None:
         """Parse a VALUE line from a dictionary file."""
         if len(tokens) != 4:
             raise ParseError(
@@ -303,10 +303,10 @@ class Dictionary:
 
         if adef.type in ["integer", "signed", "short", "byte", "integer64"]:
             value = int(value, 0)
-        value = tools.EncodeAttr(adef.type, value)
-        self.attributes[attr].values.Add(key, value)
+        value = tools.encode_attr(adef.type, value)
+        self.attributes[attr].values.add(key, value)
 
-    def __ParseVendor(self, state: dict, tokens: list) -> None:
+    def __parse_vendor(self, state: dict, tokens: list) -> None:
         """Parse a VENDOR line, registering a new vendor."""
         if len(tokens) not in [3, 4]:
             raise ParseError(
@@ -341,9 +341,9 @@ class Dictionary:
                 )
 
         (vendorname, vendor) = tokens[1:3]
-        self.vendors.Add(vendorname, int(vendor, 0))
+        self.vendors.add(vendorname, int(vendor, 0))
 
-    def __ParseBeginVendor(self, state: dict, tokens: list) -> None:
+    def __parse_begin_vendor(self, state: dict, tokens: list) -> None:
         """Start a block of attributes for a specific vendor."""
         if len(tokens) != 2:
             raise ParseError(
@@ -354,7 +354,7 @@ class Dictionary:
 
         vendor = tokens[1]
 
-        if not self.vendors.HasForward(vendor):
+        if not self.vendors.has_forward(vendor):
             raise ParseError(
                 "Unknown vendor %s in begin-vendor statement" % vendor,
                 file=state["file"],
@@ -363,7 +363,7 @@ class Dictionary:
 
         state["vendor"] = vendor
 
-    def __ParseEndVendor(self, state: dict, tokens: list):
+    def __parse_end_vendor(self, state: dict, tokens: list):
         """End a block of vendor-specific attributes."""
         if len(tokens) != 2:
             raise ParseError(
@@ -382,7 +382,7 @@ class Dictionary:
             )
         state["vendor"] = ""
 
-    def ReadDictionary(self, file: str) -> None:
+    def read_dictionary(self, file: str) -> None:
         """Parse a dictionary file.
         Reads a RADIUS dictionary file and merges its contents into the
         class instance.
@@ -398,8 +398,8 @@ class Dictionary:
         state["tlvs"] = {}
         self.defer_parse = []
         for line in fil:
-            state["file"] = fil.File()
-            state["line"] = fil.Line()
+            state["file"] = fil.file()
+            state["line"] = fil.line()
             line = line.split("#", 1)[0].strip()
 
             tokens = line.split()
@@ -408,18 +408,18 @@ class Dictionary:
 
             key = tokens[0].upper()
             if key == "ATTRIBUTE":
-                self.__ParseAttribute(state, tokens)
+                self.__parse_attribute(state, tokens)
             elif key == "VALUE":
-                self.__ParseValue(state, tokens, True)
+                self.__parse_value(state, tokens, True)
             elif key == "VENDOR":
-                self.__ParseVendor(state, tokens)
+                self.__parse_vendor(state, tokens)
             elif key == "BEGIN-VENDOR":
-                self.__ParseBeginVendor(state, tokens)
+                self.__parse_begin_vendor(state, tokens)
             elif key == "END-VENDOR":
-                self.__ParseEndVendor(state, tokens)
+                self.__parse_end_vendor(state, tokens)
 
         for state, tokens in self.defer_parse:
             key = tokens[0].upper()
             if key == "VALUE":
-                self.__ParseValue(state, tokens, False)
+                self.__parse_value(state, tokens, False)
         self.defer_parse = []

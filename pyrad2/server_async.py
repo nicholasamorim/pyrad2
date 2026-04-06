@@ -1,6 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Optional
 
@@ -42,24 +42,24 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
         self.request_callback = request_callback
         self.transport: asyncio.DatagramTransport
 
-    def connection_made(self, transport: asyncio.BaseTransport):
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
         self.transport = transport  # type: ignore
         logger.info("[{}:{}] Transport created", self.ip, self.port)
 
-    def connection_lost(self, exc):
+    def connection_lost(self, exc: Exception | None) -> None:
         if exc:
             logger.warning("[{}:{}] Connection lost: {}", self.ip, self.port, exc)
         else:
             logger.info("[{}:{}] Transport closed", self.ip, self.port)
 
-    def send_response(self, reply: Packet, addr: str):
-        self.transport.sendto(reply.ReplyPacket(), addr)
+    def send_response(self, reply: Packet, addr: str) -> None:
+        self.transport.sendto(reply.reply_packet(), addr)
 
-    def datagram_received(self, data, addr: tuple[str | Any, int]):
+    def datagram_received(self, data: bytes, addr: tuple[str | Any, int]):
         logger.debug(
             "[{}:{}] Received {} bytes from {}", self.ip, self.port, len(data), addr
         )
-        receive_date = datetime.utcnow()
+        receive_date = datetime.now(timezone.utc)
 
         remote_host = self.hosts.get(addr[0], self.hosts.get("0.0.0.0"))
         if not remote_host:
@@ -95,7 +95,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                 req = AuthPacket(
                     secret=remote_host.secret, dict=self.server.dict, packet=data
                 )
-                if self.server.enable_pkt_verify and not req.VerifyAuthRequest():
+                if self.server.enable_pkt_verify and not req.verify_auth_request():
                     raise PacketError("Packet verification failed")
 
             elif self.server_type == ServerType.Coa:
@@ -107,7 +107,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                 req = CoAPacket(
                     secret=remote_host.secret, dict=self.server.dict, packet=data
                 )
-                if self.server.enable_pkt_verify and not req.VerifyPacket():
+                if self.server.enable_pkt_verify and not req.verify_packet():
                     raise PacketError("Packet verification failed")
 
             elif self.server_type == ServerType.Acct:
@@ -116,7 +116,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                 req = AcctPacket(
                     secret=remote_host.secret, dict=self.server.dict, packet=data
                 )
-                if self.server.enable_pkt_verify and not req.VerifyPacket():
+                if self.server.enable_pkt_verify and not req.verify_packet():
                     raise PacketError("Packet verification failed")
 
             self.request_callback(self, req, addr)
@@ -134,7 +134,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                     exc,
                 )
 
-        process_date = datetime.utcnow()
+        process_date = datetime.now(timezone.utc)
         elapsed = (process_date - receive_date).microseconds / 1000
         logger.debug(
             "[{}:{}] Request from {} processed in {} ms",
@@ -144,7 +144,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
             elapsed,
         )
 
-    def error_received(self, exc):
+    def error_received(self, exc: Exception) -> None:
         logger.error("[{}:{}] Error received: {}", self.ip, self.port, exc)
 
     async def close_transport(self):
@@ -290,7 +290,7 @@ class ServerAsync(ABC):
             pkt (packet.Packet): Packet to process
             attributes (dict): Custom attributes to be added to the reply
         """
-        return pkt.CreateReply(**attributes)
+        return pkt.create_reply(**attributes)
 
     @abstractmethod
     def handle_auth_packet(

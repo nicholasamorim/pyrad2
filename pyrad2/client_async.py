@@ -100,7 +100,7 @@ class DatagramProtocolClient(asyncio.Protocol):
         }
 
         # In queue packet raw on socket buffer
-        self.transport.sendto(packet.RequestPacket())
+        self.transport.sendto(packet.request_packet())
 
     def connection_made(self, transport: asyncio.BaseTransport):
         assert isinstance(transport, asyncio.DatagramTransport), (
@@ -145,7 +145,7 @@ class DatagramProtocolClient(asyncio.Protocol):
                 reply.dict = packet.dict
                 reply.secret = packet.secret
 
-                if packet.VerifyReply(reply, data):
+                if packet.verify_reply(reply, data, enforce_ma=self.client.enforce_ma):
                     req["future"].set_result(reply)
                     # Remove request for map
                     del self.pending_requests[reply.id]
@@ -206,6 +206,7 @@ class ClientAsync:
         dict: Optional[Dictionary] = None,
         retries: int = 3,
         timeout: int = 30,
+        enforce_ma: bool = False,
     ):
         """Initializes an async RADIUS client.
 
@@ -224,6 +225,7 @@ class ClientAsync:
         self.retries = retries
         self.timeout = timeout
         self.dict = dict
+        self.enforce_ma = enforce_ma
 
         self.auth_port = auth_port
         self.protocol_auth: Optional[DatagramProtocolClient] = None
@@ -337,7 +339,7 @@ class ClientAsync:
             del self.protocol_acct
             self.protocol_acct = None
 
-    def CreateAuthPacket(self, **args) -> AuthPacket:
+    def create_auth_packet(self, **args) -> AuthPacket:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS packet which can
         be used to communicate with the RADIUS server this client
@@ -354,10 +356,11 @@ class ClientAsync:
             dict=self.dict,
             id=self.protocol_auth.create_id(),
             secret=self.secret,
+            message_authenticator=True if self.enforce_ma else False,
             **args,
         )
 
-    def CreateAcctPacket(self, **args) -> AcctPacket:
+    def create_acct_packet(self, **args) -> AcctPacket:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS packet which can
         be used to communicate with the RADIUS server this client
@@ -377,7 +380,7 @@ class ClientAsync:
             **args,
         )
 
-    def CreateCoAPacket(self, **args) -> CoAPacket:
+    def create_coa_packet(self, **args) -> CoAPacket:
         """Create a new RADIUS packet.
         This utility function creates a new RADIUS packet which can
         be used to communicate with the RADIUS server this client
@@ -395,13 +398,13 @@ class ClientAsync:
             id=self.protocol_coa.create_id(), dict=self.dict, secret=self.secret, **args
         )
 
-    def CreatePacket(self, id: int, **args) -> Packet:
+    def create_packet(self, id: int, **args) -> Packet:
         if not id:
             raise Exception("Missing mandatory packet id")
 
         return Packet(id=id, dict=self.dict, secret=self.secret, **args)
 
-    def SendPacket(self, pkt: Packet) -> asyncio.Future:
+    def send_packet(self, pkt: Packet) -> asyncio.Future:
         """Send a packet to a RADIUS server.
 
         Args:

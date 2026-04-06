@@ -7,8 +7,8 @@ import pyrad2
 setup(
     name="pyrad2",
     version=pyrad2.__version__,
-    author="Nicholas Amorim, Istvan Ruzman, Christian Giese",
-    author_email="nicholas@santos.ee, istvan@ruzman.eu, developer@gicnet.de",
+    author="Nicholas Amorim",
+    author_email="nicholas@santos.ee",
     url="https://github.com/nicholasamorim/pyrad2",
     license="BSD",
     description="RADIUS tools",
@@ -19,6 +19,7 @@ setup(
         "License :: OSI Approved :: BSD License",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Topic :: System :: Systems Administration :: Authentication/Directory",
     ],

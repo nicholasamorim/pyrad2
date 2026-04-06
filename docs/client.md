@@ -55,7 +55,7 @@ This is the core code that creates the packet.
 
 ``` py
 def create_request(client, user):
-    req = client.CreateAuthPacket(User_Name=user)
+    req = client.create_auth_packet(User_Name=user)
 
     req["NAS-IP-Address"] = "192.168.1.10"
     req["NAS-Port"] = 0
@@ -75,7 +75,7 @@ You can find a list of standard RADIUS attributes [here](https://datatracker.iet
 To set attributes in the `Client` object, you need to replace underscores with hyphens. So instead of `User_Name`, you use `User-Name`. The former is used in python code and the latter is used directly in the underlying data.
 
 ``` py title="Naming inconsistencies"
-req = srv.CreateAuthPacket(User_Name="wichert")
+req = srv.create_auth_packet(User_Name="wichert")
 
 # But if acessing the attributes directly
 req["User-Name"] = "wichert2"

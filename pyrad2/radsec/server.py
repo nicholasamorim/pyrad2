@@ -146,7 +146,7 @@ class RadSecServer:
             logger.warning("Drop package from unknown source {}", peername[0])
             return
 
-        writer.write(reply.ReplyPacket())
+        writer.write(reply.reply_packet())
         await writer.drain()
         logger.info("Sent reply to {}: {}", peername, reply.code)
 

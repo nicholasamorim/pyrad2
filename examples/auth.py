@@ -14,7 +14,7 @@ srv = Client(
     dict=Dictionary("dictionary"),
 )
 
-req = srv.CreateAuthPacket(User_Name="wichert")
+req = srv.create_auth_packet(User_Name="wichert")
 
 req["NAS-IP-Address"] = "192.168.1.10"
 req["NAS-Port"] = 0
@@ -26,7 +26,7 @@ req["Framed-IP-Address"] = "10.0.0.100"
 
 try:
     logger.info("Sending authentication request")
-    reply = srv.SendPacket(req)
+    reply = srv.send_packet(req)
 except Timeout:
     logger.error("RADIUS server does not reply")
     sys.exit(1)

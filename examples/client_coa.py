@@ -27,14 +27,14 @@ attributes = {k.replace("-", "_"): ATTRIBUTES[k] for k in ATTRIBUTES}
 
 if sys.argv[1] == "coa":
     # create coa request
-    request = client.CreateCoAPacket(**attributes)
+    request = client.create_coa_packet(**attributes)
 elif sys.argv[1] == "dis":
     # create disconnect request
-    request = client.CreateCoAPacket(code=packet.DisconnectRequest, **attributes)
+    request = client.create_coa_packet(code=packet.DisconnectRequest, **attributes)
 else:
     sys.exit(1)
 
 # send request
-result = client.SendPacket(request)
+result = client.send_packet(request)
 logger.info(result)
 logger.info("Result code: {}", result.code)

@@ -1,5 +1,6 @@
 import os
-if os.name == 'nt':
+
+if os.name == "nt":
     import selectors
 else:
     import select
@@ -50,7 +51,7 @@ class Server(host.Host):
         MaxPacketSize (int): Maximum size of a RADIUS packet. (class variable)
     """
 
-    MaxPacketSize = 8192
+    MAX_PACKET_SIZE = 8192
 
     def __init__(
         self,
@@ -89,9 +90,9 @@ class Server(host.Host):
 
         if addresses:
             for addr in addresses:
-                self.BindToAddress(addr)
+                self.bind_to_address(addr)
 
-    def _GetAddrInfo(
+    def _get_addr_info(
         self, addr: str
     ) -> set[tuple[socket.AddressFamily, str | int]] | list:
         """Use getaddrinfo to lookup all addresses for each address.
@@ -113,15 +114,15 @@ class Server(host.Host):
 
         return results
 
-    def BindToAddress(self, addr: str) -> None:
+    def bind_to_address(self, addr: str) -> None:
         """Add an address to listen on a specific interface.
         String "0.0.0.0" indicates you want to listen on all interfaces.
 
         Args:
             addr (str): IP address to listen on
         """
-        addrFamily = self._GetAddrInfo(addr)
-        for family, address in addrFamily:
+        addr_family = self._get_addr_info(addr)
+        for family, address in addr_family:
             if self.auth_enabled:
                 authfd = socket.socket(family, socket.SOCK_DGRAM)
                 authfd.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -140,7 +141,7 @@ class Server(host.Host):
                 coafd.bind((address, self.coaport))
                 self.coafds.append(coafd)
 
-    def HandleAuthPacket(self, pkt: packet.Packet):
+    def handle_auth_packet(self, pkt: packet.Packet):
         """Authentication packet handler.
         This is an empty function that is called when a valid
         authentication packet has been received. It can be overriden in
@@ -150,7 +151,7 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
 
-    def HandleAcctPacket(self, pkt: packet.Packet):
+    def handle_acct_packet(self, pkt: packet.Packet):
         """Accounting packet handler.
         This is an empty function that is called when a valid
         accounting packet has been received. It can be overriden in
@@ -160,7 +161,7 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
 
-    def HandleCoaPacket(self, pkt: packet.Packet):
+    def handle_coa_packet(self, pkt: packet.Packet):
         """CoA packet handler.
         This is an empty function that is called when a valid
         accounting packet has been received. It can be overriden in
@@ -170,7 +171,7 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
 
-    def HandleDisconnectPacket(self, pkt: packet.Packet):
+    def handle_disconnect_packet(self, pkt: packet.Packet):
         """CoA packet handler.
         This is an empty function that is called when a valid
         accounting packet has been received. It can be overriden in
@@ -180,7 +181,7 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
 
-    def _AddSecret(self, pkt: packet.Packet) -> None:
+    def _add_secret(self, pkt: packet.Packet) -> None:
         """Add secret to packets received and raise ServerPacketError
         for unknown hosts.
 
@@ -194,7 +195,7 @@ class Server(host.Host):
         else:
             raise ServerPacketError("Received packet from unknown host")
 
-    def _HandleAuthPacket(self, pkt: packet.Packet) -> None:
+    def _handle_auth_packet(self, pkt: packet.Packet) -> None:
         """Process a packet received on the authentication port.
         If this packet should be dropped instead of processed a
         ServerPacketError exception should be raised. The main loop will
@@ -203,14 +204,14 @@ class Server(host.Host):
         Args:
             pkt (packet.Packet): Packet to process
         """
-        self._AddSecret(pkt)
+        self._add_secret(pkt)
         if pkt.code != PacketType.AccessRequest:
             raise ServerPacketError(
                 "Received non-authentication packet on authentication port"
             )
-        self.HandleAuthPacket(pkt)
+        self.handle_auth_packet(pkt)
 
-    def _HandleAcctPacket(self, pkt: packet.Packet) -> None:
+    def _handle_acct_packet(self, pkt: packet.Packet) -> None:
         """Process a packet received on the accounting port.
         If this packet should be dropped instead of processed a
         ServerPacketError exception should be raised. The main loop will
@@ -219,15 +220,15 @@ class Server(host.Host):
         Args:
             pkt (packet.Packet): Packet to process
         """
-        self._AddSecret(pkt)
+        self._add_secret(pkt)
         if pkt.code not in [
             PacketType.AccountingRequest,
             PacketType.AccountingResponse,
         ]:
             raise ServerPacketError("Received non-accounting packet on accounting port")
-        self.HandleAcctPacket(pkt)
+        self.handle_acct_packet(pkt)
 
-    def _HandleCoaPacket(self, pkt: packet.Packet) -> None:
+    def _handle_coa_packet(self, pkt: packet.Packet) -> None:
         """Process a packet received on the coa port.
         If this packet should be dropped instead of processed a
         ServerPacketError exception should be raised. The main loop will
@@ -236,15 +237,15 @@ class Server(host.Host):
         Args:
             pkt (packet.Packet): Packet to process
         """
-        self._AddSecret(pkt)
+        self._add_secret(pkt)
         if pkt.code == PacketType.CoARequest:
-            self.HandleCoaPacket(pkt)
+            self.handle_coa_packet(pkt)
         elif pkt.code == PacketType.DisconnectRequest:
-            self.HandleDisconnectPacket(pkt)
+            self.handle_disconnect_packet(pkt)
         else:
             raise ServerPacketError("Received non-coa packet on coa port")
 
-    def _GrabPacket(self, pktgen: Callable, fd: socket.socket) -> packet.Packet:
+    def _grab_packet(self, pktgen: Callable, fd: socket.socket) -> packet.Packet:
         """Read a packet from a network connection.
         This method assumes there is data waiting for to be read.
 
@@ -254,17 +255,17 @@ class Server(host.Host):
         Returns:
             packet.Packet: RADIUS packet
         """
-        (data, source) = fd.recvfrom(self.MaxPacketSize)
+        (data, source) = fd.recvfrom(self.MAX_PACKET_SIZE)
         pkt = pktgen(data)
         pkt.source = source
         pkt.fd = fd
         return pkt
 
-    def _PrepareSockets(self) -> None:
+    def _prepare_sockets(self) -> None:
         """Prepare all sockets to receive packets."""
         for fd in self.authfds + self.acctfds + self.coafds:
             self._fdmap[fd.fileno()] = fd
-            if os.name == 'nt':
+            if os.name == "nt":
                 self._sel.register(fd.fileno(), selectors.EVENT_READ)
             else:
                 self._poll.register(
@@ -277,7 +278,7 @@ class Server(host.Host):
         if self.coa_enabled:
             self._realcoafds = list(map(lambda x: x.fileno(), self.coafds))
 
-    def CreateReplyPacket(self, pkt: packet.Packet, **attributes) -> packet.Packet:
+    def create_reply_packet(self, pkt: packet.Packet, **attributes) -> packet.Packet:
         """Create a reply packet.
         Create a new packet which can be returned as a reply to a received
         packet.
@@ -285,61 +286,61 @@ class Server(host.Host):
         Args:
             pkt (packet.Packet): Packet to process
         """
-        reply = pkt.CreateReply(**attributes)
+        reply = pkt.create_reply(**attributes)
         reply.source = pkt.source
         return reply
 
-    def _ProcessInput(self, fd: socket.socket) -> None:
+    def _process_input(self, fd: socket.socket) -> None:
         """Process available data.
         If this packet should be dropped instead of processed a
         PacketError exception should be raised. The main loop will
         drop the packet and log the reason.
 
-        This function calls either HandleAuthPacket() or
-        HandleAcctPacket() depending on which socket is being
+        This function calls either handle_auth_packet() or
+        handle_acct_packet() depending on which socket is being
         processed.
 
         Args:
             fd (socket.socket): Socket to read the packet from
         """
         if self.auth_enabled and fd.fileno() in self._realauthfds:
-            pkt = self._GrabPacket(
+            pkt = self._grab_packet(
                 lambda data, s=self: s.CreateAuthPacket(packet=data), fd
             )
-            self._HandleAuthPacket(pkt)
+            self._handle_auth_packet(pkt)
         elif self.acct_enabled and fd.fileno() in self._realacctfds:
-            pkt = self._GrabPacket(
+            pkt = self._grab_packet(
                 lambda data, s=self: s.CreateAcctPacket(packet=data), fd
             )
-            self._HandleAcctPacket(pkt)
+            self._handle_acct_packet(pkt)
         elif self.coa_enabled:
-            pkt = self._GrabPacket(
+            pkt = self._grab_packet(
                 lambda data, s=self: s.CreateCoAPacket(packet=data), fd
             )
-            self._HandleCoaPacket(pkt)
+            self._handle_coa_packet(pkt)
         else:
             raise ServerPacketError("Received packet for unknown handler")
 
-    def Run(self) -> None:
+    def run(self) -> None:
         """Main loop.
         This method is the main loop for a RADIUS server. It waits
         for packets to arrive via the network and calls other methods
         to process them.
         """
-        if os.name == 'nt':
+        if os.name == "nt":
             self._sel = selectors.DefaultSelector()
         else:
             self._poll = select.poll()
         self._fdmap: dict[int, socket.socket] = {}
-        self._PrepareSockets()
+        self._prepare_sockets()
 
         while True:
-            if os.name == 'nt':
+            if os.name == "nt":
                 for key, mask in self._sel.select(timeout=1):
                     if mask & selectors.EVENT_READ:
                         try:
                             fdo = self._fdmap[key.fd]
-                            self._ProcessInput(fdo)
+                            self._process_input(fdo)
                         except ServerPacketError as err:
                             logger.info("Dropping packet: " + str(err))
                         except packet.PacketError as err:
@@ -351,7 +352,7 @@ class Server(host.Host):
                     if event == select.POLLIN:
                         try:
                             fdo = self._fdmap[fd]
-                            self._ProcessInput(fdo)
+                            self._process_input(fdo)
                         except ServerPacketError as err:
                             logger.info("Dropping packet: " + str(err))
                         except packet.PacketError as err:

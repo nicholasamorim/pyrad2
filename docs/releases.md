@@ -1,5 +1,17 @@
 # Releases
 
+# 2.0 (2026-04-06)
+
+- *Breaking Changes*: The entire codebase has been converted from CamaleCase to use Python's snake case.
+- Enforce Message-Authenticator if present
+- Ascend-Data-Filter now supports `delete` keyword
+- Several fixes, more typing
+
+# 1.2.0 (2025-07-22)
+
+## Features
+
+- Use selectors in place of select on Windows
 
 # 1.1.1 (2025-07-09)
 

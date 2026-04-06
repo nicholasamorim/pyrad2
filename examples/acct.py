@@ -9,9 +9,9 @@ from pyrad2.exceptions import Timeout
 from loguru import logger
 
 
-def SendPacket(srv, req):
+def send_packet(srv, req):
     try:
-        srv.SendPacket(req)
+        srv.send_packet(req)
     except Timeout:
         logger.info("RADIUS server does not reply")
         sys.exit(1)
@@ -26,7 +26,7 @@ srv = Client(
     dict=Dictionary("dictionary"),
 )
 
-req = srv.CreateAuthPacket(User_Name="wichert")
+req = srv.create_auth_packet(User_Name="wichert")
 
 req["NAS-IP-Address"] = "192.168.1.10"
 req["NAS-Port"] = 0
@@ -38,7 +38,7 @@ req["Framed-IP-Address"] = "10.0.0.100"
 
 logger.info("Sending accounting start packet")
 req["Acct-Status-Type"] = "Start"
-srv.SendPacket(req)
+srv.send_packet(req)
 
 logger.info("Sending accounting stop packet")
 req["Acct-Status-Type"] = "Stop"
@@ -46,4 +46,4 @@ req["Acct-Input-Octets"] = random.randrange(2**10, 2**30)
 req["Acct-Output-Octets"] = random.randrange(2**10, 2**30)
 req["Acct-Session-Time"] = random.randrange(120, 3600)
 req["Acct-Terminate-Cause"] = random.choice(["User-Request", "Idle-Timeout"])
-srv.SendPacket(req)
+srv.send_packet(req)

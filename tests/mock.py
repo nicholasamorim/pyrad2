@@ -13,15 +13,15 @@ class MockPacket:
         self.verify = verify
         self.error = error
 
-    def CreateReply(self, packet=None):
+    def create_reply(self, packet=None):
         if self.error:
             raise PacketError
         return self.reply
 
-    def VerifyReply(self, reply, rawreply):
+    def verify_reply(self, reply, rawreply, enforce_ma):
         return self.verify
 
-    def RequestPacket(self):
+    def request_packet(self):
         return "request packet"
 
     def __contains__(self, key):
@@ -45,11 +45,12 @@ class MockSocket:
         self.address = None
         self.output = []
 
+        self.data = data if data is not None else b""
+
         if data is not None:
             (self.read_end, self.write_end) = os.pipe()
             fcntl.fcntl(self.write_end, fcntl.F_SETFL, os.O_NONBLOCK)
             os.write(self.write_end, data)
-            self.data = data
         else:
             self.read_end = 1
             self.write_end = None

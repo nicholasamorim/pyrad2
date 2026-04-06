@@ -20,7 +20,7 @@ def get_async_client():
 
 
 def create_request(client, user):
-    req = client.CreateAuthPacket(User_Name=user)
+    req = client.create_auth_packet(User_Name=user)
 
     req["NAS-IP-Address"] = "192.168.1.10"
     req["NAS-Port"] = 0
@@ -100,7 +100,7 @@ async def test_multi_auth():
         tasks = []
         for i in range(255):
             req = create_request(client, f"user{i}")
-            task = client.SendPacket(req)  # assuming SendPacket is awaitable
+            task = client.send_packet(req)  # assuming SendPacket is awaitable
             tasks.append(task)
 
         responses = await asyncio.gather(*tasks, return_exceptions=True)
