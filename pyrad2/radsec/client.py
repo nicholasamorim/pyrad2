@@ -2,7 +2,7 @@ import asyncio
 import ssl
 import struct
 from hashlib import md5
-from typing import Optional
+from typing import Iterable, Optional
 
 from loguru import logger
 
@@ -17,9 +17,12 @@ from pyrad2.packet import (
     PacketImplementation,
 )
 from pyrad2.tools import read_radius_packet
+from pyrad2.tools import cert_fingerprint_matches, normalize_cert_fingerprint
 
 
 class RadSecClient:
+    DEFAULT_MINIMUM_TLS_VERSION = ssl.TLSVersion.TLSv1_2
+
     def __init__(
         self,
         server: str = "127.0.0.1",
@@ -31,7 +34,10 @@ class RadSecClient:
         certfile: str = "certs/client/client.cert.pem",
         keyfile: str = "certs/client/client.key.pem",
         certfile_server: str = "certs//ca/ca.cert.pem",
-        check_hostname: bool = False,
+        check_hostname: bool = True,
+        minimum_tls_version: ssl.TLSVersion = DEFAULT_MINIMUM_TLS_VERSION,
+        ciphers: Optional[str] = None,
+        allowed_server_fingerprints: Optional[Iterable[str]] = None,
     ):
         """Initializes a RadSec client.
 
@@ -46,6 +52,11 @@ class RadSecClient:
             certfile (str): Path to client SSL certificate
             keyfile (str): Path to client SSL certificate
             certfile_server (str): Path to server SSL certificate
+            check_hostname (bool): Validate the server certificate name.
+            minimum_tls_version (ssl.TLSVersion): Lowest TLS version to negotiate.
+            ciphers (str): Optional OpenSSL cipher string override.
+            allowed_server_fingerprints (Iterable[str]): Optional SHA-256 certificate
+                fingerprint allowlist for the server certificate.
 
         """
         self.server = server
@@ -55,10 +66,28 @@ class RadSecClient:
         self.timeout = timeout
         self.dict = dict
 
-        self.setup_ssl(certfile, keyfile, certfile_server, check_hostname)
+        self.allowed_server_fingerprints = {
+            normalize_cert_fingerprint(fingerprint)
+            for fingerprint in (allowed_server_fingerprints or [])
+        }
+
+        self.setup_ssl(
+            certfile,
+            keyfile,
+            certfile_server,
+            check_hostname,
+            minimum_tls_version,
+            ciphers,
+        )
 
     def setup_ssl(
-        self, certfile: str, keyfile: str, certfile_server: str, check_hostname: bool
+        self,
+        certfile: str,
+        keyfile: str,
+        certfile_server: str,
+        check_hostname: bool,
+        minimum_tls_version: ssl.TLSVersion,
+        ciphers: Optional[str],
     ):
         try:
             self.ssl_ctx = ssl.create_default_context(
@@ -73,6 +102,23 @@ class RadSecClient:
             raise FileNotFoundError(msg.format(ssl_paths)) from e
 
         self.ssl_ctx.check_hostname = check_hostname
+        self.ssl_ctx.minimum_version = minimum_tls_version
+        if ciphers is not None:
+            self.ssl_ctx.set_ciphers(ciphers)
+
+    def _verify_server_fingerprint(self, writer: asyncio.StreamWriter) -> bool:
+        if not self.allowed_server_fingerprints:
+            return True
+
+        ssl_object = writer.get_extra_info("ssl_object")
+        if ssl_object is None:
+            return False
+
+        cert = ssl_object.getpeercert(binary_form=True)
+        if cert is None:
+            return False
+
+        return cert_fingerprint_matches(cert, self.allowed_server_fingerprints)
 
     def create_auth_packet(self, **kwargs) -> AuthPacket:
         """Create a new RADIUS packet.
@@ -141,6 +187,12 @@ class RadSecClient:
             self.server,
             self.port,
         )
+
+        if not self._verify_server_fingerprint(writer):
+            logger.warning("Server certificate fingerprint is not allowed")
+            writer.close()
+            await writer.wait_closed()
+            return None
 
         writer.write(packet.request_packet())
         await writer.drain()
