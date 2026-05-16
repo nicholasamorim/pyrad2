@@ -68,7 +68,6 @@ def encode_ipv6_prefix(addr: str, default_prefixlen: int = 128) -> bytes:
     elif isinstance(addr, IPv6Address):
         net = IPv6Network((addr, default_prefixlen), strict=False)
     elif isinstance(addr, str):
-        print("xxxx")
         if "/" in addr:
             net = ip_network(addr, strict=False)
         else:
@@ -345,6 +344,28 @@ def get_cert_fingerprint(cert: bytes) -> str:
     hash = sha256(der_bytes).digest()
     # Return in base64 or hex
     return hash.hex()  # or base64.b64encode(sha256).decode()
+
+
+def normalize_cert_fingerprint(fingerprint: str) -> str:
+    """Normalize a SHA-256 certificate fingerprint for comparison."""
+    normalized = (
+        fingerprint.lower()
+        .removeprefix("sha256:")
+        .replace(":", "")
+        .replace(" ", "")
+    )
+    if len(normalized) != 64:
+        raise ValueError("SHA-256 certificate fingerprints must be 64 hex characters")
+    try:
+        bytes.fromhex(normalized)
+    except ValueError as exc:
+        raise ValueError("Certificate fingerprints must be hexadecimal") from exc
+    return normalized
+
+
+def cert_fingerprint_matches(cert: bytes, allowed_fingerprints: set[str]) -> bool:
+    """Return True when cert's SHA-256 fingerprint is in the allowlist."""
+    return get_cert_fingerprint(cert) in allowed_fingerprints
 
 
 async def read_radius_packet(reader: StreamReader) -> bytes:

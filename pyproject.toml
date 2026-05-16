@@ -6,23 +6,23 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "loguru>=0.7.3",
-    "mkdocs-material>=9.6.15",
-    "mkdocstrings[python]>=0.29.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.4",
 ]
 
 [dependency-groups]
 dev = [
-    "mypy>=1.16.1",
-    "pytest>=8.4.1",
-    "pytest-cov>=6.2.1",
-    "pytest-sugar>=1.0.0",
-    "ruff>=0.12.2",
-    "types-setuptools>=80.9.0.20250529",
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "pytest-sugar>=1.1.1",
+    "ruff>=0.15.3",
+    "types-setuptools>=82.0.0.20260508",
 ]
 docs = [
     "mkdocs>=1.6.1",
-    "mkdocs-material>=9.6.15",
-    "mkdocstrings[python]>=0.29.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.4",
 ]
 
 [project.urls]

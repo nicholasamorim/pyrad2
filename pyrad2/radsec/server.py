@@ -1,7 +1,7 @@
 import asyncio
 import ssl
 from abc import abstractmethod
-from typing import Optional
+from typing import Iterable, Optional
 
 from loguru import logger
 
@@ -17,7 +17,9 @@ from pyrad2.packet import (
 )
 from pyrad2.server import RemoteHost, ServerPacketError
 from pyrad2.tools import (
+    cert_fingerprint_matches,
     get_cert_fingerprint,
+    normalize_cert_fingerprint,
     read_radius_packet,
 )
 
@@ -43,7 +45,7 @@ class RadSecServer:
     dynamic authorization changes.
     """
 
-    ALLOWED_CIPHERS = "DES-CBC3-SHA:RC4-SHA:AES128-SHA"
+    DEFAULT_MINIMUM_TLS_VERSION = ssl.TLSVersion.TLSv1_2
 
     def __init__(
         self,
@@ -55,7 +57,10 @@ class RadSecServer:
         certfile: str = "certs/server/server.cert.pem",
         keyfile: str = "certs/server/server.key.pem",
         ca_certfile: str = "certs/ca/ca.cert.pem",
-        verify_mode: ssl.VerifyMode = ssl.CERT_NONE,
+        verify_mode: ssl.VerifyMode = ssl.CERT_REQUIRED,
+        minimum_tls_version: ssl.TLSVersion = DEFAULT_MINIMUM_TLS_VERSION,
+        ciphers: Optional[str] = None,
+        allowed_client_fingerprints: Optional[Iterable[str]] = None,
     ):
         """Initializes a RadSec server.
 
@@ -68,14 +73,25 @@ class RadSecServer:
             certfile (str): Path to server SSL certificate
             keyfile (str): Path to server SSL certificate
             ca_certfile (str): Path to server CA certfificate
+            verify_mode (ssl.VerifyMode): Client certificate verification mode.
+            minimum_tls_version (ssl.TLSVersion): Lowest TLS version to negotiate.
+            ciphers (str): Optional OpenSSL cipher string override.
+            allowed_client_fingerprints (Iterable[str]): Optional SHA-256 certificate
+                fingerprint allowlist for client certificates.
         """
         self.listen_address = listen_address
         self.listen_port = listen_port
         self.hosts = {} if hosts is None else hosts
         self.dict = dictionary
         self.verify_packet = verify_packet
+        self.allowed_client_fingerprints = {
+            normalize_cert_fingerprint(fingerprint)
+            for fingerprint in (allowed_client_fingerprints or [])
+        }
 
-        self.setup_ssl(certfile, keyfile, ca_certfile, verify_mode)
+        self.setup_ssl(
+            certfile, keyfile, ca_certfile, verify_mode, minimum_tls_version, ciphers
+        )
 
     async def run(self):
         server = await asyncio.start_server(
@@ -87,7 +103,6 @@ class RadSecServer:
 
         addr = server.sockets[0].getsockname()
         logger.info("RADSEC Server with mutual TLS running on {}", addr)
-        logger.info("Allowed ciphers: {}", self.ALLOWED_CIPHERS)
 
         try:
             async with server:
@@ -101,7 +116,15 @@ class RadSecServer:
             await server.wait_closed()
             logger.info("Server shutdown")
 
-    def setup_ssl(self, certfile: str, keyfile: str, ca_certfile: str, verify_mode):
+    def setup_ssl(
+        self,
+        certfile: str,
+        keyfile: str,
+        ca_certfile: str,
+        verify_mode: ssl.VerifyMode,
+        minimum_tls_version: ssl.TLSVersion,
+        ciphers: Optional[str],
+    ):
         ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         try:
             ssl_ctx.load_cert_chain(certfile=certfile, keyfile=keyfile)
@@ -112,10 +135,19 @@ class RadSecServer:
             raise FileNotFoundError(msg.format(ssl_paths)) from e
 
         ssl_ctx.verify_mode = verify_mode
+        ssl_ctx.minimum_version = minimum_tls_version
         ssl_ctx.load_verify_locations(cafile=ca_certfile)
-        ssl_ctx.set_ciphers(self.ALLOWED_CIPHERS)
+        if ciphers is not None:
+            ssl_ctx.set_ciphers(ciphers)
 
         self.ssl_ctx = ssl_ctx
+
+    def _verify_client_fingerprint(self, cert: bytes | None) -> bool:
+        if not self.allowed_client_fingerprints:
+            return True
+        if cert is None:
+            return False
+        return cert_fingerprint_matches(cert, self.allowed_client_fingerprints)
 
     async def _handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -133,6 +165,12 @@ class RadSecServer:
             )
         else:
             logger.warning("No certificate from client {}", peername)
+
+        if not self._verify_client_fingerprint(client_id):
+            logger.warning("Client {} certificate fingerprint is not allowed", peername)
+            writer.close()
+            await writer.wait_closed()
+            return
 
         logger.info("RADSEC connection established from {}", peername)
 

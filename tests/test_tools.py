@@ -1,6 +1,9 @@
 import unittest
+import ssl
 
 from pyrad2 import tools
+
+from .base import TEST_ROOT_PATH
 
 
 class EncodingTests(unittest.TestCase):
@@ -82,6 +85,26 @@ class EncodingTests(unittest.TestCase):
 
     def test_unknown_type_decoding(self):
         self.assertRaises(ValueError, tools.decode_attr, "unknown", None)
+
+    def test_normalize_cert_fingerprint(self):
+        fingerprint = "SHA256:AA:BB " + ("cc" * 29) + "dd"
+        self.assertEqual(
+            tools.normalize_cert_fingerprint(fingerprint),
+            "aabb" + ("cc" * 29) + "dd",
+        )
+
+    def test_normalize_cert_fingerprint_rejects_invalid_values(self):
+        self.assertRaises(ValueError, tools.normalize_cert_fingerprint, "abc")
+        self.assertRaises(ValueError, tools.normalize_cert_fingerprint, "z" * 64)
+
+    def test_cert_fingerprint_matches_allowlist(self):
+        with open(f"{TEST_ROOT_PATH}/certs/client/client.cert.pem") as cert_file:
+            cert = ssl.PEM_cert_to_DER_cert(cert_file.read())
+
+        fingerprint = tools.get_cert_fingerprint(cert)
+
+        self.assertTrue(tools.cert_fingerprint_matches(cert, {fingerprint}))
+        self.assertFalse(tools.cert_fingerprint_matches(cert, {"0" * 64}))
 
     def test_encode_function(self):
         self.assertEqual(tools.encode_attr("string", "string"), b"string")
