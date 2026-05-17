@@ -46,3 +46,28 @@ dictfile = dictionary.Dictionary("dictionary")
 ```
 
 You are actually passing a _path_ to a file (or a [file-like object](https://docs.python.org/3/library/io.html)) called `dictionary`, so make sure the file you pass is accessible from your code and it's a valid dictionary file.
+
+#### Supported dictionary features
+
+pyrad2 aims to load real-world FreeRADIUS dictionaries without modification.
+
+**Data types**: `string`, `octets`, `integer`, `signed`, `short`, `byte`,
+`integer64`, `date`, `ipaddr`, `ipv6addr`, `ipv6prefix`, `ifid` (RFC 3162
+8-byte Interface-Id), `ether` (RFC 6911 MAC address), `abinary` (Ascend
+filter format), and `tlv` (one level of nesting).
+
+**Attribute options** (comma-separated, after the type column):
+
+- `has_tag` — attribute carries a one-byte tag prefix (RFC 2868).
+- `encrypt=N` — apply encryption flavour 1, 2, or 3.
+- `concat` — values longer than 253 bytes split across multiple AVPs on
+  the wire and concatenate on decode (RFC 7268 §3.6). Typical for
+  `EAP-Message` and `CHAP-Challenge`.
+
+**Vendor format** (`VENDOR Name 9 format=type_len,len_len`): the per-vendor
+VSA wire format is honored end-to-end. `type_len` may be 1, 2, or 4 bytes
+and `len_len` may be 0, 1, or 2 bytes. The default when no `format=` is
+declared follows RFC 2865 §5.26 (`1,1`).
+
+**Not yet supported**: RFC 6929 extended / long-extended attributes
+(types 241–246) and TLV nesting deeper than two levels.
