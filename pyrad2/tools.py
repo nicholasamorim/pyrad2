@@ -347,7 +347,12 @@ def get_cert_fingerprint(cert: bytes) -> str:
 
 
 def normalize_cert_fingerprint(fingerprint: str) -> str:
-    """Normalize a SHA-256 certificate fingerprint for comparison."""
+    """Normalize a SHA-256 certificate fingerprint for comparison.
+
+    Accepts plain hex, colon-separated hex, and values prefixed with
+    `sha256:`. Raises ValueError when the normalized value is not a 64
+    character hexadecimal SHA-256 fingerprint.
+    """
     normalized = (
         fingerprint.lower()
         .removeprefix("sha256:")
@@ -364,7 +369,7 @@ def normalize_cert_fingerprint(fingerprint: str) -> str:
 
 
 def cert_fingerprint_matches(cert: bytes, allowed_fingerprints: set[str]) -> bool:
-    """Return True when cert's SHA-256 fingerprint is in the allowlist."""
+    """Return True when a DER certificate's SHA-256 fingerprint is allowed."""
     return get_cert_fingerprint(cert) in allowed_fingerprints
 
 

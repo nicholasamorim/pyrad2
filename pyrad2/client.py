@@ -11,7 +11,7 @@ import time
 from typing import Optional
 
 from pyrad2 import host, packet
-from pyrad2.constants import PacketType, EAPPacketType, EAPType
+from pyrad2.constants import EAPPacketType, EAPType, PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.exceptions import Timeout
 
@@ -61,6 +61,13 @@ class Client(host.Host):
         else:
             self._poll = select.poll()
         self._socket: Optional[socket.socket] = None
+
+    def _prepare_outgoing_packet(self, pkt: packet.PacketImplementation) -> None:
+        """Apply Message-Authenticator policy before a packet is sent."""
+        packet.prepare_request_message_authenticator(
+            pkt,
+            require_message_authenticator=self.enforce_ma,
+        )
 
     def bind(self, addr: str | tuple) -> None:
         """Bind socket to an address.
@@ -166,6 +173,7 @@ class Client(host.Host):
             if not self._socket:
                 raise RuntimeError("No socket present")
 
+            self._prepare_outgoing_packet(pkt)
             self._socket.sendto(pkt.request_packet(), (self.server, port))
 
             while now < waitto:

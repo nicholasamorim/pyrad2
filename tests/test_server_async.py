@@ -1,8 +1,12 @@
 import unittest
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
+from pyrad2 import packet
 from pyrad2.constants import PacketType
+from pyrad2.dictionary import Dictionary
+from pyrad2.exceptions import PacketError
 from pyrad2.server import RemoteHost
 from pyrad2.server_async import (
     DatagramProtocolServer,
@@ -10,7 +14,7 @@ from pyrad2.server_async import (
     ServerType,
 )
 
-from .base import DummyServer, capture_logs
+from .base import DummyServer, TEST_ROOT_PATH, capture_logs
 
 
 class DatagramProtocolServerTests(unittest.TestCase):
@@ -80,6 +84,40 @@ class ServerAsyncTests(unittest.IsolatedAsyncioTestCase):
         pkt = MagicMock()
         ServerAsync.create_reply_packet(pkt, Attr1="value")
         pkt.create_reply.assert_called_once_with(Attr1="value")
+
+    def test_message_authenticator_policy_rejects_eap_without_ma(self):
+        dictionary = Dictionary(os.path.join(TEST_ROOT_PATH, "data/full"))
+        server = DummyServer(dictionary=dictionary)
+        pkt = packet.AuthPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=dictionary,
+        )
+        pkt[79] = [b"\x02\x01\x00\x05\x01"]
+        parsed = packet.AuthPacket(
+            packet=pkt.request_packet(), secret=b"secret", dict=dictionary
+        )
+
+        with self.assertRaisesRegex(PacketError, "EAP-Message requires"):
+            server.validate_message_authenticator_policy(parsed)
+
+    def test_create_reply_packet_adds_ma_when_policy_requires_it(self):
+        dictionary = Dictionary(os.path.join(TEST_ROOT_PATH, "data/full"))
+        server = DummyServer(
+            dictionary=dictionary,
+            require_message_authenticator=True,
+        )
+        pkt = packet.AuthPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=dictionary,
+        )
+
+        reply = server.create_reply_packet(pkt)
+
+        self.assertTrue(reply.has_message_authenticator())
 
     def test_request_handler_auth(self):
         mock_pkt = MagicMock(code=PacketType.AccessRequest)

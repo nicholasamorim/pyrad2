@@ -1,12 +1,16 @@
 import select
 import socket
 import unittest
+import os
+from .base import TEST_ROOT_PATH
 from .mock import MockFinished
 from .mock import MockFd
 from .mock import MockPoll
 from .mock import MockSocket
 from .mock import MockClassMethod
 from .mock import UnmockClassMethods
+from pyrad2 import packet
+from pyrad2.dictionary import Dictionary
 from pyrad2.packet import PacketError
 from pyrad2.server import RemoteHost
 from pyrad2.server import Server
@@ -199,6 +203,81 @@ class AuthPacketHandlingTests(unittest.TestCase):
         self.assertTrue(self.server.handled is self.packet)
 
         Server.handle_auth_packet = hap
+
+
+class MessageAuthenticatorPolicyTests(unittest.TestCase):
+    def setUp(self):
+        self.dictionary = Dictionary(os.path.join(TEST_ROOT_PATH, "data/full"))
+        self.remote_host = RemoteHost("host", b"secret", "host")
+
+    def _server(self, **kwargs):
+        return Server(hosts={"host": self.remote_host}, dict=self.dictionary, **kwargs)
+
+    def _parse_auth_packet(self, pkt):
+        parsed = packet.AuthPacket(
+            packet=pkt.request_packet(),
+            secret=b"secret",
+            dict=self.dictionary,
+        )
+        parsed.source = ("host", 12345)
+        return parsed
+
+    def _parse_auth_packet_bytes(self, data):
+        parsed = packet.AuthPacket(packet=data, secret=b"secret", dict=self.dictionary)
+        parsed.source = ("host", 12345)
+        return parsed
+
+    def _auth_packet(self, **attributes):
+        return packet.AuthPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self.dictionary,
+            **attributes,
+        )
+
+    def test_eap_message_requires_message_authenticator(self):
+        pkt = self._auth_packet()
+        pkt[79] = [b"\x02\x01\x00\x05\x01"]
+
+        with self.assertRaisesRegex(PacketError, "EAP-Message requires"):
+            self._server()._handle_auth_packet(self._parse_auth_packet(pkt))
+
+    def test_valid_message_authenticator_is_accepted(self):
+        server = self._server()
+        pkt = self._auth_packet()
+        pkt[79] = [b"\x02\x01\x00\x05\x01"]
+        pkt.add_message_authenticator()
+        parsed = self._parse_auth_packet(pkt)
+
+        server._handle_auth_packet(parsed)
+
+    def test_invalid_message_authenticator_is_rejected(self):
+        pkt = self._auth_packet()
+        pkt.add_message_authenticator()
+        data = bytearray(pkt.request_packet())
+        data[-1] ^= 0xFF
+
+        with self.assertRaisesRegex(PacketError, "Message-Authenticator is invalid"):
+            self._server()._handle_auth_packet(self._parse_auth_packet_bytes(bytes(data)))
+
+    def test_require_message_authenticator_rejects_plain_auth_request(self):
+        pkt = self._auth_packet()
+
+        with self.assertRaisesRegex(PacketError, "attribute is required"):
+            self._server(require_message_authenticator=True)._handle_auth_packet(
+                self._parse_auth_packet(pkt)
+            )
+
+    def test_create_reply_packet_preserves_request_message_authenticator_policy(self):
+        server = self._server()
+        pkt = self._auth_packet()
+        pkt.add_message_authenticator()
+        parsed = self._parse_auth_packet(pkt)
+
+        reply = server.create_reply_packet(parsed)
+
+        self.assertTrue(reply.has_message_authenticator())
 
 
 class AcctPacketHandlingTests(unittest.TestCase):

@@ -241,6 +241,67 @@ class PacketTests(unittest.TestCase):
             self.packet.verify_reply(reply=reply, rawreply=reply.raw_packet)
         )
 
+    def test_verify_reply_enforce_ma_requires_reply_message_authenticator(self):
+        request = packet.AuthPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self.dict,
+            message_authenticator=True,
+        )
+        request.request_packet()
+        reply = request.create_reply()
+        rawreply = reply.reply_packet()
+        parsed_reply = request.create_reply(packet=rawreply)
+
+        self.assertFalse(
+            request.verify_reply(parsed_reply, rawreply=rawreply, enforce_ma=True)
+        )
+
+    def test_verify_reply_enforce_ma_validates_reply_message_authenticator(self):
+        request = packet.AuthPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self.dict,
+        )
+        reply = request.create_reply()
+        reply.add_message_authenticator()
+        rawreply = reply.reply_packet()
+        parsed_reply = request.create_reply(packet=rawreply)
+
+        self.assertTrue(
+            request.verify_reply(parsed_reply, rawreply=rawreply, enforce_ma=True)
+        )
+
+    def test_verify_reply_rejects_present_invalid_message_authenticator(self):
+        request = packet.AuthPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self.dict,
+        )
+        reply = request.create_reply()
+        reply.add_message_authenticator()
+        rawreply = bytearray(reply.reply_packet())
+
+        # Corrupt only the Message-Authenticator, then recompute the response
+        # authenticator so verify_reply must catch the MA failure specifically.
+        offset = 20
+        while offset < len(rawreply):
+            attr_type = rawreply[offset]
+            attr_len = rawreply[offset + 1]
+            if attr_type == 80:
+                rawreply[offset + 2] ^= 0xFF
+                break
+            offset += attr_len
+        rawreply[4:20] = hashlib.md5(
+            rawreply[0:4] + request.authenticator + rawreply[20:] + request.secret
+        ).digest()
+        parsed_reply = request.create_reply(packet=bytes(rawreply))
+
+        self.assertFalse(request.verify_reply(parsed_reply, rawreply=bytes(rawreply)))
+
     def test_verify_message_authenticator(self):
         reply = self.packet.create_reply(
             **{

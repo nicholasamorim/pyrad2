@@ -14,6 +14,7 @@ from pyrad2.packet import (
     CoAPacket,
     Packet,
     PacketError,
+    prepare_reply_message_authenticator,
 )
 from pyrad2.server import RemoteHost, ServerPacketError
 
@@ -53,6 +54,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
             logger.info("[{}:{}] Transport closed", self.ip, self.port)
 
     def send_response(self, reply: Packet, addr: str) -> None:
+        self.server.prepare_reply_packet(reply)
         self.transport.sendto(reply.reply_packet(), addr)
 
     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]):
@@ -119,6 +121,7 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                 if self.server.enable_pkt_verify and not req.verify_packet():
                     raise PacketError("Packet verification failed")
 
+            self.server.validate_message_authenticator_policy(req)
             self.request_callback(self, req, addr)
         except Exception as exc:
             if self.server.debug:
@@ -175,6 +178,8 @@ class ServerAsync(ABC):
         dictionary: Optional[Dictionary] = None,
         enable_pkt_verify: bool = False,
         debug: bool = False,
+        require_message_authenticator: bool = False,
+        require_eap_message_authenticator: bool = True,
     ):
         """Initialize an async server.
 
@@ -185,11 +190,17 @@ class ServerAsync(ABC):
             hosts (dict[str, RemoteHost]): Hosts who we can talk to. A dictionary mapping IP to RemoteHost class instances.
             dictionary (Dictionary): RADIUS dictionary to use.
             enable_pkt_verify (bool): If true, the packet will be verified against its secret
+            require_message_authenticator (bool): Require Message-Authenticator
+                on incoming packets.
+            require_eap_message_authenticator (bool): Require
+                Message-Authenticator on packets containing EAP-Message.
         """
         self.hosts = hosts or {}
         self.dict = dictionary
         self.enable_pkt_verify = enable_pkt_verify
         self.debug = debug
+        self.require_message_authenticator = require_message_authenticator
+        self.require_eap_message_authenticator = require_eap_message_authenticator
 
         self.auth_port = auth_port
         self.acct_port = acct_port
@@ -198,6 +209,22 @@ class ServerAsync(ABC):
         self.auth_protocols: list[asyncio.Protocol] = []
         self.acct_protocols: list[asyncio.Protocol] = []
         self.coa_protocols: list[asyncio.Protocol] = []
+
+    def validate_message_authenticator_policy(self, req: Packet) -> None:
+        """Validate incoming Message-Authenticator policy for a request."""
+        req.validate_message_authenticator_policy(
+            require_message_authenticator=self.require_message_authenticator,
+            require_eap_message_authenticator=self.require_eap_message_authenticator,
+        )
+
+    def prepare_reply_packet(self, reply: Packet) -> None:
+        """Apply outgoing Message-Authenticator policy to a reply packet."""
+        if not isinstance(reply, Packet):
+            return
+        if self.require_message_authenticator or (
+            self.require_eap_message_authenticator and reply.has_eap_message()
+        ):
+            reply.ensure_message_authenticator()
 
     def _request_handler(
         self, protocol: DatagramProtocolServer, req: Packet, addr: str
@@ -280,8 +307,7 @@ class ServerAsync(ABC):
                 await proto.close_transport()
             proto_list.clear()
 
-    @staticmethod
-    def create_reply_packet(pkt: Packet, **attributes) -> Packet:
+    def create_reply_packet(self, pkt: Optional[Packet] = None, **attributes) -> Packet:
         """Create a reply packet.
         Create a new packet which can be returned as a reply to a received
         packet.
@@ -290,7 +316,22 @@ class ServerAsync(ABC):
             pkt (packet.Packet): Packet to process
             attributes (dict): Custom attributes to be added to the reply
         """
-        return pkt.create_reply(**attributes)
+        server = self if isinstance(self, ServerAsync) else None
+        if server is None:
+            request = self  # type: ignore[assignment]
+        else:
+            if pkt is None:
+                raise ValueError("Missing packet to reply to")
+            request = pkt
+        reply = request.create_reply(**attributes)
+        if server is not None:
+            prepare_reply_message_authenticator(
+                request,
+                reply,
+                require_message_authenticator=server.require_message_authenticator,
+                require_eap_message_authenticator=server.require_eap_message_authenticator,
+            )
+        return reply
 
     @abstractmethod
     def handle_auth_packet(
