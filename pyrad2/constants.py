@@ -1,10 +1,17 @@
 """RADIUS protocol constants shared across the package.
 
 Values mirror those defined in the relevant RFCs (RFC 2865, RFC 3576,
-RFC 3748, RFC 5176, RFC 5997).
+RFC 3748, RFC 5176, RFC 5997, RFC 6929).
 """
 
 from enum import IntEnum
+
+# RFC 6929 Extended-Type attribute codes. 241-244 carry a one-byte
+# extended-type field; 245-246 add a one-byte flags field whose top bit
+# (More) marks an attribute that continues across multiple AVPs.
+EXTENDED_ATTRIBUTE_TYPES: frozenset[int] = frozenset({241, 242, 243, 244})
+LONG_EXTENDED_ATTRIBUTE_TYPES: frozenset[int] = frozenset({245, 246})
+LONG_EXTENDED_MORE_FLAG: int = 0x80
 
 
 class PacketType(IntEnum):
@@ -67,5 +74,7 @@ DATATYPES = frozenset(
         "ether",
         "tlv",
         "integer64",
+        "extended",
+        "long-extended",
     ]
 )

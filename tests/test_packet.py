@@ -973,3 +973,150 @@ class ConcatAttributeTests(unittest.TestCase):
         pkt.decode_packet(header + attrs)
         # Two entries remain — concat must not affect plain string attributes.
         self.assertEqual(len(pkt[31]), 2)
+
+
+class ExtendedAttributeTests(unittest.TestCase):
+    """RFC 6929 extended attributes (types 241-244, no fragmentation)."""
+
+    def _make_dict(self):
+        return Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Frag-Status 241.1 integer\n"
+                "ATTRIBUTE Auth-Lifetime 241.2 integer\n"
+            )
+        )
+
+    def _make_packet(self, dictionary=None):
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=dictionary or self._make_dict(),
+        )
+
+    def test_encode_single_extended_avp(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("Frag-Status", 5)
+        encoded = pkt._pkt_encode_attributes()
+        # [241][len=7][ext_type=1][4 bytes integer]
+        self.assertEqual(encoded, b"\xf1\x07\x01\x00\x00\x00\x05")
+
+    def test_decode_single_extended_avp(self):
+        pkt = self._make_packet()
+        attrs = b"\xf1\x07\x01\x00\x00\x00\x05"
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + attrs)
+        # Stored under parent code 241 as a sub-attribute dict.
+        self.assertEqual(pkt[241], {1: [b"\x00\x00\x00\x05"]})
+        # And accessible by name via the parent.
+        self.assertEqual(pkt["Extended-Attribute-1"], {"Frag-Status": [5]})
+
+    def test_roundtrip_multiple_sub_attributes(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("Frag-Status", 5)
+        pkt.add_attribute("Auth-Lifetime", 3600)
+        encoded = pkt._pkt_encode_attributes()
+
+        decoded = self._make_packet()
+        header = struct.pack("!BBH", 1, 1, 20 + len(encoded)) + b"0123456789ABCDEF"
+        decoded.decode_packet(header + encoded)
+        self.assertEqual(
+            decoded["Extended-Attribute-1"],
+            {"Frag-Status": [5], "Auth-Lifetime": [3600]},
+        )
+
+    def test_encode_rejects_oversized_value(self):
+        d = Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Huge-Blob 241.7 octets\n"
+            )
+        )
+        pkt = self._make_packet(d)
+        # 253 bytes is too large for one extended AVP (cap is 252).
+        pkt[241] = {7: [b"A" * 253]}
+        self.assertRaises(ValueError, pkt._pkt_encode_attributes)
+
+
+class LongExtendedAttributeTests(unittest.TestCase):
+    """RFC 6929 long-extended attributes (245-246), with fragmentation."""
+
+    def _make_dict(self):
+        return Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-5 245 long-extended\n"
+                "ATTRIBUTE WiMAX-Blob 245.1 octets\n"
+            )
+        )
+
+    def _make_packet(self):
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self._make_dict(),
+        )
+
+    def test_encode_short_value_fits_single_fragment(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("WiMAX-Blob", b"hello")
+        encoded = pkt._pkt_encode_attributes()
+        # [245][len=9][ext_type=1][flags=0][value]
+        self.assertEqual(encoded, b"\xf5\x09\x01\x00hello")
+
+    def test_encode_long_value_splits_with_more_flag(self):
+        pkt = self._make_packet()
+        # Max payload per fragment is 251 bytes, so 500 bytes → 2 fragments
+        # (251 + 249), with More set on the first. The single-AVP encoder
+        # rejects >253-byte octets, so set raw bytes on the parent dict
+        # directly — that's the storage shape decode produces too.
+        pkt[245] = {1: [b"A" * 500]}
+        encoded = pkt._pkt_encode_attributes()
+
+        # First fragment: [245][255][1][0x80][251 bytes A]
+        first = encoded[:255]
+        self.assertEqual(first[:4], b"\xf5\xff\x01\x80")
+        self.assertEqual(first[4:], b"A" * 251)
+
+        # Second fragment: [245][253][1][0x00][249 bytes A]
+        second = encoded[255:]
+        self.assertEqual(second[:4], b"\xf5\xfd\x01\x00")
+        self.assertEqual(second[4:], b"A" * 249)
+
+    def test_decode_reassembles_fragments(self):
+        pkt = self._make_packet()
+        # Manually build a 500-byte split payload like the encoder produces.
+        payload = b"A" * 500
+        first = (
+            struct.pack("!BBBB", 245, 4 + 251, 1, 0x80) + payload[:251]
+        )
+        second = (
+            struct.pack("!BBBB", 245, 4 + 249, 1, 0x00) + payload[251:]
+        )
+        attrs = first + second
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + attrs)
+
+        self.assertEqual(pkt["Extended-Attribute-5"], {"WiMAX-Blob": [payload]})
+
+    def test_roundtrip_large_value(self):
+        pkt = self._make_packet()
+        original = bytes(range(256)) * 5  # 1280 bytes — six fragments
+        pkt[245] = {1: [original]}
+        encoded = pkt._pkt_encode_attributes()
+
+        decoded = self._make_packet()
+        header = struct.pack("!BBH", 1, 1, 20 + len(encoded)) + b"0123456789ABCDEF"
+        decoded.decode_packet(header + encoded)
+        self.assertEqual(decoded[245], {1: [original]})
+
+    def test_decode_drops_orphan_fragment(self):
+        # A fragment with More=1 that never sees its terminator must not
+        # produce a partial value on the packet.
+        pkt = self._make_packet()
+        orphan = struct.pack("!BBBB", 245, 9, 1, 0x80) + b"hello"
+        header = struct.pack("!BBH", 1, 1, 20 + len(orphan)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + orphan)
+        # No completed value was finalized.
+        self.assertNotIn(245, pkt)

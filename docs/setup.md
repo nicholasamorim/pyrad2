@@ -54,7 +54,8 @@ pyrad2 aims to load real-world FreeRADIUS dictionaries without modification.
 **Data types**: `string`, `octets`, `integer`, `signed`, `short`, `byte`,
 `integer64`, `date`, `ipaddr`, `ipv6addr`, `ipv6prefix`, `ifid` (RFC 3162
 8-byte Interface-Id), `ether` (RFC 6911 MAC address), `abinary` (Ascend
-filter format), and `tlv` (one level of nesting).
+filter format), `tlv` (one level of nesting), `extended` and
+`long-extended` (RFC 6929 wrappers).
 
 **Attribute options** (comma-separated, after the type column):
 
@@ -69,5 +70,24 @@ VSA wire format is honored end-to-end. `type_len` may be 1, 2, or 4 bytes
 and `len_len` may be 0, 1, or 2 bytes. The default when no `format=` is
 declared follows RFC 2865 §5.26 (`1,1`).
 
-**Not yet supported**: RFC 6929 extended / long-extended attributes
-(types 241–246) and TLV nesting deeper than two levels.
+**RFC 6929 extended attributes** (types 241–246): declare the wrapper as
+`extended` (241–244) or `long-extended` (245–246), then add sub-attributes
+using dotted-code notation:
+
+```
+ATTRIBUTE Extended-Attribute-1  241    extended
+ATTRIBUTE Frag-Status           241.1  integer
+ATTRIBUTE Auth-Lifetime         241.2  integer
+
+ATTRIBUTE Extended-Attribute-5  245    long-extended
+ATTRIBUTE WiMAX-Blob            245.1  octets
+```
+
+Values are accessed by name on the packet (`pkt["Frag-Status"] = 5`) and
+read back through the parent (`pkt["Extended-Attribute-1"]` returns a
+dict of sub-attribute name → values). Long-extended values larger than
+251 bytes are fragmented across multiple AVPs on send and reassembled on
+receive — callers see one logical value either way.
+
+**Not yet supported**: TLV nesting deeper than two levels, and the
+Extended-Vendor-Specific (`evs`) type.

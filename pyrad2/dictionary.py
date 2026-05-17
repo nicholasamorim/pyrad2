@@ -76,9 +76,15 @@ where ``type_len`` is 1, 2, or 4 and ``len_len`` is 0, 1, or 2. The
 default (RFC 2865 §5.26) is ``format=1,1``. Stored formats are applied
 when encoding and decoding Vendor-Specific Attributes for that vendor.
 
+RFC 6929 extended attributes are recognized via the dotted-code syntax
+(e.g. ``ATTRIBUTE Frag-Status 241.1 integer``) when the parent (type
+codes 241-246) is declared as ``extended`` or ``long-extended``. The
+fragmentation flag for ``long-extended`` is handled transparently on
+both encode and decode.
+
 Limitations:
     * Nested TLVs deeper than two levels are not yet supported.
-    * RFC 6929 extended/long-extended attributes are not yet supported.
+    * Extended-Vendor-Specific (EVS, ``evs`` type) is not yet supported.
 """
 
 from copy import copy
@@ -302,11 +308,13 @@ class Dictionary:
             has_tag=has_tag,
             concat=concat,
         )
-        if datatype == "tlv":
-            # save attribute in tlvs
+        if datatype in ("tlv", "extended", "long-extended"):
+            # Save the container so subsequent dotted-code sub-attributes
+            # (e.g. ``ATTRIBUTE Frag-Status 241.1 integer``) can find their
+            # parent regardless of whether the wrapper is a TLV or an
+            # RFC 6929 extended attribute.
             state["tlvs"][code] = self.attributes[attribute]
         if is_sub_attribute:
-            # save sub attribute in parent tlv and update their parent field
             state["tlvs"][parent_code].sub_attributes[code] = attribute
             self.attributes[attribute].parent = state["tlvs"][parent_code]
 

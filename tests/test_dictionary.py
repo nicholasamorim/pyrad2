@@ -307,6 +307,38 @@ class DictionaryParsingTests(unittest.TestCase):
         else:
             self.fail()
 
+    def testExtendedParentAndSubAttribute(self):
+        # RFC 6929: parent 241 declared as ``extended``, with a sub-attribute
+        # under the dotted-code form ``241.1``.
+        self.dict.read_dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Frag-Status 241.1 integer\n"
+            )
+        )
+        parent = self.dict["Extended-Attribute-1"]
+        self.assertEqual(parent.type, "extended")
+        self.assertEqual(parent.code, 241)
+        sub = self.dict["Frag-Status"]
+        self.assertTrue(sub.is_sub_attribute)
+        self.assertEqual(sub.code, 1)
+        self.assertIs(sub.parent, parent)
+        self.assertEqual(parent.sub_attributes, {1: "Frag-Status"})
+
+    def testLongExtendedParentAndSubAttribute(self):
+        self.dict.read_dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-5 245 long-extended\n"
+                "ATTRIBUTE WiMAX-Blob 245.1 octets\n"
+            )
+        )
+        parent = self.dict["Extended-Attribute-5"]
+        self.assertEqual(parent.type, "long-extended")
+        self.assertEqual(parent.code, 245)
+        sub = self.dict["WiMAX-Blob"]
+        self.assertTrue(sub.is_sub_attribute)
+        self.assertIs(sub.parent, parent)
+
     def testVendorFormatStoredAndRetrievable(self):
         # Default format is (1, 1) when no format= is declared.
         self.dict.read_dictionary(StringIO("VENDOR Cisco 9"))

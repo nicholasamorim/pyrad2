@@ -495,7 +495,10 @@ class Packet(OrderedDict):
 
         values = super().__getitem__(self._encode_key(key))
         attr = self.dict.attributes[key]
-        if attr.type == "tlv":  # return map from sub attribute code to its values
+        if attr.type in ("tlv", "extended", "long-extended"):
+            # Container attributes — return a map from sub-attribute name to
+            # its decoded values. Storage shape is identical across TLV and
+            # RFC 6929 extended/long-extended containers.
             map_result: dict = {}
             for sub_attr_key, sub_attr_val in values.items():
                 sub_attr_name = attr.sub_attributes[sub_attr_key]
@@ -702,21 +705,95 @@ class Packet(OrderedDict):
         attr = dictionary.attributes.get(self._decode_key(code))
         return attr is not None and getattr(attr, "concat", False)
 
+    def _container_type(self, code: Hashable) -> Optional[str]:
+        """Return the container datatype (``tlv``, ``extended``, ``long-extended``) or None."""
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return None
+        attr = dictionary.attributes.get(self._decode_key(code))
+        if attr is None:
+            return None
+        if attr.type in ("tlv", "extended", "long-extended"):
+            return attr.type
+        return None
+
+    @staticmethod
+    def _split_into_chunks(data: bytes, max_chunk: int) -> list[bytes]:
+        """Split ``data`` into chunks of at most ``max_chunk`` bytes.
+
+        Empty input produces a single empty chunk so callers that need at
+        least one fragment (e.g. long-extended) get a deterministic result.
+        """
+        if not data:
+            return [b""]
+        return [data[i : i + max_chunk] for i in range(0, len(data), max_chunk)]
+
+    def _pkt_encode_extended(self, parent_code: int, sub_attributes: dict) -> bytes:
+        """Encode RFC 6929 extended attributes (types 241-244).
+
+        Each sub-attribute value is emitted as one AVP of the form
+        ``[parent][len][ext_type][value]``. The single-byte length field
+        caps the value at 252 bytes; longer values require a parent
+        declared as ``long-extended``.
+        """
+        result = b""
+        for ext_type, values in sub_attributes.items():
+            for value in values:
+                if len(value) > 252:
+                    raise ValueError(
+                        "Extended attribute value too long; declare the "
+                        "parent as long-extended to enable fragmentation"
+                    )
+                result += (
+                    struct.pack("!BBB", parent_code, 3 + len(value), ext_type) + value
+                )
+        return result
+
+    def _pkt_encode_long_extended(
+        self, parent_code: int, sub_attributes: dict
+    ) -> bytes:
+        """Encode RFC 6929 long-extended attributes (types 245-246).
+
+        Values larger than 251 bytes are fragmented across multiple AVPs.
+        The More flag (bit 0x80 of the flags byte) is set on every
+        fragment except the last so the receiver can reassemble.
+        """
+        from pyrad2.constants import LONG_EXTENDED_MORE_FLAG
+
+        result = b""
+        for ext_type, values in sub_attributes.items():
+            for value in values:
+                chunks = self._split_into_chunks(value, 251)
+                for index, chunk in enumerate(chunks):
+                    more = LONG_EXTENDED_MORE_FLAG if index < len(chunks) - 1 else 0
+                    result += (
+                        struct.pack(
+                            "!BBBB", parent_code, 4 + len(chunk), ext_type, more
+                        )
+                        + chunk
+                    )
+        return result
+
     def _pkt_encode_attributes(self) -> bytes:
         result = b""
         for code, datalst in self.items():
-            if self._pkt_is_tlv_attribute(code):
+            container = self._container_type(code)
+            if container == "tlv":
                 result += self._pkt_encode_tlv(code, datalst)
+                continue
+            if container == "extended":
+                result += self._pkt_encode_extended(code, datalst)
+                continue
+            if container == "long-extended":
+                result += self._pkt_encode_long_extended(code, datalst)
                 continue
             concat = self._is_concat_attribute(code)
             for data in datalst:
                 if concat and len(data) > 253:
                     # Split values larger than one AVP into 253-byte chunks;
                     # the receiver concatenates per RFC 7268 §3.6.
-                    for start in range(0, len(data), 253):
-                        result += self._pkt_encode_attribute(
-                            code, data[start : start + 253]
-                        )
+                    for chunk in self._split_into_chunks(data, 253):
+                        result += self._pkt_encode_attribute(code, chunk)
                 else:
                     result += self._pkt_encode_attribute(code, data)
         return result
@@ -786,6 +863,39 @@ class Packet(OrderedDict):
         attr = self.dict.attributes.get(self._decode_key(code))
         return attr is not None and attr.type == "tlv"
 
+    def _pkt_decode_extended(self, parent_code: int, value: bytes) -> None:
+        """Decode one extended AVP (RFC 6929 §2.1) into ``self[parent][ext_type]``."""
+        if not value:
+            return
+        ext_type = value[0]
+        payload = value[1:]
+        parent_dict = self.setdefault(parent_code, {})
+        parent_dict.setdefault(ext_type, []).append(payload)
+
+    def _pkt_decode_long_extended_fragment(
+        self, parent_code: int, value: bytes
+    ) -> None:
+        """Decode one long-extended fragment (RFC 6929 §2.2), reassembling on M=0.
+
+        Fragments accumulate in ``self._long_ext_buf`` until the More flag
+        clears, at which point the joined value is appended to the parent.
+        """
+        from pyrad2.constants import LONG_EXTENDED_MORE_FLAG
+
+        if len(value) < 2:
+            return
+        ext_type = value[0]
+        flags = value[1]
+        payload = value[2:]
+
+        buf = self._long_ext_buf.setdefault((parent_code, ext_type), bytearray())
+        buf.extend(payload)
+
+        if not flags & LONG_EXTENDED_MORE_FLAG:
+            parent_dict = self.setdefault(parent_code, {})
+            parent_dict.setdefault(ext_type, []).append(bytes(buf))
+            del self._long_ext_buf[(parent_code, ext_type)]
+
     def decode_packet(self, packet: bytes) -> None:
         """Initialize the object from raw packet data.  Decode a packet as
         received from the network and decode it.
@@ -806,6 +916,7 @@ class Packet(OrderedDict):
             raise PacketError("Packet length is too long (%d)" % length)
 
         self.clear()
+        self._long_ext_buf: dict[tuple[int, int], bytearray] = {}
 
         packet = packet[20:]
         while packet:
@@ -825,10 +936,16 @@ class Packet(OrderedDict):
                 # POST: Message Authenticator AVP is present.
                 self.message_authenticator = True
                 self.setdefault(key, []).append(value)
-            elif self._pkt_is_tlv_attribute(key):
-                self._pkt_decode_tlv_attribute(key, value)
             else:
-                self.setdefault(key, []).append(value)
+                container = self._container_type(key)
+                if container == "tlv":
+                    self._pkt_decode_tlv_attribute(key, value)
+                elif container == "extended":
+                    self._pkt_decode_extended(key, value)
+                elif container == "long-extended":
+                    self._pkt_decode_long_extended_fragment(key, value)
+                else:
+                    self.setdefault(key, []).append(value)
 
             packet = packet[attrlen:]
 
