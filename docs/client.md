@@ -133,9 +133,7 @@ PYTHONPATH=. uv run examples/status_radsec.py
 
 The UDP `examples/status.py` script can't reach a RadSec server - they're on different ports and transports.
 
----
-
-# RadSec
+## RadSec
 
 !!! info "Status"
 
@@ -145,7 +143,7 @@ RadSec replaces UDP+MD5 with TLS/TCP on port 2083. Auth, accounting, and dynamic
 
 For server-side details and a discussion of what the RFC actually changes, see [RadSec in the server docs](server.md#radsec-radius-over-tls).
 
-## Creating a RadSec client
+### Creating a RadSec client
 
 ```python
 from pyrad2.radsec.client import RadSecClient
@@ -163,9 +161,7 @@ client = RadSecClient(
 
 A runnable example is in [`examples/auth_radsec.py`](https://github.com/nicholasamorim/pyrad2/blob/master/examples/auth_radsec.py).
 
----
-
-# RADIUS/1.1 (RFC 9765)
+## RADIUS/1.1 (RFC 9765)
 
 !!! warning "Status"
 
@@ -194,7 +190,7 @@ reply = await client.send_packet(req)
 print(client._negotiated_version)  # RadiusVersion.V1_1 if both sides agreed
 ```
 
-## Why `set_obfuscated`?
+### Why `set_obfuscated`?
 
 A client that advertises *both* v1.0 and v1.1 doesn't know which one will be negotiated until the TLS handshake completes. But attribute assignment happens **before** that. `set_obfuscated` defers the encoding decision until send time:
 
@@ -210,7 +206,7 @@ The same helper works for `Tunnel-Password`, `MS-MPPE-*-Key`, and other `encrypt
 
 For v1.0-only clients, the historic `req["User-Password"] = req.pw_crypt("...")` pattern still works.
 
-## Strict v1.1 mode and downgrades
+### Strict v1.1 mode and downgrades
 
 If your client is configured for `(V1_1,)` only and the server doesn't advertise the `radius/1.1` ALPN, `send_packet()` returns `None` after raising `PacketError` internally - the client refuses to silently downgrade ([RFC 9765 §3.3](https://datatracker.ietf.org/doc/html/rfc9765#section-3.3)).
 
@@ -222,6 +218,6 @@ To distinguish that case from a normal timeout, check `client.last_error` after 
 | `TimeoutError` | Network timeout |
 | `None` | Clean no-reply |
 
-## TLS version
+### TLS version
 
 RFC 9765 §3.4 mandates **TLS 1.3 or later** whenever v1.1 is configured. The constructor auto-promotes `minimum_tls_version` to `TLSv1_3` in that case.

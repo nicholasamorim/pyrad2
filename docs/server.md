@@ -191,9 +191,7 @@ pyrad2 validates `Message-Authenticator` whenever it's present. By default:
 
 To require it on **every** incoming packet, pass `require_message_authenticator=True` when constructing `Server`, `ServerAsync`, or `RadSecServer`.
 
----
-
-# RadSec - RADIUS over TLS
+## RadSec - RADIUS over TLS
 
 !!! info "Status"
 
@@ -203,7 +201,7 @@ RadSec is RADIUS over TLS/TCP instead of UDP. It replaces the MD5-based packet a
 
 The shared secret defaults to `radsec` per the RFC, but you can override it per host.
 
-## A minimal RadSec server
+### A minimal RadSec server
 
 ```python
 import os, asyncio
@@ -261,9 +259,8 @@ A full example lives in [`examples/server_radsec.py`](https://github.com/nichola
 
 Status-Server health checks reuse the same TLS/TCP connection as everything else. Use [`examples/status_radsec.py`](https://github.com/nicholasamorim/pyrad2/blob/master/examples/status_radsec.py) - the UDP `status.py` script can't reach a RadSec server.
 
----
 
-# RADIUS/1.1 (RFC 9765)
+## RADIUS/1.1 (RFC 9765)
 
 !!! warning "Status"
 
@@ -276,7 +273,7 @@ RADIUS/1.1 is a **TLS-only profile** of RADIUS that drops the MD5 baggage now th
 | `radius/1.0` | Historic RADIUS, MD5-based ([RFC 2865](https://datatracker.ietf.org/doc/html/rfc2865)) |
 | `radius/1.1` | RFC 9765 - no MD5, no Message-Authenticator, Token instead of Request Authenticator |
 
-## What changes in v1.1
+### What changes in v1.1
 
 | Area | Behavior |
 | --- | --- |
@@ -288,7 +285,7 @@ RADIUS/1.1 is a **TLS-only profile** of RADIUS that drops the MD5 baggage now th
 
 In your auth handler, `packet["User-Password"]` is the literal cleartext bytes the client sent.
 
-## Enabling v1.1
+### Enabling v1.1
 
 Pass `radius_versions=...` to the server constructor. The default is `(V1_0,)` for backward compatibility - no ALPN string is advertised, so historic peers see byte-identical TLS handshakes.
 
@@ -301,7 +298,7 @@ server = RadSecServer(
 )
 ```
 
-## Negotiation outcomes
+### Negotiation outcomes
 
 | Server advertises | Client advertises | Result |
 | --- | --- | --- |
@@ -319,7 +316,7 @@ RFC 9765 §3.4 also mandates **TLS 1.3 or later** whenever v1.1 is in play. `Rad
 
 The negotiated version is available on every parsed packet as `packet.radius_version`. The RadSec server logs `RADSEC connection established from ... (ALPN=..., RADIUS/...)` on every handshake.
 
-## Writing a v1.1-aware handler
+### Writing a v1.1-aware handler
 
 Most handlers work unchanged. The only practical difference is the `User-Password` access pattern: in v1.1 it's already plaintext; in v1.0 you decrypt it as before.
 
