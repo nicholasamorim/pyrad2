@@ -403,3 +403,22 @@ VALUE		Packet-Type	Accounting-Message		10
 VALUE		Packet-Type	Access-Challenge		11
 VALUE		Packet-Type	Status-Server			12
 VALUE		Packet-Type	Status-Client			13
+
+#
+# Microsoft Vendor-Specific Attributes (RFC 2548).
+# Required by the pyrad2.mschap / pyrad2.mppe helpers.
+#
+VENDOR		Microsoft	311
+
+BEGIN-VENDOR Microsoft
+ATTRIBUTE	MS-CHAP-Response		1	octets
+ATTRIBUTE	MS-CHAP-Error			2	string
+ATTRIBUTE	MS-CHAP-Challenge		11	octets
+ATTRIBUTE	MS-CHAP-Domain			10	string
+ATTRIBUTE	MS-MPPE-Send-Key		16	octets	encrypt=2
+ATTRIBUTE	MS-MPPE-Recv-Key		17	octets	encrypt=2
+ATTRIBUTE	MS-MPPE-Encryption-Policy	7	integer
+ATTRIBUTE	MS-MPPE-Encryption-Types	8	integer
+ATTRIBUTE	MS-CHAP2-Response		25	octets
+ATTRIBUTE	MS-CHAP2-Success		26	string
+END-VENDOR Microsoft

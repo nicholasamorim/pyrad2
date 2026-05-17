@@ -209,6 +209,7 @@ class Packet(OrderedDict):
         id: Optional[int] = None,
         secret: bytes = b"radsec",
         authenticator: Optional[bytes] = None,
+        radius_version: RadiusVersion = RadiusVersion.V1_0,
         **attributes,
     ):
         """Initializes a Packet instance.
@@ -218,19 +219,17 @@ class Packet(OrderedDict):
             id (int): Packet identification number (8 bits).
             secret (str): Secret needed to communicate with a RADIUS server.
             authenticator (bytes): Optional authenticator
-            attributes (dict): Attributes to set in the packet
             radius_version (RadiusVersion): RFC 9765 protocol version. Default
                 ``V1_0`` preserves historic MD5 behavior; ``V1_1`` flips the
                 packet over to the TLS-only profile (no MD5 obfuscation, no
                 Message-Authenticator, Token in place of Request/Response
                 Authenticator). Set this *before* decoding raw bytes.
+            attributes (dict): Attributes to set in the packet
         """
         super().__init__()
-        # radius_version must be set before decode_packet runs so attribute
-        # de-obfuscation (salt_decrypt etc.) knows which profile to use.
-        self.radius_version: RadiusVersion = attributes.pop(
-            "radius_version", RadiusVersion.V1_0
-        )
+        # Must be set before decode_packet runs so attribute de-obfuscation
+        # (salt_decrypt etc.) knows which profile to use.
+        self.radius_version: RadiusVersion = radius_version
         # Sidecar for attributes whose obfuscation depends on the
         # negotiated radius_version. ``set_obfuscated()`` writes here; the
         # actual encoding happens just before ``request_packet`` /

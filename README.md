@@ -1,81 +1,106 @@
-<img src="docs/logo.png" width="10%" height="auto"> 
+<img src="docs/logo.png" width="10%" height="auto">
+
+# pyrad2
 
 [![Tests](https://github.com/nicholasamorim/pyrad2/actions/workflows/python-test.yml/badge.svg)](https://github.com/nicholasamorim/pyrad2/actions/workflows/python-test.yml)
 [![python](https://img.shields.io/badge/Python-3.12+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
-[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)]([https://github.com/psf/black](https://github.com/astral-sh/uv))
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/uv)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
-pyrad2 is an implementation of a RADIUS client/server as described in RFC2865 and of RADSEC client/server as described in RFC6614. It takes care of all the details like building RADIUS packets,sending them and decoding responses.
+**A modern Python toolkit for building RADIUS clients and servers.**
 
-**Documentation can be found [here](https://nicholasamorim.github.io/pyrad2/).**
+pyrad2 gives you the protocol — packet encoding, dictionary parsing, transport handling, retransmission, TLS — so you can write the business logic. Build an authentication backend, a CoA proxy, a RadSec accounting collector, or a network-access controller without touching wire formats.
 
-# Introduction
+> 📚 **Full documentation: [nicholasamorim.github.io/pyrad2](https://nicholasamorim.github.io/pyrad2/)**
 
-[pyrad2](https://github.com/nicholasamorim/pyrad2) is an implementation of a RADIUS client/server as described in RFC2865. It takes care of all the details like building RADIUS packets, sending them and decoding responses.
-
-# Differences from Pyrad
-
-What this fork does differently from upstream [pyrad](https://github.com/pyradius/pyrad):
-   
-- Adds **RadSec** (RFC 6614) client and server (experimental)
-- Adds **RADIUS/1.1** (RFC 9765, experimental) over RadSec via TLS ALPN negotiation — drops MD5 obfuscation, Message-Authenticator, and Request/Response Authenticator MD5 since TLS already authenticates the bytes; falls back to historic RadSec when either side doesn't advertise the new ALPN
-- Adds **Status-Server** (RFC 5997) health checks across sync, async, and RadSec
-- Adds **RFC 5080 §2.2.2 duplicate detection / response cache** — retransmitted Access/Accounting/CoA/Disconnect-Requests replay the cached reply bytes instead of re-running the handler, which is what keeps EAP `State` continuity intact and stops accounting double-counts
-- Adds **Message-Authenticator** enforcement (validated whenever present, required for EAP, opt-in to require on every packet)
-- Adds **CoA/Disconnect** (RFC 5176) handling with default NAK behavior + `Error-Cause` so unhandled requests are answered cleanly
-- **Loads FreeRADIUS dictionaries** with broad fidelity: `ifid` (RFC 3162) and `ether` (RFC 6911) types, the `concat` attribute option (RFC 7268), the per-vendor `format=` directive (1/2/4-byte type fields, 0/1/2-byte length fields), RFC 6929 extended / long-extended attributes (types 241–246) with transparent fragmentation, and EVS (Extended-Vendor-Specific) via `BEGIN-VENDOR parent=` syntax
-- Adds a `PYRAD2_TRACE=1` wire-level packet dump for every `request_packet` / `reply_packet` / `decode_packet`
-- Adds [`scenarios/`](scenarios) — single-process end-to-end demos that show a full RADIUS exchange on one log
-- Drops Python <3.12 and the `twisted` integration; converts the entire codebase to snake_case (see [Pyrad Compatibility](docs/compatibility.md))
-- Extensive typing (mypy-clean) and significantly higher test coverage
-- Numerous async-client bug fixes (retry/timeout correctness, EAP-MD5 parity with the sync client)
-
-Note that this is _not_ a stand-alone Radius implementation like [FreeRadius](https://www.freeradius.org). You are supposed to inherit the server classes and code your own behind-the-scenes implementation. This package allows you to code your business logic on top of it.
-
-# Requirements & Installation
-
-pyrad2 requires Python 3.12 and uses [uv](https://github.com/astral-sh/uv). On a Mac, you can simply run `brew install uv`.
-
-# Examples and scenarios
-
-See the [Getting Started guide](https://nicholasamorim.github.io/pyrad2/setup/) for a better overview.
-
-The repo ships two complementary surfaces depending on what you want:
-
-- **[`examples/`](examples)** — operational scripts to **copy into your project** and edit. Server runs in one terminal, client in another. Targets: `make server`, `make auth`, `make server_radsec`, `make server_coa`, `make acct`, etc.
-- **[`scenarios/`](scenarios)** — single-process end-to-end demos that run a server **and** client in one event loop. Not meant to be edited — they're runnable explanations of what a RADIUS flow looks like, top to bottom, on one log. This is the fastest way to learn what pyrad2 actually does.
+## Install
 
 ```bash
-make demo                  # all seven sequentially
+pip install pyrad2     # or: uv add pyrad2
+```
 
-make scenario_auth         # Access-Request → Access-Accept (UDP, RFC 2865)
+Requires Python **3.12+**.
+
+## Quick look
+
+```python
+from pyrad2.client_async import ClientAsync
+from pyrad2.dictionary import Dictionary
+from pyrad2.constants import PacketType
+
+client = ClientAsync(server="radius.example.com", secret=b"...", dict=Dictionary("dictionary"))
+await client.initialize_transports(enable_auth=True)
+
+req = client.create_auth_packet(User_Name="alice", User_Password="hunter2")
+reply = await client.send_packet(req)
+
+if reply.code == PacketType.AccessAccept:
+    print("Welcome,", reply["User-Name"][0])
+```
+
+Head to the [Getting Started guide](https://nicholasamorim.github.io/pyrad2/setup/) for the full walkthrough.
+
+## What's in the box
+
+| Feature | Spec |
+| --- | --- |
+| RADIUS client & server (sync + async) | [RFC 2865](https://datatracker.ietf.org/doc/html/rfc2865) |
+| RadSec — RADIUS over TLS | [RFC 6614](https://datatracker.ietf.org/doc/html/rfc6614) |
+| RADIUS/1.1 over RadSec (experimental) | [RFC 9765](https://datatracker.ietf.org/doc/html/rfc9765) |
+| CoA & Disconnect (Dynamic Authorization) | [RFC 5176](https://datatracker.ietf.org/doc/html/rfc5176) |
+| Status-Server health checks | [RFC 5997](https://datatracker.ietf.org/doc/html/rfc5997) |
+| Duplicate detection / response cache | [RFC 5080 §2.2.2](https://datatracker.ietf.org/doc/html/rfc5080#section-2.2.2) |
+| FreeRADIUS dictionary support | Extended attributes, vendor formats, EVS |
+| Wire-level packet tracing | `PYRAD2_TRACE=1` |
+
+pyrad2 is a **library**, not a daemon. It is not a drop-in replacement for [FreeRADIUS](https://freeradius.org); it gives you the moving parts to build your own.
+
+## See it run
+
+Two complementary surfaces ship with the repo:
+
+- **[`scenarios/`](scenarios)** — single-process, end-to-end demos. A server **and** a client run in the same event loop so the full exchange shows up on one log. **Don't edit them — they're runnable explanations.**
+- **[`examples/`](examples)** — operational scripts you copy into your project and edit.
+
+```bash
+make demo                  # all scenarios sequentially
+
+make scenario_auth         # Access-Request → Access-Accept (UDP)
 make scenario_acct         # Accounting-Request → Accounting-Response
 make scenario_coa          # CoA-Request → CoA-ACK (RFC 5176)
 make scenario_status       # Status-Server health check (RFC 5997)
-make scenario_dedup        # Duplicate detection / response cache (RFC 5080)
-make scenario_radsec       # RadSec (RFC 6614) — mutual TLS, Access-Request
-make scenario_radsec_v11   # RADIUS/1.1 (RFC 9765) — ALPN-negotiated v1.1 over RadSec
+make scenario_dedup        # Duplicate detection (RFC 5080)
+make scenario_radsec       # RadSec over mutual TLS (RFC 6614)
+make scenario_radsec_v11   # RADIUS/1.1 over RadSec (RFC 9765)
 ```
 
-Set `PYRAD2_TRACE=1` on any script — scenario, example, or your own code — to dump every packet's wire bytes and decoded AVPs as they cross `request_packet` / `reply_packet` / `decode_packet`. Pair it with a scenario for a "watch a full RADIUS exchange one byte at a time" view:
+Watch the actual bytes on the wire by setting `PYRAD2_TRACE=1` on any script:
 
 ```bash
 PYRAD2_TRACE=1 make scenario_auth
 ```
 
-# Tests
+## Documentation
 
-Run `make test`
+- **[Getting Started](https://nicholasamorim.github.io/pyrad2/setup/)** — install, RADIUS in one minute, run an exchange
+- **[Running a Server](https://nicholasamorim.github.io/pyrad2/server/)** — auth, accounting, CoA, RadSec, RADIUS/1.1
+- **[Making Requests](https://nicholasamorim.github.io/pyrad2/client/)** — clients, EAP, health checks, RadSec
+- **[Dictionary Reference](https://nicholasamorim.github.io/pyrad2/dictionary/)** — every supported type and option
+- **[Migrating from pyrad](https://nicholasamorim.github.io/pyrad2/compatibility/)** — breaking changes since 2.0
 
-# Author, Copyright, Availability
+## Tests
 
-pyrad2 is currently maintaned by Nicholas Amorim.
+```bash
+make test
+```
+
+## Author, Copyright, Availability
+
+pyrad2 is currently maintained by Nicholas Amorim.
 
 pyrad was written by [Wichert Akkerman](wichert@wiggy.net) and is maintained by Christian Giese (GIC-de) and Istvan Ruzman (Istvan91).
 
-This project is licensed under a BSD license.
+This project is licensed under a BSD license. Copyright and license information can be found in `LICENSE.txt`.
 
-Copyright and license information can be found in the LICENSE.txt file.
-
-Bugs and wishes can be submitted in the pyrad2 [issue tracker](https://github.com/nicholasamorim/pyrad2/issues) on GitHub.
+Bugs and wishes can be submitted in the pyrad2 [issue tracker](https://github.com/nicholasamorim/pyrad2/issues) on GitHub. PRs are very welcome.

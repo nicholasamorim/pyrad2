@@ -9,11 +9,12 @@ theme:
     
 nav:
   - Home: index.md
-  - Getting Started:
-    - Setup and Concepts: setup.md
+  - Getting Started: setup.md
+  - Guides:
     - Running a RADIUS Server: server.md
     - Making RADIUS Requests: client.md
-  - Pyrad Compatibility : compatibility.md
+    - Dictionary Reference: dictionary.md
+  - Migrating from pyrad: compatibility.md
   - API Reference:
       - server: api/server.md
       - server_async: api/server_async.md
@@ -43,7 +44,11 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
   - admonition
+  - attr_list
+  - md_in_html
   - pymdownx.details
 
 plugins:
