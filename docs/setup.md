@@ -46,3 +46,74 @@ dictfile = dictionary.Dictionary("dictionary")
 ```
 
 You are actually passing a _path_ to a file (or a [file-like object](https://docs.python.org/3/library/io.html)) called `dictionary`, so make sure the file you pass is accessible from your code and it's a valid dictionary file.
+
+#### Supported dictionary features
+
+pyrad2 aims to load real-world FreeRADIUS dictionaries without modification.
+
+A runnable demo of every feature below lives in
+[`examples/dictionary_features.py`](https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary_features.py),
+backed by [`examples/dictionary.extended`](https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary.extended).
+Run it with `make dictionary_features`.
+
+**Data types**: `string`, `octets`, `integer`, `signed`, `short`, `byte`,
+`integer64`, `date`, `ipaddr`, `ipv6addr`, `ipv6prefix`, `ifid` (RFC 3162
+8-byte Interface-Id), `ether` (RFC 6911 MAC address), `abinary` (Ascend
+filter format), `tlv` (one level of nesting), `extended` and
+`long-extended` (RFC 6929 wrappers).
+
+**Attribute options** (comma-separated, after the type column):
+
+- `has_tag` — attribute carries a one-byte tag prefix (RFC 2868).
+- `encrypt=N` — apply encryption flavour 1, 2, or 3.
+- `concat` — values longer than 253 bytes split across multiple AVPs on
+  the wire and concatenate on decode (RFC 7268 §3.6). Typical for
+  `EAP-Message` and `CHAP-Challenge`.
+
+**Vendor format** (`VENDOR Name 9 format=type_len,len_len`): the per-vendor
+VSA wire format is honored end-to-end. `type_len` may be 1, 2, or 4 bytes
+and `len_len` may be 0, 1, or 2 bytes. The default when no `format=` is
+declared follows RFC 2865 §5.26 (`1,1`).
+
+**RFC 6929 extended attributes** (types 241–246): declare the wrapper as
+`extended` (241–244) or `long-extended` (245–246), then add sub-attributes
+using dotted-code notation:
+
+```
+ATTRIBUTE Extended-Attribute-1  241    extended
+ATTRIBUTE Frag-Status           241.1  integer
+ATTRIBUTE Auth-Lifetime         241.2  integer
+
+ATTRIBUTE Extended-Attribute-5  245    long-extended
+ATTRIBUTE WiMAX-Blob            245.1  octets
+```
+
+Values are accessed by name on the packet (`pkt["Frag-Status"] = 5`) and
+read back through the parent (`pkt["Extended-Attribute-1"]` returns a
+dict of sub-attribute name → values). Long-extended values larger than
+251 bytes are fragmented across multiple AVPs on send and reassembled on
+receive — callers see one logical value either way.
+
+**Extended-Vendor-Specific** (EVS, RFC 6929 §2.3): the `evs` type marks a
+sub-attribute of an extended wrapper that carries a vendor-specific
+payload. FreeRADIUS's `BEGIN-VENDOR <name> parent=<evs-attr>` syntax
+scopes the vendor's attributes underneath:
+
+```
+ATTRIBUTE Extended-Attribute-1        241     extended
+ATTRIBUTE Extended-Vendor-Specific-1  241.26  evs
+
+VENDOR Example 12345
+
+BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1
+ATTRIBUTE Example-Attr-1  1  string
+ATTRIBUTE Example-Attr-2  2  integer
+END-VENDOR Example
+```
+
+EVS attributes are accessed by name (`pkt["Example-Attr-1"] = "hello"`).
+The wire encoding wraps the vendor id and vendor type into the extended
+payload; long-extended EVS values are fragmented and reassembled the same
+way as plain long-extended attributes.
+
+**Not yet supported**: TLV nesting deeper than two levels.

@@ -449,6 +449,11 @@ class Packet(OrderedDict):
             return key
 
         attr = self.dict.attributes[key]
+        if attr.is_sub_attribute and attr.parent and attr.parent.type == "evs":
+            # EVS-VSA: the dictionary already stores the canonical 4-tuple
+            # (extended_wrapper, evs_slot, vendor_id, vendor_type) — that's
+            # the only place all four are reachable from this attribute.
+            return self.dict.attrindex.get_forward(key)
         if (
             attr.vendor and not attr.is_sub_attribute
         ):  # sub attribute keys don't need vendor
@@ -474,7 +479,12 @@ class Packet(OrderedDict):
 
         (key, value) = self._encode_key_values(key, value)
 
-        if attr.is_sub_attribute:
+        if attr.is_sub_attribute and not (
+            attr.parent and attr.parent.type == "evs"
+        ):
+            # TLV-style nesting under the parent code. EVS-VSAs skip this:
+            # their 4-tuple key already identifies the slot uniquely so they
+            # live flat at the top level of the packet dict.
             tlv = self.setdefault(self._encode_key(attr.parent.name), {})
             encoded = tlv.setdefault(key, [])
         else:
@@ -495,7 +505,10 @@ class Packet(OrderedDict):
 
         values = super().__getitem__(self._encode_key(key))
         attr = self.dict.attributes[key]
-        if attr.type == "tlv":  # return map from sub attribute code to its values
+        if attr.type in ("tlv", "extended", "long-extended"):
+            # Container attributes — return a map from sub-attribute name to
+            # its decoded values. Storage shape is identical across TLV and
+            # RFC 6929 extended/long-extended containers.
             map_result: dict = {}
             for sub_attr_key, sub_attr_val in values.items():
                 sub_attr_name = attr.sub_attributes[sub_attr_key]
@@ -621,11 +634,38 @@ class Packet(OrderedDict):
             return False
         return True
 
+    # Mapping from byte width to struct format for the VSA inner header.
+    _VSA_TYPE_FORMATS = {1: "!B", 2: "!H", 4: "!I"}
+    _VSA_LEN_FORMATS = {1: "!B", 2: "!H"}
+
+    def _vendor_format(self, vendor_id: int) -> tuple[int, int]:
+        """Return the ``(type_len, len_len)`` VSA wire format for a vendor."""
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return (1, 1)
+        return dictionary.vendor_format(vendor_id)
+
+    @classmethod
+    def _pack_vsa_inner(
+        cls, vsa_type: int, value: bytes, type_len: int, len_len: int
+    ) -> bytes:
+        """Encode the inner VSA header per RFC 2865 §5.26 honoring vendor format.
+
+        ``len_len=0`` produces a header with no length field; the value
+        extends to the end of the encapsulating attribute.
+        """
+        encoded = struct.pack(cls._VSA_TYPE_FORMATS[type_len], vsa_type)
+        if len_len:
+            total = type_len + len_len + len(value)
+            encoded += struct.pack(cls._VSA_LEN_FORMATS[len_len], total)
+        return encoded + value
+
     def _pkt_encode_attribute(self, key: Hashable, value: Any):
         if isinstance(key, tuple):
-            value = struct.pack("!L", key[0]) + self._pkt_encode_attribute(
-                key[1], value
-            )
+            vendor_id, vsa_type = key
+            type_len, len_len = self._vendor_format(vendor_id)
+            inner = self._pack_vsa_inner(vsa_type, value, type_len, len_len)
+            value = struct.pack("!L", vendor_id) + inner
             key = 26
 
         return struct.pack("!BB", key, (len(value) + 2)) + value
@@ -667,42 +707,204 @@ class Packet(OrderedDict):
         else:
             return b"".join(tlv_avps)
 
+    def _is_concat_attribute(self, code: Hashable) -> bool:
+        """Return True when ``code`` refers to a dictionary attribute marked ``concat``."""
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return False
+        attr = dictionary.attributes.get(self._decode_key(code))
+        return attr is not None and getattr(attr, "concat", False)
+
+    def _container_type(self, code: Hashable) -> Optional[str]:
+        """Return the container datatype (``tlv``, ``extended``, ``long-extended``) or None."""
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return None
+        attr = dictionary.attributes.get(self._decode_key(code))
+        if attr is None:
+            return None
+        if attr.type in ("tlv", "extended", "long-extended"):
+            return attr.type
+        return None
+
+    @staticmethod
+    def _split_into_chunks(data: bytes, max_chunk: int) -> list[bytes]:
+        """Split ``data`` into chunks of at most ``max_chunk`` bytes.
+
+        Empty input produces a single empty chunk so callers that need at
+        least one fragment (e.g. long-extended) get a deterministic result.
+        """
+        if not data:
+            return [b""]
+        return [data[i : i + max_chunk] for i in range(0, len(data), max_chunk)]
+
+    def _pkt_encode_extended(self, parent_code: int, sub_attributes: dict) -> bytes:
+        """Encode RFC 6929 extended attributes (types 241-244).
+
+        Each sub-attribute value is emitted as one AVP of the form
+        ``[parent][len][ext_type][value]``. The single-byte length field
+        caps the value at 252 bytes; longer values require a parent
+        declared as ``long-extended``.
+        """
+        result = b""
+        for ext_type, values in sub_attributes.items():
+            for value in values:
+                if len(value) > 252:
+                    raise ValueError(
+                        "Extended attribute value too long; declare the "
+                        "parent as long-extended to enable fragmentation"
+                    )
+                result += (
+                    struct.pack("!BBB", parent_code, 3 + len(value), ext_type) + value
+                )
+        return result
+
+    def _pkt_encode_long_extended(
+        self, parent_code: int, sub_attributes: dict
+    ) -> bytes:
+        """Encode RFC 6929 long-extended attributes (types 245-246).
+
+        Values larger than 251 bytes are fragmented across multiple AVPs.
+        The More flag (bit 0x80 of the flags byte) is set on every
+        fragment except the last so the receiver can reassemble.
+        """
+        from pyrad2.constants import LONG_EXTENDED_MORE_FLAG
+
+        result = b""
+        for ext_type, values in sub_attributes.items():
+            for value in values:
+                chunks = self._split_into_chunks(value, 251)
+                for index, chunk in enumerate(chunks):
+                    more = LONG_EXTENDED_MORE_FLAG if index < len(chunks) - 1 else 0
+                    result += (
+                        struct.pack(
+                            "!BBBB", parent_code, 4 + len(chunk), ext_type, more
+                        )
+                        + chunk
+                    )
+        return result
+
+    def _pkt_encode_evs(self, key: tuple, value: bytes) -> bytes:
+        """Encode one RFC 6929 EVS-VSA AVP (or fragment chain in long form).
+
+        ``key`` is the flat 4-tuple ``(parent, evs_slot, vendor_id,
+        vendor_type)``. For extended parents the value is capped at 247
+        bytes; for long-extended parents it is fragmented into 246-byte
+        chunks, each carrying the same vendor-id and vendor-type with the
+        More flag set on every fragment except the last.
+        """
+        from pyrad2.constants import (
+            LONG_EXTENDED_ATTRIBUTE_TYPES,
+            LONG_EXTENDED_MORE_FLAG,
+        )
+
+        parent_code, ext_type, vendor_id, vsa_type = key
+        evs_header = struct.pack("!L", vendor_id) + struct.pack("!B", vsa_type)
+
+        if parent_code in LONG_EXTENDED_ATTRIBUTE_TYPES:
+            result = b""
+            chunks = self._split_into_chunks(value, 246)
+            for index, chunk in enumerate(chunks):
+                more = LONG_EXTENDED_MORE_FLAG if index < len(chunks) - 1 else 0
+                result += (
+                    struct.pack(
+                        "!BBBB", parent_code, 9 + len(chunk), ext_type, more
+                    )
+                    + evs_header
+                    + chunk
+                )
+            return result
+
+        if len(value) > 247:
+            raise ValueError(
+                "EVS value too large for extended wrapper; declare the "
+                "wrapper as long-extended to enable fragmentation"
+            )
+        return (
+            struct.pack("!BBB", parent_code, 8 + len(value), ext_type)
+            + evs_header
+            + value
+        )
+
     def _pkt_encode_attributes(self) -> bytes:
         result = b""
         for code, datalst in self.items():
-            if self._pkt_is_tlv_attribute(code):
+            if isinstance(code, tuple) and len(code) == 4:
+                # EVS-VSA: (parent_code, evs_slot, vendor_id, vendor_type)
+                for value in datalst:
+                    result += self._pkt_encode_evs(code, value)
+                continue
+            container = self._container_type(code)
+            if container == "tlv":
                 result += self._pkt_encode_tlv(code, datalst)
-            else:
-                for data in datalst:
+                continue
+            if container == "extended":
+                result += self._pkt_encode_extended(code, datalst)
+                continue
+            if container == "long-extended":
+                result += self._pkt_encode_long_extended(code, datalst)
+                continue
+            concat = self._is_concat_attribute(code)
+            for data in datalst:
+                if concat and len(data) > 253:
+                    # Split values larger than one AVP into 253-byte chunks;
+                    # the receiver concatenates per RFC 7268 §3.6.
+                    for chunk in self._split_into_chunks(data, 253):
+                        result += self._pkt_encode_attribute(code, chunk)
+                else:
                     result += self._pkt_encode_attribute(code, data)
         return result
 
     def _pkt_decode_vendor_attribute(self, data: bytes) -> list[tuple]:
-        # Check if this packet is long enough to be in the
-        # RFC2865 recommended form
-        if len(data) < 6:
+        if len(data) < 4:
             return [(26, data)]
 
-        (vendor, atype, length) = struct.unpack("!LBB", data[:6])[0:3]
-        try:
-            if self._pkt_is_tlv_attribute((vendor, atype)):
-                self._pkt_decode_tlv_attribute((vendor, atype), data[6 : length + 4])
-                tlvs = []  # tlv is added to the packet inside _pkt_decode_tlv_attribute
-            else:
-                tlvs = [((vendor, atype), data[6 : length + 4])]
-        except Exception:
+        (vendor,) = struct.unpack("!L", data[:4])
+        type_len, len_len = self._vendor_format(vendor)
+        header_len = type_len + len_len
+        inner = data[4:]
+
+        if len(inner) < header_len:
             return [(26, data)]
 
-        sumlength = 4 + length
-        while len(data) > sumlength:
+        tlvs: list[tuple] = []
+        offset = 0
+        while offset + header_len <= len(inner):
             try:
-                atype, length = struct.unpack("!BB", data[sumlength : sumlength + 2])[
-                    0:2
-                ]
+                (atype,) = struct.unpack(
+                    self._VSA_TYPE_FORMATS[type_len],
+                    inner[offset : offset + type_len],
+                )
+                if len_len == 0:
+                    payload_end = len(inner)
+                else:
+                    (length_value,) = struct.unpack(
+                        self._VSA_LEN_FORMATS[len_len],
+                        inner[offset + type_len : offset + header_len],
+                    )
+                    if length_value < header_len:
+                        return [(26, data)]
+                    payload_end = offset + length_value
+                    if payload_end > len(inner):
+                        return [(26, data)]
+            except struct.error:
+                return [(26, data)]
+
+            payload = inner[offset + header_len : payload_end]
+            try:
+                if self._pkt_is_tlv_attribute((vendor, atype)):
+                    self._pkt_decode_tlv_attribute((vendor, atype), payload)
+                else:
+                    tlvs.append(((vendor, atype), payload))
             except Exception:
                 return [(26, data)]
-            tlvs.append(((vendor, atype), data[sumlength + 2 : sumlength + length]))
-            sumlength += length
+
+            offset = payload_end
+            if len_len == 0:
+                break
+
+        if offset != len(inner):
+            return [(26, data)]
         return tlvs
 
     def _pkt_decode_tlv_attribute(self, code, data):
@@ -717,6 +919,81 @@ class Packet(OrderedDict):
     def _pkt_is_tlv_attribute(self, code):
         attr = self.dict.attributes.get(self._decode_key(code))
         return attr is not None and attr.type == "tlv"
+
+    def _is_evs_slot(self, parent_code: int, ext_type: int) -> bool:
+        """Return True if ``(parent_code, ext_type)`` is an EVS marker."""
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return False
+        parent_attr = dictionary.attributes.get(self._decode_key(parent_code))
+        if parent_attr is None:
+            return False
+        sub_name = parent_attr.sub_attributes.get(ext_type)
+        if sub_name is None:
+            return False
+        sub_attr = dictionary.attributes.get(sub_name)
+        return sub_attr is not None and sub_attr.type == "evs"
+
+    def _pkt_decode_extended(self, parent_code: int, value: bytes) -> None:
+        """Decode one extended AVP (RFC 6929 §2.1).
+
+        If the extended-type slot is registered as an ``evs`` marker, the
+        payload is split into vendor-id + vendor-type + value and stored
+        under a flat 4-tuple key. Otherwise it stores under
+        ``self[parent][ext_type]`` as a regular extended sub-attribute.
+        """
+        if not value:
+            return
+        ext_type = value[0]
+        payload = value[1:]
+
+        if len(payload) >= 5 and self._is_evs_slot(parent_code, ext_type):
+            (vendor_id,) = struct.unpack("!L", payload[:4])
+            vsa_type = payload[4]
+            self.setdefault(
+                (parent_code, ext_type, vendor_id, vsa_type), []
+            ).append(payload[5:])
+            return
+
+        parent_dict = self.setdefault(parent_code, {})
+        parent_dict.setdefault(ext_type, []).append(payload)
+
+    def _pkt_decode_long_extended_fragment(
+        self, parent_code: int, value: bytes
+    ) -> None:
+        """Decode one long-extended fragment (RFC 6929 §2.2), reassembling on M=0.
+
+        Fragments accumulate in ``self._long_ext_buf`` until the More flag
+        clears, at which point the joined value is appended to the parent.
+        EVS fragments key the buffer on the full 4-tuple so concurrent
+        vendor attributes under the same wrapper don't collide.
+        """
+        from pyrad2.constants import LONG_EXTENDED_MORE_FLAG
+
+        if len(value) < 2:
+            return
+        ext_type = value[0]
+        flags = value[1]
+        payload = value[2:]
+
+        if len(payload) >= 5 and self._is_evs_slot(parent_code, ext_type):
+            (vendor_id,) = struct.unpack("!L", payload[:4])
+            vsa_type = payload[4]
+            chunk = payload[5:]
+            buf_key = (parent_code, ext_type, vendor_id, vsa_type)
+            buf = self._long_ext_buf.setdefault(buf_key, bytearray())
+            buf.extend(chunk)
+            if not flags & LONG_EXTENDED_MORE_FLAG:
+                self.setdefault(buf_key, []).append(bytes(buf))
+                del self._long_ext_buf[buf_key]
+            return
+
+        buf = self._long_ext_buf.setdefault((parent_code, ext_type), bytearray())
+        buf.extend(payload)
+        if not flags & LONG_EXTENDED_MORE_FLAG:
+            parent_dict = self.setdefault(parent_code, {})
+            parent_dict.setdefault(ext_type, []).append(bytes(buf))
+            del self._long_ext_buf[(parent_code, ext_type)]
 
     def decode_packet(self, packet: bytes) -> None:
         """Initialize the object from raw packet data.  Decode a packet as
@@ -738,6 +1015,9 @@ class Packet(OrderedDict):
             raise PacketError("Packet length is too long (%d)" % length)
 
         self.clear()
+        # Keys are (parent_code, ext_type) for plain long-extended fragments
+        # and (parent_code, ext_type, vendor_id, vendor_type) for EVS ones.
+        self._long_ext_buf: dict[tuple[int, ...], bytearray] = {}
 
         packet = packet[20:]
         while packet:
@@ -757,12 +1037,37 @@ class Packet(OrderedDict):
                 # POST: Message Authenticator AVP is present.
                 self.message_authenticator = True
                 self.setdefault(key, []).append(value)
-            elif self._pkt_is_tlv_attribute(key):
-                self._pkt_decode_tlv_attribute(key, value)
             else:
-                self.setdefault(key, []).append(value)
+                container = self._container_type(key)
+                if container == "tlv":
+                    self._pkt_decode_tlv_attribute(key, value)
+                elif container == "extended":
+                    self._pkt_decode_extended(key, value)
+                elif container == "long-extended":
+                    self._pkt_decode_long_extended_fragment(key, value)
+                else:
+                    self.setdefault(key, []).append(value)
 
             packet = packet[attrlen:]
+
+        self._merge_concat_attributes()
+
+    def _merge_concat_attributes(self) -> None:
+        """Concatenate split AVPs for attributes flagged with the ``concat`` option.
+
+        Operates on the raw bytes stored under each code, bypassing the
+        type-decoding overlays in ``__getitem__`` / ``__setitem__``.
+        """
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return
+        for code in list(OrderedDict.keys(self)):
+            attr = dictionary.attributes.get(self._decode_key(code))
+            if attr is None or not getattr(attr, "concat", False):
+                continue
+            chunks = OrderedDict.__getitem__(self, code)
+            if isinstance(chunks, list) and len(chunks) > 1:
+                OrderedDict.__setitem__(self, code, [b"".join(chunks)])
 
     def _salt_en_decrypt(self, data, salt):
         result = b""

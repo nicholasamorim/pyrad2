@@ -96,6 +96,64 @@ def encode_ipv6_address(addr: str | IPv6Address) -> bytes:
     return IPv6Address(addr).packed
 
 
+def encode_ifid(value: str | bytes) -> bytes:
+    """Encode an 8-byte Interface-Id (RFC 3162) from ``xxxx:xxxx:xxxx:xxxx`` form.
+
+    Bytes already of length 8 are passed through unchanged so that dictionary
+    VALUE entries — which arrive pre-encoded — round-trip cleanly.
+    """
+    if isinstance(value, (bytes, bytearray)):
+        if len(value) != 8:
+            raise ValueError("Interface-Id must be 8 bytes")
+        return bytes(value)
+    if not isinstance(value, str):
+        raise TypeError("Interface-Id must be a string")
+    groups = value.split(":")
+    if len(groups) != 4:
+        raise ValueError("Interface-Id must have four colon-separated 16-bit groups")
+    try:
+        packed = b"".join(int(g, 16).to_bytes(2, "big") for g in groups)
+    except (ValueError, OverflowError) as exc:
+        raise ValueError("Interface-Id groups must be 16-bit hex") from exc
+    return packed
+
+
+def decode_ifid(value: bytes) -> str:
+    """Decode 8-byte Interface-Id (RFC 3162) into ``xxxx:xxxx:xxxx:xxxx`` form."""
+    if len(value) != 8:
+        raise ValueError("Interface-Id must be 8 bytes")
+    return ":".join(
+        f"{int.from_bytes(value[i : i + 2], 'big'):04x}" for i in range(0, 8, 2)
+    )
+
+
+def encode_ether(value: str | bytes) -> bytes:
+    """Encode a 6-byte Ethernet MAC address from ``hh:hh:hh:hh:hh:hh`` form.
+
+    Accepts both colon and hyphen separators. Bytes of length 6 pass through.
+    """
+    if isinstance(value, (bytes, bytearray)):
+        if len(value) != 6:
+            raise ValueError("Ethernet address must be 6 bytes")
+        return bytes(value)
+    if not isinstance(value, str):
+        raise TypeError("Ethernet address must be a string")
+    parts = value.replace("-", ":").split(":")
+    if len(parts) != 6:
+        raise ValueError("Ethernet address must have six octets")
+    try:
+        return bytes(int(b, 16) for b in parts)
+    except ValueError as exc:
+        raise ValueError("Ethernet address octets must be hex bytes") from exc
+
+
+def decode_ether(value: bytes) -> str:
+    """Decode a 6-byte Ethernet MAC address into ``hh:hh:hh:hh:hh:hh`` form."""
+    if len(value) != 6:
+        raise ValueError("Ethernet address must be 6 bytes")
+    return ":".join(f"{b:02x}" for b in value)
+
+
 def encode_ascend_binary(orig_str: str) -> bytes:
     """Encode binary data in Ascend-specific format (length prefixed)."""
     """
@@ -304,6 +362,10 @@ def encode_attr(datatype: str, value) -> bytes | str:
         return encode_date(value)
     elif datatype == "integer64":
         return encode_integer64(value)
+    elif datatype == "ifid":
+        return encode_ifid(value)
+    elif datatype == "ether":
+        return encode_ether(value)
     else:
         raise ValueError("Unknown attribute type %s" % datatype)
 
@@ -334,6 +396,10 @@ def decode_attr(datatype: str, value) -> bytes | str:
         return decode_date(value)
     elif datatype == "integer64":
         return decode_integer64(value)
+    elif datatype == "ifid":
+        return decode_ifid(value)
+    elif datatype == "ether":
+        return decode_ether(value)
     else:
         raise ValueError("Unknown attribute type %s" % datatype)
 

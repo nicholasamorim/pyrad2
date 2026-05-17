@@ -53,3 +53,6 @@ coa:
 
 status_radsec:
 	PYTHONPATH=. uv run examples/status_radsec.py
+
+dictionary_features:
+	PYTHONPATH=. uv run examples/dictionary_features.py

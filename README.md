@@ -17,6 +17,7 @@ pyrad2 is an implementation of a RADIUS client/server as described in RFC2865 an
 What this fork does:
    
 - Adds RadSec (RFC 6614) support (Experimental)
+- **Loads FreeRADIUS dictionaries** with broad fidelity: `ifid` (RFC 3162) and `ether` (RFC 6911) types, the `concat` attribute option (RFC 7268), the per-vendor `format=` directive (1/2/4-byte type fields, 0/1/2-byte length fields), RFC 6929 extended / long-extended attributes (types 241–246) with transparent fragmentation, and EVS (Extended-Vendor-Specific) via `BEGIN-VENDOR parent=` syntax
 - Supports only Python 3.12+
 - Extensive typing
 - Increased test coverage

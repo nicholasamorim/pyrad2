@@ -3,6 +3,7 @@ import os
 import struct
 import unittest
 import hashlib
+from io import StringIO
 
 from .base import TEST_ROOT_PATH
 
@@ -827,3 +828,403 @@ class AcctPacketTests(unittest.TestCase):
         rebuilt_no_authenticator = rebuilt[:4] + b"\x00" * 16 + rebuilt[20:]
 
         self.assertEqual(raw_no_authenticator, rebuilt_no_authenticator)
+
+
+class VendorFormatEncodingTests(unittest.TestCase):
+    """VSAs must honor the per-vendor ``(type_len, len_len)`` format."""
+
+    def _make_packet(self, dict_source):
+        d = Dictionary(StringIO(dict_source))
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=d,
+        )
+
+    def test_default_format_unchanged(self):
+        """Format (1,1) — RFC 2865 default — must produce the legacy layout."""
+        pkt = self._make_packet(
+            "VENDOR Cisco 9\nBEGIN-VENDOR Cisco\n"
+            "ATTRIBUTE Cisco-AVPair 1 string\nEND-VENDOR Cisco\n"
+        )
+        encoded = pkt._pkt_encode_attribute((9, 1), b"hello")
+        # [26][len][vendor_id=4][type=1][inner_len=7][value]
+        self.assertEqual(encoded, b"\x1a\x0d\x00\x00\x00\x09\x01\x07hello")
+
+    def test_format_4_2_encode_and_decode(self):
+        """USR-style format=4,2 widens both type and length fields."""
+        pkt = self._make_packet(
+            "VENDOR Big 100 format=4,2\nBEGIN-VENDOR Big\n"
+            "ATTRIBUTE Big-Attr 7 string\nEND-VENDOR Big\n"
+        )
+        encoded = pkt._pkt_encode_attribute((100, 7), b"hi")
+        # [26][total_len=14][vendor=4][type=4 bytes 0x00000007][len=2 bytes 0x0008][hi]
+        self.assertEqual(
+            encoded,
+            b"\x1a\x0e\x00\x00\x00\x64\x00\x00\x00\x07\x00\x08hi",
+        )
+
+        # Decode round-trip: peel off the outer [26][len] header (2 bytes).
+        decoded = pkt._pkt_decode_vendor_attribute(encoded[2:])
+        self.assertEqual(decoded, [((100, 7), b"hi")])
+
+    def test_format_2_1_encode_and_decode(self):
+        pkt = self._make_packet(
+            "VENDOR Mid 200 format=2,1\nBEGIN-VENDOR Mid\n"
+            "ATTRIBUTE Mid-Attr 0x010f string\nEND-VENDOR Mid\n"
+        )
+        encoded = pkt._pkt_encode_attribute((200, 0x010F), b"abc")
+        # Outer [26][len]; then vendor=4 bytes, type=2 bytes, length=1 byte, value=3 bytes.
+        self.assertEqual(encoded[2:6], b"\x00\x00\x00\xc8")  # vendor=200
+        self.assertEqual(encoded[6:8], b"\x01\x0f")  # 2-byte type
+        self.assertEqual(encoded[8:9], b"\x06")  # 1-byte length = type(2)+len(1)+value(3)
+        self.assertEqual(encoded[9:], b"abc")
+
+        decoded = pkt._pkt_decode_vendor_attribute(encoded[2:])
+        self.assertEqual(decoded, [((200, 0x010F), b"abc")])
+
+    def test_format_4_0_no_length_field(self):
+        """format=4,0 means the inner VSA fills the encapsulating AVP exactly."""
+        pkt = self._make_packet(
+            "VENDOR No-Len 429 format=4,0\nBEGIN-VENDOR No-Len\n"
+            "ATTRIBUTE No-Len-Attr 5 string\nEND-VENDOR No-Len\n"
+        )
+        encoded = pkt._pkt_encode_attribute((429, 5), b"value")
+        # No length field — value extends to the end of the buffer.
+        self.assertEqual(encoded[2:6], b"\x00\x00\x01\xad")  # vendor=429
+        self.assertEqual(encoded[6:10], b"\x00\x00\x00\x05")  # 4-byte type
+        self.assertEqual(encoded[10:], b"value")
+
+        decoded = pkt._pkt_decode_vendor_attribute(encoded[2:])
+        self.assertEqual(decoded, [((429, 5), b"value")])
+
+    def test_decode_rejects_truncated_length(self):
+        pkt = self._make_packet("VENDOR Foo 11\n")
+        # length=99 but only 5 bytes of payload available.
+        bad = b"\x00\x00\x00\x0b\x02\x63value"
+        self.assertEqual(pkt._pkt_decode_vendor_attribute(bad), [(26, bad)])
+
+
+class ConcatAttributeTests(unittest.TestCase):
+    """Attributes flagged with ``concat`` split on encode and merge on decode."""
+
+    def _make_dict(self):
+        return Dictionary(StringIO("ATTRIBUTE Long-Octets 30 octets concat\n"))
+
+    def _make_packet(self):
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self._make_dict(),
+        )
+
+    def test_encode_splits_value_into_253_byte_chunks(self):
+        pkt = self._make_packet()
+        pkt[30] = [b"A" * 300]
+        encoded = pkt._pkt_encode_attributes()
+        # Expect two AVPs: [30][255][253 bytes A], then [30][49][47 bytes A]
+        self.assertEqual(encoded[0], 30)
+        self.assertEqual(encoded[1], 255)  # 253 value + 2 header
+        self.assertEqual(encoded[2:255], b"A" * 253)
+        rest = encoded[255:]
+        self.assertEqual(rest[0], 30)
+        self.assertEqual(rest[1], 49)  # 47 value + 2 header
+        self.assertEqual(rest[2:], b"A" * 47)
+
+    def test_encode_leaves_short_value_alone(self):
+        pkt = self._make_packet()
+        pkt[30] = [b"short"]
+        encoded = pkt._pkt_encode_attributes()
+        self.assertEqual(encoded, b"\x1e\x07short")
+
+    def test_decode_merges_split_chunks(self):
+        d = self._make_dict()
+        pkt = packet.Packet(
+            id=1, secret=b"secret", authenticator=b"0123456789ABCDEF", dict=d
+        )
+        chunk1 = b"A" * 253
+        chunk2 = b"A" * 47
+        attrs = (
+            struct.pack("!BB", 30, len(chunk1) + 2)
+            + chunk1
+            + struct.pack("!BB", 30, len(chunk2) + 2)
+            + chunk2
+        )
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + attrs)
+        # After concat-merge there is exactly one entry of 300 bytes.
+        self.assertEqual(len(pkt[30]), 1)
+        self.assertEqual(pkt[30][0], b"A" * 300)
+
+    def test_decode_does_not_merge_non_concat_attributes(self):
+        d = Dictionary(StringIO("ATTRIBUTE Multi-String 31 string\n"))
+        pkt = packet.Packet(
+            id=1, secret=b"secret", authenticator=b"0123456789ABCDEF", dict=d
+        )
+        attrs = (
+            struct.pack("!BB", 31, 5)
+            + b"AAA"
+            + struct.pack("!BB", 31, 5)
+            + b"BBB"
+        )
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + attrs)
+        # Two entries remain — concat must not affect plain string attributes.
+        self.assertEqual(len(pkt[31]), 2)
+
+
+class ExtendedAttributeTests(unittest.TestCase):
+    """RFC 6929 extended attributes (types 241-244, no fragmentation)."""
+
+    def _make_dict(self):
+        return Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Frag-Status 241.1 integer\n"
+                "ATTRIBUTE Auth-Lifetime 241.2 integer\n"
+            )
+        )
+
+    def _make_packet(self, dictionary=None):
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=dictionary or self._make_dict(),
+        )
+
+    def test_encode_single_extended_avp(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("Frag-Status", 5)
+        encoded = pkt._pkt_encode_attributes()
+        # [241][len=7][ext_type=1][4 bytes integer]
+        self.assertEqual(encoded, b"\xf1\x07\x01\x00\x00\x00\x05")
+
+    def test_decode_single_extended_avp(self):
+        pkt = self._make_packet()
+        attrs = b"\xf1\x07\x01\x00\x00\x00\x05"
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + attrs)
+        # Stored under parent code 241 as a sub-attribute dict.
+        self.assertEqual(pkt[241], {1: [b"\x00\x00\x00\x05"]})
+        # And accessible by name via the parent.
+        self.assertEqual(pkt["Extended-Attribute-1"], {"Frag-Status": [5]})
+
+    def test_roundtrip_multiple_sub_attributes(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("Frag-Status", 5)
+        pkt.add_attribute("Auth-Lifetime", 3600)
+        encoded = pkt._pkt_encode_attributes()
+
+        decoded = self._make_packet()
+        header = struct.pack("!BBH", 1, 1, 20 + len(encoded)) + b"0123456789ABCDEF"
+        decoded.decode_packet(header + encoded)
+        self.assertEqual(
+            decoded["Extended-Attribute-1"],
+            {"Frag-Status": [5], "Auth-Lifetime": [3600]},
+        )
+
+    def test_encode_rejects_oversized_value(self):
+        d = Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Huge-Blob 241.7 octets\n"
+            )
+        )
+        pkt = self._make_packet(d)
+        # 253 bytes is too large for one extended AVP (cap is 252).
+        pkt[241] = {7: [b"A" * 253]}
+        self.assertRaises(ValueError, pkt._pkt_encode_attributes)
+
+
+class LongExtendedAttributeTests(unittest.TestCase):
+    """RFC 6929 long-extended attributes (245-246), with fragmentation."""
+
+    def _make_dict(self):
+        return Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-5 245 long-extended\n"
+                "ATTRIBUTE WiMAX-Blob 245.1 octets\n"
+            )
+        )
+
+    def _make_packet(self):
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self._make_dict(),
+        )
+
+    def test_encode_short_value_fits_single_fragment(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("WiMAX-Blob", b"hello")
+        encoded = pkt._pkt_encode_attributes()
+        # [245][len=9][ext_type=1][flags=0][value]
+        self.assertEqual(encoded, b"\xf5\x09\x01\x00hello")
+
+    def test_encode_long_value_splits_with_more_flag(self):
+        pkt = self._make_packet()
+        # Max payload per fragment is 251 bytes, so 500 bytes → 2 fragments
+        # (251 + 249), with More set on the first. The single-AVP encoder
+        # rejects >253-byte octets, so set raw bytes on the parent dict
+        # directly — that's the storage shape decode produces too.
+        pkt[245] = {1: [b"A" * 500]}
+        encoded = pkt._pkt_encode_attributes()
+
+        # First fragment: [245][255][1][0x80][251 bytes A]
+        first = encoded[:255]
+        self.assertEqual(first[:4], b"\xf5\xff\x01\x80")
+        self.assertEqual(first[4:], b"A" * 251)
+
+        # Second fragment: [245][253][1][0x00][249 bytes A]
+        second = encoded[255:]
+        self.assertEqual(second[:4], b"\xf5\xfd\x01\x00")
+        self.assertEqual(second[4:], b"A" * 249)
+
+    def test_decode_reassembles_fragments(self):
+        pkt = self._make_packet()
+        # Manually build a 500-byte split payload like the encoder produces.
+        payload = b"A" * 500
+        first = (
+            struct.pack("!BBBB", 245, 4 + 251, 1, 0x80) + payload[:251]
+        )
+        second = (
+            struct.pack("!BBBB", 245, 4 + 249, 1, 0x00) + payload[251:]
+        )
+        attrs = first + second
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + attrs)
+
+        self.assertEqual(pkt["Extended-Attribute-5"], {"WiMAX-Blob": [payload]})
+
+    def test_roundtrip_large_value(self):
+        pkt = self._make_packet()
+        original = bytes(range(256)) * 5  # 1280 bytes — six fragments
+        pkt[245] = {1: [original]}
+        encoded = pkt._pkt_encode_attributes()
+
+        decoded = self._make_packet()
+        header = struct.pack("!BBH", 1, 1, 20 + len(encoded)) + b"0123456789ABCDEF"
+        decoded.decode_packet(header + encoded)
+        self.assertEqual(decoded[245], {1: [original]})
+
+    def test_decode_drops_orphan_fragment(self):
+        # A fragment with More=1 that never sees its terminator must not
+        # produce a partial value on the packet.
+        pkt = self._make_packet()
+        orphan = struct.pack("!BBBB", 245, 9, 1, 0x80) + b"hello"
+        header = struct.pack("!BBH", 1, 1, 20 + len(orphan)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + orphan)
+        # No completed value was finalized.
+        self.assertNotIn(245, pkt)
+
+
+class EvsAttributeTests(unittest.TestCase):
+    """RFC 6929 §2.3 Extended-Vendor-Specific (EVS) round-trips."""
+
+    def _extended_dict(self):
+        return Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Extended-Vendor-Specific-1 241.26 evs\n"
+                "VENDOR Example 12345\n"
+                "BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1\n"
+                "ATTRIBUTE Example-Attr-1 1 string\n"
+                "ATTRIBUTE Example-Attr-2 2 integer\n"
+                "END-VENDOR Example\n"
+            )
+        )
+
+    def _long_dict(self):
+        return Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-5 245 long-extended\n"
+                "ATTRIBUTE Extended-Vendor-Specific-5 245.26 evs\n"
+                "VENDOR Example 12345\n"
+                "BEGIN-VENDOR Example parent=Extended-Vendor-Specific-5\n"
+                "ATTRIBUTE Big-Blob 1 octets\n"
+                "END-VENDOR Example\n"
+            )
+        )
+
+    def _make_packet(self, dictionary):
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=dictionary,
+        )
+
+    def test_encode_evs_inside_extended_wrapper(self):
+        pkt = self._make_packet(self._extended_dict())
+        pkt.add_attribute("Example-Attr-1", "hello")
+        encoded = pkt._pkt_encode_attributes()
+        # Wire: [241][len=13][ext=26][vendor_id=4 bytes][vsa_type=1][hello]
+        self.assertEqual(
+            encoded,
+            b"\xf1\x0d\x1a\x00\x00\x30\x39\x01hello",
+        )
+
+    def test_roundtrip_evs_under_extended(self):
+        d = self._extended_dict()
+        pkt = self._make_packet(d)
+        pkt.add_attribute("Example-Attr-1", "hello")
+        pkt.add_attribute("Example-Attr-2", 42)
+        encoded = pkt._pkt_encode_attributes()
+
+        decoded = self._make_packet(d)
+        header = struct.pack("!BBH", 1, 1, 20 + len(encoded)) + b"0123456789ABCDEF"
+        decoded.decode_packet(header + encoded)
+        self.assertEqual(decoded["Example-Attr-1"], ["hello"])
+        self.assertEqual(decoded["Example-Attr-2"], [42])
+        # And the underlying storage is the flat 4-tuple key.
+        self.assertEqual(decoded[(241, 26, 12345, 1)], [b"hello"])
+
+    def test_encode_evs_rejects_oversize_under_extended(self):
+        d = self._extended_dict()
+        pkt = self._make_packet(d)
+        # 248 bytes exceeds the 247-byte cap for extended EVS.
+        pkt[(241, 26, 12345, 1)] = [b"A" * 248]
+        self.assertRaises(ValueError, pkt._pkt_encode_attributes)
+
+    def test_long_extended_evs_fragments_and_reassembles(self):
+        d = self._long_dict()
+        pkt = self._make_packet(d)
+        # Each long-extended EVS fragment carries 246 bytes of value, so
+        # 600 bytes splits into three fragments (246 + 246 + 108).
+        original = b"X" * 600
+        pkt[(245, 26, 12345, 1)] = [original]
+        encoded = pkt._pkt_encode_attributes()
+
+        # First fragment header: parent=245, len=255, ext=26, more=0x80
+        self.assertEqual(encoded[:4], b"\xf5\xff\x1a\x80")
+        # Then vendor_id 4 bytes + vsa_type 1 byte + 246 bytes payload.
+        self.assertEqual(encoded[4:9], b"\x00\x00\x30\x39\x01")
+        self.assertEqual(encoded[9:255], b"X" * 246)
+
+        # Reassemble through decode.
+        decoded = self._make_packet(d)
+        header = struct.pack("!BBH", 1, 1, 20 + len(encoded)) + b"0123456789ABCDEF"
+        decoded.decode_packet(header + encoded)
+        self.assertEqual(decoded[(245, 26, 12345, 1)], [original])
+        self.assertEqual(decoded["Big-Blob"], [original])
+
+    def test_extended_decode_falls_back_when_no_evs_marker(self):
+        # An extended attribute at slot 26 with no EVS marker in the dict
+        # must still decode as a regular extended sub-attribute, not EVS.
+        d = Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Plain-Sub 241.26 octets\n"
+            )
+        )
+        pkt = self._make_packet(d)
+        # [241][len=10][ext=26][7 bytes payload]
+        attrs = b"\xf1\x0a\x1a" + b"payload"
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + attrs)
+        # Stored as a normal extended sub-attribute, not split as EVS.
+        self.assertEqual(pkt[241], {26: [b"payload"]})

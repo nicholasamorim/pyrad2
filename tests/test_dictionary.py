@@ -136,6 +136,26 @@ class DictionaryParsingTests(unittest.TestCase):
         )
         self.assertEqual(self.dict["Option-Type"].has_tag, True)
         self.assertEqual(self.dict["Option-Type"].encrypt, 1)
+        self.assertEqual(self.dict["Option-Type"].concat, False)
+
+    def testAttributeConcatOption(self):
+        # FreeRADIUS-style concat option keeps the attribute defined
+        # instead of silently dropping it (the old behaviour).
+        self.dict.read_dictionary(
+            StringIO("ATTRIBUTE Long-Octets 30 octets concat")
+        )
+        self.assertEqual(self.dict["Long-Octets"].concat, True)
+        self.assertEqual(self.dict["Long-Octets"].type, "octets")
+        self.assertEqual(self.dict["Long-Octets"].code, 30)
+
+    def testAttributeConcatCombinedWithOtherOptions(self):
+        self.dict.read_dictionary(
+            StringIO("ATTRIBUTE Frag-Octets 31 octets has_tag,concat,encrypt=2")
+        )
+        attr = self.dict["Frag-Octets"]
+        self.assertTrue(attr.has_tag)
+        self.assertTrue(attr.concat)
+        self.assertEqual(attr.encrypt, 2)
 
     def testAttributeEncryptionError(self):
         try:
@@ -286,6 +306,93 @@ class DictionaryParsingTests(unittest.TestCase):
             self.assertEqual("Syntax" in str(e), True)
         else:
             self.fail()
+
+    def testExtendedParentAndSubAttribute(self):
+        # RFC 6929: parent 241 declared as ``extended``, with a sub-attribute
+        # under the dotted-code form ``241.1``.
+        self.dict.read_dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Frag-Status 241.1 integer\n"
+            )
+        )
+        parent = self.dict["Extended-Attribute-1"]
+        self.assertEqual(parent.type, "extended")
+        self.assertEqual(parent.code, 241)
+        sub = self.dict["Frag-Status"]
+        self.assertTrue(sub.is_sub_attribute)
+        self.assertEqual(sub.code, 1)
+        self.assertIs(sub.parent, parent)
+        self.assertEqual(parent.sub_attributes, {1: "Frag-Status"})
+
+    def testLongExtendedParentAndSubAttribute(self):
+        self.dict.read_dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-5 245 long-extended\n"
+                "ATTRIBUTE WiMAX-Blob 245.1 octets\n"
+            )
+        )
+        parent = self.dict["Extended-Attribute-5"]
+        self.assertEqual(parent.type, "long-extended")
+        self.assertEqual(parent.code, 245)
+        sub = self.dict["WiMAX-Blob"]
+        self.assertTrue(sub.is_sub_attribute)
+        self.assertIs(sub.parent, parent)
+
+    def testEvsParserStoresFourTupleKey(self):
+        # RFC 6929 §2.3 — EVS-VSA. The marker lives at 241.26 with type evs,
+        # then BEGIN-VENDOR parent= scopes the vendor block beneath it.
+        self.dict.read_dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Extended-Vendor-Specific-1 241.26 evs\n"
+                "VENDOR Example 12345\n"
+                "BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1\n"
+                "ATTRIBUTE Example-Attr-1 1 string\n"
+                "ATTRIBUTE Example-Attr-2 2 integer\n"
+                "END-VENDOR Example\n"
+            )
+        )
+        # The vendor attributes index under the canonical 4-tuple.
+        self.assertEqual(self.dict.attrindex["Example-Attr-1"], (241, 26, 12345, 1))
+        self.assertEqual(self.dict.attrindex["Example-Attr-2"], (241, 26, 12345, 2))
+        # And their parent points back at the EVS marker.
+        marker = self.dict["Extended-Vendor-Specific-1"]
+        self.assertEqual(marker.type, "evs")
+        self.assertIs(self.dict["Example-Attr-1"].parent, marker)
+        self.assertEqual(self.dict["Example-Attr-1"].vendor, "Example")
+        self.assertTrue(self.dict["Example-Attr-1"].is_sub_attribute)
+
+    def testEvsRejectsNonEvsParent(self):
+        # parent= must refer to an attribute whose type is "evs".
+        try:
+            self.dict.read_dictionary(
+                StringIO(
+                    "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                    "ATTRIBUTE Not-Evs 241.7 integer\n"
+                    "VENDOR Example 12345\n"
+                    "BEGIN-VENDOR Example parent=Not-Evs\n"
+                )
+            )
+        except ParseError as e:
+            self.assertIn("evs", str(e).lower())
+        else:
+            self.fail("expected ParseError for non-evs parent")
+
+    def testVendorFormatStoredAndRetrievable(self):
+        # Default format is (1, 1) when no format= is declared.
+        self.dict.read_dictionary(StringIO("VENDOR Cisco 9"))
+        self.assertEqual(self.dict.vendor_format(9), (1, 1))
+
+        # Explicit format= persists on the dictionary.
+        self.dict.read_dictionary(StringIO("VENDOR USR 429 format=4,0"))
+        self.assertEqual(self.dict.vendor_format(429), (4, 0))
+
+        self.dict.read_dictionary(StringIO("VENDOR Big-Type 100 format=2,1"))
+        self.assertEqual(self.dict.vendor_format(100), (2, 1))
+
+        # Unknown vendor ids fall back to the default.
+        self.assertEqual(self.dict.vendor_format(99999), (1, 1))
 
     def testBeginVendorTooFewColumns(self):
         try:
