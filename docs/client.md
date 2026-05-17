@@ -93,16 +93,16 @@ req["NAS-IP-Address"] = "192.168.1.10"
 
     This feature is currently *experimental*.
 
-To use RadSec client, you must import from `pyrad2.client.radsec.client`
+To use RadSec client, you must import from `pyrad2.radsec.client`.
 
 ``` py title="Creating a RadSec client"
 client = RadSecClient(
     server="127.0.0.1",
     secret=b"radsec",
     dict=Dictionary("/dictionary"),
-    certfile="certs/ca/ca.cert.pem",
-    keyfile="certs/client/client.cert.pem"
-    certfile_server="certs/client/client.key.pem"
+    certfile="certs/client/client.cert.pem",
+    keyfile="certs/client/client.key.pem",
+    certfile_server="certs/ca/ca.cert.pem",
 )
 ```
 

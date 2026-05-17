@@ -38,6 +38,8 @@ class RadSecClient:
         minimum_tls_version: ssl.TLSVersion = DEFAULT_MINIMUM_TLS_VERSION,
         ciphers: Optional[str] = None,
         allowed_server_fingerprints: Optional[Iterable[str]] = None,
+        reuse_connection: bool = True,
+        reconnect_backoff: float = 0.25,
     ):
         """Initializes a RadSec client.
 
@@ -57,6 +59,9 @@ class RadSecClient:
             ciphers (str): Optional OpenSSL cipher string override.
             allowed_server_fingerprints (Iterable[str]): Optional SHA-256 certificate
                 fingerprint allowlist for the server certificate.
+            reuse_connection (bool): Reuse the TLS connection for multiple packets.
+            reconnect_backoff (float): Seconds to wait before retrying after a
+                connection or read failure.
 
         """
         self.server = server
@@ -65,6 +70,11 @@ class RadSecClient:
         self.retries = retries
         self.timeout = timeout
         self.dict = dict
+        self.reuse_connection = reuse_connection
+        self.reconnect_backoff = reconnect_backoff
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
+        self._io_lock = asyncio.Lock()
 
         self.allowed_server_fingerprints = {
             normalize_cert_fingerprint(fingerprint)
@@ -107,6 +117,11 @@ class RadSecClient:
             self.ssl_ctx.set_ciphers(ciphers)
 
     def _verify_server_fingerprint(self, writer: asyncio.StreamWriter) -> bool:
+        """Verify the connected server certificate against the fingerprint allowlist.
+
+        If no fingerprints were configured, the certificate trust decision is
+        left to Python's TLS verification.
+        """
         if not self.allowed_server_fingerprints:
             return True
 
@@ -119,6 +134,112 @@ class RadSecClient:
             return False
 
         return cert_fingerprint_matches(cert, self.allowed_server_fingerprints)
+
+    @staticmethod
+    def _writer_is_closing(writer: asyncio.StreamWriter | None) -> bool:
+        """Return whether a stream writer is absent or already closing."""
+        if writer is None:
+            return True
+        is_closing = getattr(writer, "is_closing", None)
+        if is_closing is None:
+            return False
+        return is_closing()
+
+    async def _close_writer(self, writer: asyncio.StreamWriter | None) -> None:
+        """Close a stream writer and wait until the close completes."""
+        if writer is None:
+            return
+        writer.close()
+        await writer.wait_closed()
+
+    async def close(self) -> None:
+        """Close any reusable RadSec connection held by the client."""
+        writer = self._writer
+        self._reader = None
+        self._writer = None
+        await self._close_writer(writer)
+
+    async def __aenter__(self) -> "RadSecClient":
+        """Return this client for use as an async context manager."""
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        """Close the reusable RadSec connection when leaving a context manager."""
+        await self.close()
+
+    async def _open_connection(
+        self,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Open and validate a TLS connection to the RadSec server."""
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(self.server, self.port, ssl=self.ssl_ctx),
+            timeout=self.timeout,
+        )
+
+        logger.info(
+            "Connected to RADSEC server on {}:{}",
+            self.server,
+            self.port,
+        )
+
+        if not self._verify_server_fingerprint(writer):
+            await self._close_writer(writer)
+            raise PacketError("Server certificate fingerprint is not allowed")
+
+        return reader, writer
+
+    async def _ensure_connection(
+        self,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Return an existing reusable connection or open a new one."""
+        if (
+            self.reuse_connection
+            and self._reader is not None
+            and not self._writer_is_closing(self._writer)
+        ):
+            assert self._writer is not None
+            return self._reader, self._writer
+
+        await self.close()
+        self._reader, self._writer = await self._open_connection()
+        return self._reader, self._writer
+
+    async def _write_packet(
+        self, writer: asyncio.StreamWriter, packet: PacketImplementation
+    ) -> None:
+        """Write one RADIUS packet to the RadSec stream within the client timeout."""
+        writer.write(packet.request_packet())
+        await asyncio.wait_for(writer.drain(), timeout=self.timeout)
+
+    async def _read_packet(self, reader: asyncio.StreamReader) -> bytes:
+        """Read one RADIUS packet from the RadSec stream within the client timeout."""
+        return await asyncio.wait_for(read_radius_packet(reader), timeout=self.timeout)
+
+    async def _send_packet_once(self, packet: PacketImplementation) -> Optional[Packet]:
+        """Send one RADIUS packet over the current connection strategy."""
+        reader: asyncio.StreamReader
+        writer: asyncio.StreamWriter | None = None
+
+        if self.reuse_connection:
+            reader, writer = await self._ensure_connection()
+        else:
+            reader, writer = await self._open_connection()
+
+        try:
+            await self._write_packet(writer, packet)
+            response = await self._read_packet(reader)
+
+            logger.info("Received {} bytes from server", len(response))
+            logger.debug("Response: {}", response.hex())
+
+            reply = packet.create_reply(packet=response)
+            if packet.verify_reply(reply, response):
+                return reply
+
+            raise PacketError("Received invalid RADSEC reply")
+        finally:
+            if not self.reuse_connection:
+                await self._close_writer(writer)
 
     def create_auth_packet(self, **kwargs) -> AuthPacket:
         """Create a new RADIUS packet.
@@ -170,59 +291,43 @@ class RadSecClient:
         return CoAPacket(id=id, dict=self.dict, secret=self.secret, **kwargs)
 
     def create_packet(self, id, **kwargs) -> Packet:
+        """Create a generic RADIUS packet with this client's dictionary and secret."""
         return Packet(id=id, dict=self.dict, secret=self.secret, **kwargs)
 
     async def _send_packet(self, packet: PacketImplementation) -> Optional[Packet]:
-        """Send a packet to a RADIUS server.
+        """Send a packet to a RadSec server with timeout and reconnect handling.
 
         Args:
             packet (Packet): The packet to send
         """
-        reader, writer = await asyncio.open_connection(
-            self.server, self.port, ssl=self.ssl_ctx
+        attempts = max(1, self.retries)
+        retryable_errors = (
+            asyncio.IncompleteReadError,
+            asyncio.TimeoutError,
+            ConnectionError,
+            EOFError,
+            OSError,
         )
 
-        logger.info(
-            "Connected to RADSEC server on {}:{}, sending RADIUS packet",
-            self.server,
-            self.port,
-        )
+        async with self._io_lock:
+            for attempt in range(attempts):
+                try:
+                    return await self._send_packet_once(packet)
+                except PacketError as exc:
+                    logger.error("RADSEC packet error: {}", exc)
+                    await self.close()
+                    return None
+                except retryable_errors as exc:
+                    logger.warning(
+                        "RADSEC request attempt {}/{} failed: {}",
+                        attempt + 1,
+                        attempts,
+                        exc,
+                    )
+                    await self.close()
 
-        if not self._verify_server_fingerprint(writer):
-            logger.warning("Server certificate fingerprint is not allowed")
-            writer.close()
-            await writer.wait_closed()
-            return None
-
-        writer.write(packet.request_packet())
-        await writer.drain()
-
-        async def close():
-            writer.close()
-            await writer.wait_closed()
-
-        try:
-            response = await read_radius_packet(reader)
-        except asyncio.TimeoutError:
-            logger.warning("Timeout waiting for server response")
-            await close()
-            return None
-
-        if not response:
-            logger.info("No response received")
-            await close()
-            return None
-
-        logger.info("Received {} bytes from server", len(response))
-        logger.debug("Response: {}", response.hex())
-
-        try:
-            reply = packet.create_reply(packet=response)
-            if packet.verify_reply(reply, response):
-                return reply
-        except PacketError as e:
-            logger.error("Error creating reply {}", e)
-            await close()
+                if attempt + 1 < attempts and self.reconnect_backoff > 0:
+                    await asyncio.sleep(self.reconnect_backoff)
 
         return None
 

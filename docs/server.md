@@ -170,6 +170,5 @@ if __name__ == "__main__":
 Running this file shows us the server ready to accept requests.
 
 ```
-2025-07-09 16:18:35.415 | INFO | pyrad2.radsec.server:run:86 - RADSEC Server with mutual TLS running on ('0.0.0.0', 2083)
-2025-07-09 16:18:35.415 | INFO | pyrad2.radsec.server:run:87 - Allowed ciphers: DES-CBC3-SHA:RC4-SHA:AES128-SHA
+2026-05-16 22:18:35.415 | INFO | pyrad2.radsec.server:run:101 - RADSEC Server with mutual TLS running on ('0.0.0.0', 2083)
 ```

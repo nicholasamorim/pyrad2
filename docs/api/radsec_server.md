@@ -39,5 +39,25 @@ the SHA-256 fingerprint of the presented client certificate. If
 `allowed_client_fingerprints` is omitted or empty, any certificate trusted by
 `ca_certfile` is accepted.
 
+The server reads packets in a loop on each accepted TLS connection. By default,
+the connection stays open until the client disconnects. You can bound long-lived
+connections with `connection_read_timeout` and `max_packets_per_connection`:
+
+```python
+server = RadSecServer(
+    hosts=hosts,
+    dictionary=dictionary,
+    certfile="certs/server/server.cert.pem",
+    keyfile="certs/server/server.key.pem",
+    ca_certfile="certs/ca/ca.cert.pem",
+    connection_read_timeout=30,
+    max_packets_per_connection=1000,
+)
+```
+
+Use `verify_packet=True` when the server should verify request authenticators
+before dispatching to your handlers. Access-Request, Accounting, CoA, and
+Disconnect packets are verified with their packet-specific verifier.
+
 ::: pyrad2.radsec.server
     handler: python
