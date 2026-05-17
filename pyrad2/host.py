@@ -76,6 +76,14 @@ class Host:
         """
         return packet.CoAPacket(dict=self.dict, **args)
 
+    def create_status_packet(self, **args) -> packet.Packet:
+        """Create a new Status-Server RADIUS packet.
+
+        Status-Server packets are used for RFC 5997 health checks and always
+        include Message-Authenticator when encoded for transmission.
+        """
+        return packet.StatusPacket(dict=self.dict, **args)
+
     def send_packet(self, fd: socket.socket, pkt) -> None:
         """Send a packet.
 

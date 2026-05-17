@@ -392,6 +392,32 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reply.code, PacketType.AccessAccept)
         self.assertTrue(reply.has_message_authenticator())
 
+    async def test_status_server_replies_without_handler_side_effects(self):
+        async def fail_access_handler(packet):
+            self.fail("access handler called")
+
+        self.server.handle_access_request = fail_access_handler
+        request = self.client.create_status_packet()
+
+        reply = await self.server.packet_received(request.request_packet(), "127.0.0.1")
+
+        self.assertEqual(reply.code, PacketType.AccessAccept)
+        self.assertTrue(reply.has_message_authenticator())
+
+    async def test_status_server_requires_message_authenticator(self):
+        request = self.client.create_status_packet()
+        request.authenticator = b"0123456789ABCDEF"
+        raw = struct.pack(
+            "!BBH16s",
+            PacketType.StatusServer,
+            request.id,
+            20,
+            request.authenticator,
+        )
+
+        with self.assertRaisesRegex(PacketError, "Status-Server requires"):
+            await self.server.packet_received(raw, "127.0.0.1")
+
     async def test_handle_client_reads_multiple_packets_from_one_stream(self):
         server = RadSecServer(
             certfile=SERVER_CERTFILE,

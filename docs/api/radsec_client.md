@@ -50,5 +50,21 @@ async with RadSecClient(...) as client:
 `RadSecClient` automatically adds `Message-Authenticator` to outgoing
 `Access-Request` packets that contain `EAP-Message`.
 
+Use `create_status_packet()` for RFC 5997 Status-Server health checks. The
+request automatically includes the mandatory `Message-Authenticator`:
+
+```python
+request = client.create_status_packet()
+reply = await client.send_packet(request)
+```
+
+The UDP Status-Server example (`examples/status.py`) talks to a normal RADIUS
+server on UDP/1812. To check a RadSec server such as
+`examples/server_radsec.py`, use the TLS/TCP example instead:
+
+```shell
+make status_radsec
+```
+
 ::: pyrad2.radsec.client
     handler: python

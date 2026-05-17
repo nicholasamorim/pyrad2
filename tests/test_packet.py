@@ -583,6 +583,50 @@ class AuthPacketConstructionTests(PacketConstructionTests):
         self.assertEqual(pkt.code, PacketType.AccessRequest)
 
 
+class StatusPacketTests(unittest.TestCase):
+    def setUp(self):
+        self.path = os.path.join(TEST_ROOT_PATH, "data")
+        self.dict = Dictionary(os.path.join(self.path, "full"))
+        self.packet = packet.StatusPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self.dict,
+        )
+
+    def test_request_packet_includes_message_authenticator(self):
+        rawpacket = self.packet.request_packet()
+        parsed = packet.StatusPacket(packet=rawpacket, secret=b"secret", dict=self.dict)
+
+        self.assertTrue(parsed.has_message_authenticator())
+        self.assertTrue(parsed.verify_message_authenticator())
+
+    def test_parse_packet_returns_status_packet(self):
+        rawpacket = self.packet.request_packet()
+
+        parsed = packet.parse_packet(rawpacket, b"secret", self.dict)
+
+        self.assertIsInstance(parsed, packet.StatusPacket)
+
+    def test_validate_policy_requires_message_authenticator(self):
+        rawpacket = (
+            b"\x0c\x01\x00\x14"
+            b"0123456789ABCDEF"
+        )
+        parsed = packet.StatusPacket(packet=rawpacket, secret=b"secret", dict=self.dict)
+
+        with self.assertRaisesRegex(packet.PacketError, "Status-Server requires"):
+            parsed.validate_message_authenticator_policy()
+
+    def test_accounting_response_to_status_server_verifies_message_authenticator(self):
+        reply = self.packet.create_reply(code=PacketType.AccountingResponse)
+        reply.ensure_message_authenticator()
+        rawreply = reply.reply_packet()
+        parsed_reply = self.packet.create_reply(packet=rawreply)
+
+        self.assertTrue(self.packet.verify_reply(parsed_reply, rawreply=rawreply))
+
+
 class AuthPacketTests(unittest.TestCase):
     def setUp(self):
         self.path = os.path.join(TEST_ROOT_PATH, "data")

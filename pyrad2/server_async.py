@@ -14,6 +14,7 @@ from pyrad2.packet import (
     CoAPacket,
     Packet,
     PacketError,
+    StatusPacket,
     prepare_reply_message_authenticator,
 )
 from pyrad2.server import RemoteHost, ServerPacketError
@@ -53,9 +54,25 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
         else:
             logger.info("[{}:{}] Transport closed", self.ip, self.port)
 
-    def send_response(self, reply: Packet, addr: str) -> None:
+    def send_response(self, reply: Packet, addr: tuple[str | Any, int]) -> None:
         self.server.prepare_reply_packet(reply)
         self.transport.sendto(reply.reply_packet(), addr)
+
+    def _handle_status_server(
+        self, data: bytes, remote_host: RemoteHost, addr: tuple[str | Any, int]
+    ) -> None:
+        """Reply to Status-Server without invoking normal request callbacks."""
+        req = StatusPacket(secret=remote_host.secret, dict=self.server.dict, packet=data)
+        self.server.validate_message_authenticator_policy(req)
+        reply = self.server.create_status_response(req, self.server_type)
+        logger.debug(
+            "[{}:{}] Received Status-Server from {}; replying with {}",
+            self.ip,
+            self.port,
+            addr,
+            PacketType(reply.code).name,
+        )
+        self.send_response(reply, addr)
 
     def datagram_received(self, data: bytes, addr: tuple[str | Any, int]):
         logger.debug(
@@ -92,6 +109,9 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                 raise ServerPacketError(f"Invalid response packet {req.code}")
 
             if self.server_type == ServerType.Auth:
+                if req.code == PacketType.StatusServer:
+                    self._handle_status_server(data, remote_host, addr)
+                    return
                 if req.code != PacketType.AccessRequest:
                     raise ServerPacketError("Received non-auth packet on auth port")
                 req = AuthPacket(
@@ -101,6 +121,8 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                     raise PacketError("Packet verification failed")
 
             elif self.server_type == ServerType.Coa:
+                if req.code == PacketType.StatusServer:
+                    raise ServerPacketError("Received status packet on coa port")
                 if req.code not in (
                     PacketType.DisconnectRequest,
                     PacketType.CoARequest,
@@ -113,6 +135,9 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                     raise PacketError("Packet verification failed")
 
             elif self.server_type == ServerType.Acct:
+                if req.code == PacketType.StatusServer:
+                    self._handle_status_server(data, remote_host, addr)
+                    return
                 if req.code != PacketType.AccountingRequest:
                     raise ServerPacketError("Received non-acct packet on acct port")
                 req = AcctPacket(
@@ -225,6 +250,17 @@ class ServerAsync(ABC):
             self.require_eap_message_authenticator and reply.has_eap_message()
         ):
             reply.ensure_message_authenticator()
+
+    def create_status_response(
+        self, pkt: StatusPacket, server_type: ServerType
+    ) -> Packet:
+        """Create the RFC 5997 response for a Status-Server request."""
+        code = (
+            PacketType.AccountingResponse
+            if server_type == ServerType.Acct
+            else PacketType.AccessAccept
+        )
+        return self.create_reply_packet(pkt, code=code)
 
     def _request_handler(
         self, protocol: DatagramProtocolServer, req: Packet, addr: str

@@ -145,6 +145,26 @@ class Client(host.Host):
         """
         return super().create_coa_packet(secret=self.secret, **args)
 
+    def create_status_packet(self, **args) -> packet.StatusPacket:
+        """Create an RFC 5997 Status-Server health-check packet."""
+        return packet.StatusPacket(dict=self.dict, secret=self.secret, **args)
+
+    def _status_port(self, port: str) -> int:
+        """Return the UDP port used for a Status-Server health check."""
+        if port == "auth":
+            return self.authport
+        if port == "acct":
+            return self.acctport
+        raise ValueError("Status-Server port must be 'auth' or 'acct'")
+
+    def send_status_packet(
+        self, pkt: Optional[packet.StatusPacket] = None, *, port: str = "auth"
+    ) -> packet.Packet:
+        """Send a Status-Server packet to the auth or accounting port."""
+        if pkt is None:
+            pkt = self.create_status_packet()
+        return self._send_packet(pkt, self._status_port(port))
+
     def _send_packet(self, pkt: packet.PacketImplementation, port: int):
         """Send a packet to a RADIUS server.
 
@@ -221,6 +241,8 @@ class Client(host.Host):
         Raises:
             Timeout: RADIUS server does not reply
         """
+        if isinstance(pkt, packet.StatusPacket):
+            return self.send_status_packet(pkt)
         if isinstance(pkt, packet.AuthPacket):
             if pkt.auth_type == "eap-md5":
                 # Creating EAP-Identity

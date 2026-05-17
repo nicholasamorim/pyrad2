@@ -15,6 +15,7 @@ from pyrad2.packet import (
     Packet,
     PacketError,
     PacketImplementation,
+    StatusPacket,
     prepare_request_message_authenticator,
 )
 from pyrad2.tools import read_radius_packet
@@ -295,6 +296,11 @@ class RadSecClient:
         """
         id = kwargs.pop("id", Packet.create_id())
         return CoAPacket(id=id, dict=self.dict, secret=self.secret, **kwargs)
+
+    def create_status_packet(self, **kwargs) -> StatusPacket:
+        """Create an RFC 5997 Status-Server health-check packet."""
+        id = kwargs.pop("id", Packet.create_id())
+        return StatusPacket(id=id, dict=self.dict, secret=self.secret, **kwargs)
 
     def create_packet(self, id, **kwargs) -> Packet:
         """Create a generic RADIUS packet with this client's dictionary and secret."""

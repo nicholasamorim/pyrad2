@@ -3,6 +3,7 @@
 - [Making RADIUS Requests](#making-radius-requests)
 - [UDP Requests](#udp)
   - [Sending an authentication packet](#sending-an-authentication-packet)
+- [Status-Server health checks](#status-server-health-checks)
 - [Setting attributes](#setting-attributes)
 - [RadSec](#radsec)
 
@@ -89,6 +90,38 @@ client = ClientAsync(
 )
 ```
 
+# Status-Server health checks
+
+Use `create_status_packet()` and `send_status_packet()` for RFC 5997
+Status-Server health checks. PyRad2 automatically includes the mandatory
+`Message-Authenticator` on the request.
+
+```py title="Sync UDP Status-Server request"
+from pyrad2.client import Client
+
+client = Client(...)
+req = client.create_status_packet()
+reply = client.send_status_packet(req, port="auth")
+```
+
+```py title="Async UDP Status-Server request"
+from pyrad2.client_async import ClientAsync
+
+client = ClientAsync(...)
+req = client.create_status_packet()
+reply = await client.send_status_packet(req, port="auth")
+```
+
+Use `port="acct"` to check the accounting port instead. Authentication-port
+checks expect an `Access-Accept` response; accounting-port checks expect an
+`Accounting-Response`.
+
+For a RadSec server, use the TLS/TCP Status-Server example instead:
+
+```bash
+PYTHONPATH=. uv run examples/status_radsec.py
+```
+
 # Setting attributes
 
 To set attributes in the `Client` object, you need to replace underscores with hyphens. So instead of `User_Name`, you use `User-Name`. The former is used in python code and the latter is used directly in the underlying data.
@@ -126,3 +159,7 @@ client = RadSecClient(
 ```
 
 You can find an example implementation [here](https://github.com/nicholasamorim/pyrad2/blob/master/examples/auth_radsec.py).
+
+RadSec uses TLS/TCP on port 2083, so the UDP `examples/status.py` health-check
+script will not reach a RadSec server. Use
+`examples/status_radsec.py` for RadSec Status-Server health checks.

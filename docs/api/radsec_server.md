@@ -84,5 +84,15 @@ Replies automatically include `Message-Authenticator` when the request included
 one, when `require_message_authenticator=True`, or when the reply contains
 `EAP-Message`.
 
+RadSec servers answer RFC 5997 Status-Server health checks directly with
+`Access-Accept`. Status-Server requests must include a valid
+`Message-Authenticator` and do not invoke normal authentication, accounting, or
+CoA handlers.
+
+Use `examples/status_radsec.py` to send a Status-Server request to
+`examples/server_radsec.py`. The plain `examples/status.py` script uses UDP
+RADIUS on port 1812 and will not reach a RadSec server listening on TLS/TCP
+port 2083.
+
 ::: pyrad2.radsec.server
     handler: python

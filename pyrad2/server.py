@@ -109,6 +109,25 @@ class Server(host.Host):
             require_eap_message_authenticator=self.require_eap_message_authenticator,
         )
 
+    def _send_status_response(self, pkt: packet.Packet, code: PacketType) -> None:
+        """Reply to Status-Server without invoking normal request handlers."""
+        reply = self.create_reply_packet(pkt, code=code)
+        if hasattr(pkt, "fd"):
+            self.send_reply_packet(pkt.fd, reply)
+
+    def _handle_status_packet(self, pkt: packet.Packet, code: PacketType) -> bool:
+        """Handle Status-Server packets before normal request dispatch."""
+        if pkt.code != PacketType.StatusServer:
+            return False
+        self._validate_message_authenticator_policy(pkt)
+        logger.debug(
+            "Received Status-Server from {}; replying with {}",
+            getattr(pkt, "source", None),
+            code.name,
+        )
+        self._send_status_response(pkt, code)
+        return True
+
     def _get_addr_info(
         self, addr: str
     ) -> set[tuple[socket.AddressFamily, str | int]] | list:
@@ -222,6 +241,8 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
         self._add_secret(pkt)
+        if self._handle_status_packet(pkt, PacketType.AccessAccept):
+            return
         if pkt.code != PacketType.AccessRequest:
             raise ServerPacketError(
                 "Received non-authentication packet on authentication port"
@@ -239,6 +260,8 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
         self._add_secret(pkt)
+        if self._handle_status_packet(pkt, PacketType.AccountingResponse):
+            return
         if pkt.code not in [
             PacketType.AccountingRequest,
             PacketType.AccountingResponse,
@@ -342,17 +365,17 @@ class Server(host.Host):
         """
         if self.auth_enabled and fd.fileno() in self._realauthfds:
             pkt = self._grab_packet(
-                lambda data, s=self: s.CreateAuthPacket(packet=data), fd
+                lambda data, s=self: packet.parse_packet(data, b"", s.dict), fd
             )
             self._handle_auth_packet(pkt)
         elif self.acct_enabled and fd.fileno() in self._realacctfds:
             pkt = self._grab_packet(
-                lambda data, s=self: s.CreateAcctPacket(packet=data), fd
+                lambda data, s=self: packet.parse_packet(data, b"", s.dict), fd
             )
             self._handle_acct_packet(pkt)
         elif self.coa_enabled:
             pkt = self._grab_packet(
-                lambda data, s=self: s.CreateCoAPacket(packet=data), fd
+                lambda data, s=self: packet.parse_packet(data, b"", s.dict), fd
             )
             self._handle_coa_packet(pkt)
         else:

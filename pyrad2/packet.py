@@ -3,7 +3,7 @@ import hmac
 import secrets
 import struct
 from collections import OrderedDict
-from typing import Any, Hashable, Optional, Union, Sequence
+from typing import Any, Hashable, Optional, Union, Sequence, TypeVar
 
 from pyrad2 import tools
 from pyrad2.constants import PacketType
@@ -21,18 +21,24 @@ random_generator = secrets.SystemRandom()
 CURRENT_ID = random_generator.randrange(1, 255)
 
 # Used for Typing to indicate you accept only the subclasses
-PacketImplementation = Union["AuthPacket", "AcctPacket", "CoAPacket"]
+PacketImplementation = Union["AuthPacket", "AcctPacket", "CoAPacket", "StatusPacket"]
+ReplyPacketT = TypeVar("ReplyPacketT", bound="Packet")
 
 
 def prepare_request_message_authenticator(
     pkt: Any, *, require_message_authenticator: bool = False
 ) -> None:
-    """Add Message-Authenticator to outgoing Access-Requests when required."""
-    if getattr(pkt, "code", None) != PacketType.AccessRequest:
+    """Add Message-Authenticator to outgoing request packets when required."""
+    code = getattr(pkt, "code", None)
+    if code not in (PacketType.AccessRequest, PacketType.StatusServer):
         return
 
     has_eap_message = getattr(pkt, "has_eap_message", lambda: False)
-    if require_message_authenticator or has_eap_message():
+    if (
+        code == PacketType.StatusServer
+        or require_message_authenticator
+        or has_eap_message()
+    ):
         ensure_message_authenticator = getattr(pkt, "ensure_message_authenticator", None)
         if ensure_message_authenticator is not None:
             ensure_message_authenticator()
@@ -108,6 +114,7 @@ class Packet(OrderedDict):
         self.request_authenticator: bytes | None = (
             None  # store request authenticator in reply packets
         )
+        self.original_code: int | None = None
         self.message_authenticator = None
         self.raw_packet = None
 
@@ -143,7 +150,10 @@ class Packet(OrderedDict):
         if self.id is None:
             self.id = self.create_id()
 
-        if self.authenticator is None and self.code == PacketType.AccessRequest:
+        if self.authenticator is None and self.code in (
+            PacketType.AccessRequest,
+            PacketType.StatusServer,
+        ):
             self.authenticator = self.create_authenticator()
             self._refresh_message_authenticator()
 
@@ -191,7 +201,11 @@ class Packet(OrderedDict):
             PacketType.AccountingRequest,
             PacketType.DisconnectRequest,
             PacketType.CoARequest,
-            PacketType.AccountingResponse,
+        ):
+            hmac_constructor.update(16 * b"\00")
+        elif (
+            self.code == PacketType.AccountingResponse
+            and self.original_code != PacketType.StatusServer
         ):
             hmac_constructor.update(16 * b"\00")
         else:
@@ -293,10 +307,17 @@ class Packet(OrderedDict):
             PacketType.AccountingRequest,
             PacketType.DisconnectRequest,
             PacketType.CoARequest,
-            PacketType.AccountingResponse,
         ):
-            if original_code is None or original_code != PacketType.StatusServer:
-                # TODO: Handle Status-Server response correctly.
+            hmac_constructor.update(16 * b"\00")
+        elif self.code == PacketType.AccountingResponse:
+            if original_code == PacketType.StatusServer:
+                if original_authenticator is None:
+                    if self.authenticator:
+                        original_authenticator = self.authenticator
+                    else:
+                        raise Exception("Missing original authenticator")
+                hmac_constructor.update(original_authenticator)
+            else:
                 hmac_constructor.update(16 * b"\00")
         elif self.code in (
             PacketType.AccessAccept,
@@ -347,6 +368,8 @@ class Packet(OrderedDict):
     ) -> None:
         """Validate Message-Authenticator presence and integrity policy."""
         if not self.has_message_authenticator():
+            if self.code == PacketType.StatusServer:
+                raise PacketError("Status-Server requires Message-Authenticator")
             if require_message_authenticator:
                 raise PacketError("Message-Authenticator attribute is required")
             if require_eap_message_authenticator and self.has_eap_message():
@@ -360,13 +383,20 @@ class Packet(OrderedDict):
         makes sure the authenticator and secret are copied over
         to the new instance.
         """
-        return Packet(
-            id=self.id,
-            secret=self.secret,
-            authenticator=self.authenticator,
-            dict=self.dict,
-            **attributes,
+        return self._set_reply_context(
+            Packet(
+                id=self.id,
+                secret=self.secret,
+                authenticator=self.authenticator,
+                dict=self.dict,
+                **attributes,
+            )
         )
+
+    def _set_reply_context(self, reply: ReplyPacketT) -> ReplyPacketT:
+        """Store the request code needed for reply authenticators."""
+        reply.original_code = self.code
+        return reply
 
     def _decode_value(self, attr: Attribute, value: bytes) -> bytes | str:
         if attr.encrypt == 2:
@@ -816,6 +846,54 @@ class Packet(OrderedDict):
         return hash == self.authenticator
 
 
+class StatusPacket(Packet):
+    """RADIUS Status-Server packet for RFC 5997 health checks."""
+
+    def __init__(
+        self,
+        code: int = PacketType.StatusServer,
+        id: Optional[int] = None,
+        secret: bytes = b"",
+        authenticator: Optional[bytes] = None,
+        **attributes,
+    ):
+        """Initialize a Status-Server packet."""
+        super().__init__(code, id, secret, authenticator, **attributes)
+
+    def create_reply(
+        self, code: int = PacketType.AccessAccept, **attributes
+    ) -> "Packet":
+        """Create a response packet for this Status-Server request."""
+        return self._set_reply_context(
+            Packet(
+                code=code,
+                id=self.id,
+                secret=self.secret,
+                authenticator=self.authenticator,
+                dict=self.dict,
+                **attributes,
+            )
+        )
+
+    def request_packet(self) -> bytes:
+        """Create a ready-to-transmit RFC 5997 Status-Server request."""
+        if self.authenticator is None:
+            self.authenticator = self.create_authenticator()
+
+        if self.id is None:
+            self.id = self.create_id()
+
+        prepare_request_message_authenticator(self)
+        if self.message_authenticator:
+            self._refresh_message_authenticator()
+
+        attr = self._pkt_encode_attributes()
+        header = struct.pack(
+            "!BBH16s", self.code, self.id, (20 + len(attr)), self.authenticator
+        )
+        return header + attr
+
+
 class AuthPacket(Packet):
     def __init__(
         self,
@@ -844,14 +922,16 @@ class AuthPacket(Packet):
         makes sure the authenticator and secret are copied over
         to the new instance.
         """
-        return AuthPacket(
-            PacketType.AccessAccept,
-            self.id,
-            self.secret,
-            self.authenticator,
-            dict=self.dict,
-            auth_type=self.auth_type,
-            **attributes,
+        return self._set_reply_context(
+            AuthPacket(
+                PacketType.AccessAccept,
+                self.id,
+                self.secret,
+                self.authenticator,
+                dict=self.dict,
+                auth_type=self.auth_type,
+                **attributes,
+            )
         )
 
     def request_packet(self) -> bytes:
@@ -1039,13 +1119,15 @@ class AcctPacket(Packet):
         makes sure the authenticator and secret are copied over
         to the new instance.
         """
-        return AcctPacket(
-            PacketType.AccountingResponse,
-            self.id,
-            self.secret,
-            self.authenticator,
-            dict=self.dict,
-            **attributes,
+        return self._set_reply_context(
+            AcctPacket(
+                PacketType.AccountingResponse,
+                self.id,
+                self.secret,
+                self.authenticator,
+                dict=self.dict,
+                **attributes,
+            )
         )
 
     def verify_acct_request(self) -> bool:
@@ -1111,13 +1193,15 @@ class CoAPacket(Packet):
         makes sure the authenticator and secret are copied over
         to the new instance.
         """
-        return CoAPacket(
-            PacketType.CoAACK,
-            self.id,
-            self.secret,
-            self.authenticator,
-            dict=self.dict,
-            **attributes,
+        return self._set_reply_context(
+            CoAPacket(
+                PacketType.CoAACK,
+                self.id,
+                self.secret,
+                self.authenticator,
+                dict=self.dict,
+                **attributes,
+            )
         )
 
     def verify_coa_request(self) -> bool:
@@ -1175,6 +1259,8 @@ def parse_packet(data: bytes, secret: bytes, dictionary: Optional[Dictionary]):
 
     if code == PacketType.AccessRequest:
         packet_class = AuthPacket
+    elif code == PacketType.StatusServer:
+        packet_class = StatusPacket
     elif code in (PacketType.AccountingRequest, PacketType.AccountingResponse):
         packet_class = AcctPacket
     elif code in (PacketType.CoARequest, PacketType.DisconnectRequest):

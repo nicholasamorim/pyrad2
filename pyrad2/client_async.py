@@ -14,6 +14,7 @@ from pyrad2.packet import (
     CoAPacket,
     Packet,
     PacketImplementation,
+    StatusPacket,
     prepare_request_message_authenticator,
 )
 
@@ -407,11 +408,46 @@ class ClientAsync:
             id=self.protocol_coa.create_id(), dict=self.dict, secret=self.secret, **args
         )
 
+    def _status_protocol(self, port: str) -> DatagramProtocolClient:
+        """Return the protocol used for a Status-Server health check."""
+        if port == "auth":
+            if not self.protocol_auth:
+                raise Exception("Auth transport not initialized")
+            return self.protocol_auth
+        if port == "acct":
+            if not self.protocol_acct:
+                raise Exception("Accounting transport not initialized")
+            return self.protocol_acct
+        raise ValueError("Status-Server port must be 'auth' or 'acct'")
+
+    def create_status_packet(self, *, port: str = "auth", **args) -> StatusPacket:
+        """Create an RFC 5997 Status-Server health-check packet."""
+        protocol = self._status_protocol(port)
+        return StatusPacket(
+            id=protocol.create_id(),
+            dict=self.dict,
+            secret=self.secret,
+            **args,
+        )
+
     def create_packet(self, id: int, **args) -> Packet:
         if not id:
             raise Exception("Missing mandatory packet id")
 
         return Packet(id=id, dict=self.dict, secret=self.secret, **args)
+
+    def send_status_packet(
+        self, pkt: Optional[StatusPacket] = None, *, port: str = "auth"
+    ) -> asyncio.Future:
+        """Send a Status-Server packet to the auth or accounting port."""
+        protocol = self._status_protocol(port)
+        if pkt is None:
+            pkt = self.create_status_packet(port=port)
+
+        ans: asyncio.Future = asyncio.Future(loop=asyncio.get_event_loop())
+        self._prepare_outgoing_packet(pkt)
+        protocol.send_packet(pkt, ans)
+        return ans
 
     def send_packet(self, pkt: Packet) -> asyncio.Future:
         """Send a packet to a RADIUS server.
@@ -423,9 +459,11 @@ class ClientAsync:
             asyncio.Future: Future related with packet to send
         """
 
+        if isinstance(pkt, StatusPacket):
+            return self.send_status_packet(pkt)
+
         ans: asyncio.Future = asyncio.Future(loop=asyncio.get_event_loop())
         self._prepare_outgoing_packet(pkt)
-
         if isinstance(pkt, AuthPacket):
             if not self.protocol_auth:
                 raise Exception("Transport not initialized")

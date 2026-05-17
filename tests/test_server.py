@@ -236,6 +236,23 @@ class MessageAuthenticatorPolicyTests(unittest.TestCase):
             **attributes,
         )
 
+    def _status_packet(self):
+        return packet.StatusPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self.dictionary,
+        )
+
+    def _parse_status_packet(self, pkt):
+        parsed = packet.StatusPacket(
+            packet=pkt.request_packet(),
+            secret=b"secret",
+            dict=self.dictionary,
+        )
+        parsed.source = ("host", 12345)
+        return parsed
+
     def test_eap_message_requires_message_authenticator(self):
         pkt = self._auth_packet()
         pkt[79] = [b"\x02\x01\x00\x05\x01"]
@@ -278,6 +295,48 @@ class MessageAuthenticatorPolicyTests(unittest.TestCase):
         reply = server.create_reply_packet(parsed)
 
         self.assertTrue(reply.has_message_authenticator())
+
+    def test_auth_status_server_replies_without_auth_side_effects(self):
+        class CaptureFd:
+            def __init__(self):
+                self.sent = []
+
+            def sendto(self, data, target):
+                self.sent.append((data, target))
+
+        server = self._server()
+        server.handle_auth_packet = lambda pkt: self.fail("auth handler called")
+        parsed = self._parse_status_packet(self._status_packet())
+        parsed.fd = CaptureFd()
+
+        server._handle_auth_packet(parsed)
+
+        self.assertEqual(len(parsed.fd.sent), 1)
+        rawreply, target = parsed.fd.sent[0]
+        reply = parsed.create_reply(packet=rawreply)
+        self.assertEqual(target, parsed.source)
+        self.assertEqual(reply.code, PacketType.AccessAccept)
+        self.assertTrue(parsed.verify_reply(reply, rawreply=rawreply))
+
+    def test_accounting_status_server_replies_without_accounting_side_effects(self):
+        class CaptureFd:
+            def __init__(self):
+                self.sent = []
+
+            def sendto(self, data, target):
+                self.sent.append((data, target))
+
+        server = self._server()
+        server.handle_acct_packet = lambda pkt: self.fail("acct handler called")
+        parsed = self._parse_status_packet(self._status_packet())
+        parsed.fd = CaptureFd()
+
+        server._handle_acct_packet(parsed)
+
+        rawreply, _target = parsed.fd.sent[0]
+        reply = parsed.create_reply(packet=rawreply)
+        self.assertEqual(reply.code, PacketType.AccountingResponse)
+        self.assertTrue(parsed.verify_reply(reply, rawreply=rawreply))
 
 
 class AcctPacketHandlingTests(unittest.TestCase):
