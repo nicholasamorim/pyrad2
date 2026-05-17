@@ -80,6 +80,50 @@ class EncodingTests(unittest.TestCase):
             "0x0102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E0F100102030405060708090A0B0C0D0E",
         )
 
+    def test_ifid_encoding_roundtrip(self):
+        text = "0011:2233:4455:6677"
+        raw = tools.encode_ifid(text)
+        self.assertEqual(raw, b"\x00\x11\x22\x33\x44\x55\x66\x77")
+        self.assertEqual(tools.decode_ifid(raw), text)
+
+    def test_ifid_encoding_passes_through_8_byte_input(self):
+        raw = b"\x01\x02\x03\x04\x05\x06\x07\x08"
+        self.assertEqual(tools.encode_ifid(raw), raw)
+
+    def test_ifid_encoding_rejects_bad_input(self):
+        self.assertRaises(ValueError, tools.encode_ifid, "0011:2233:4455")
+        self.assertRaises(ValueError, tools.encode_ifid, "zzzz:0000:0000:0000")
+        self.assertRaises(ValueError, tools.encode_ifid, "10000:0:0:0")
+        self.assertRaises(ValueError, tools.encode_ifid, b"\x00" * 4)
+        self.assertRaises(TypeError, tools.encode_ifid, 42)
+
+    def test_ifid_decoding_rejects_wrong_length(self):
+        self.assertRaises(ValueError, tools.decode_ifid, b"\x00" * 6)
+
+    def test_ether_encoding_roundtrip(self):
+        text = "aa:bb:cc:dd:ee:ff"
+        raw = tools.encode_ether(text)
+        self.assertEqual(raw, b"\xaa\xbb\xcc\xdd\xee\xff")
+        self.assertEqual(tools.decode_ether(raw), text)
+
+    def test_ether_encoding_accepts_hyphen_separator(self):
+        self.assertEqual(
+            tools.encode_ether("AA-BB-CC-DD-EE-FF"),
+            b"\xaa\xbb\xcc\xdd\xee\xff",
+        )
+
+    def test_ether_encoding_passes_through_6_byte_input(self):
+        raw = b"\x01\x02\x03\x04\x05\x06"
+        self.assertEqual(tools.encode_ether(raw), raw)
+
+    def test_ether_encoding_rejects_bad_input(self):
+        self.assertRaises(ValueError, tools.encode_ether, "aa:bb:cc:dd:ee")
+        self.assertRaises(ValueError, tools.encode_ether, "zz:bb:cc:dd:ee:ff")
+        self.assertRaises(TypeError, tools.encode_ether, 42)
+
+    def test_ether_decoding_rejects_wrong_length(self):
+        self.assertRaises(ValueError, tools.decode_ether, b"\x00" * 4)
+
     def test_unknown_type_encoding(self):
         self.assertRaises(ValueError, tools.encode_attr, "unknown", None)
 
@@ -117,6 +161,14 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(
             tools.encode_attr("integer64", 0xFFFFFFFFFFFFFFFF), b"\xff" * 8
         )
+        self.assertEqual(
+            tools.encode_attr("ifid", "0011:2233:4455:6677"),
+            b"\x00\x11\x22\x33\x44\x55\x66\x77",
+        )
+        self.assertEqual(
+            tools.encode_attr("ether", "aa:bb:cc:dd:ee:ff"),
+            b"\xaa\xbb\xcc\xdd\xee\xff",
+        )
 
     def test_decode_function(self):
         self.assertEqual(tools.decode_attr("string", b"string"), "string")
@@ -129,3 +181,11 @@ class EncodingTests(unittest.TestCase):
             tools.decode_attr("integer64", b"\xff" * 8), 0xFFFFFFFFFFFFFFFF
         )
         self.assertEqual(tools.decode_attr("date", b"\x01\x02\x03\x04"), 0x01020304)
+        self.assertEqual(
+            tools.decode_attr("ifid", b"\x00\x11\x22\x33\x44\x55\x66\x77"),
+            "0011:2233:4455:6677",
+        )
+        self.assertEqual(
+            tools.decode_attr("ether", b"\xaa\xbb\xcc\xdd\xee\xff"),
+            "aa:bb:cc:dd:ee:ff",
+        )

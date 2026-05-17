@@ -3,6 +3,7 @@ import os
 import struct
 import unittest
 import hashlib
+from io import StringIO
 
 from .base import TEST_ROOT_PATH
 
@@ -827,3 +828,148 @@ class AcctPacketTests(unittest.TestCase):
         rebuilt_no_authenticator = rebuilt[:4] + b"\x00" * 16 + rebuilt[20:]
 
         self.assertEqual(raw_no_authenticator, rebuilt_no_authenticator)
+
+
+class VendorFormatEncodingTests(unittest.TestCase):
+    """VSAs must honor the per-vendor ``(type_len, len_len)`` format."""
+
+    def _make_packet(self, dict_source):
+        d = Dictionary(StringIO(dict_source))
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=d,
+        )
+
+    def test_default_format_unchanged(self):
+        """Format (1,1) — RFC 2865 default — must produce the legacy layout."""
+        pkt = self._make_packet(
+            "VENDOR Cisco 9\nBEGIN-VENDOR Cisco\n"
+            "ATTRIBUTE Cisco-AVPair 1 string\nEND-VENDOR Cisco\n"
+        )
+        encoded = pkt._pkt_encode_attribute((9, 1), b"hello")
+        # [26][len][vendor_id=4][type=1][inner_len=7][value]
+        self.assertEqual(encoded, b"\x1a\x0d\x00\x00\x00\x09\x01\x07hello")
+
+    def test_format_4_2_encode_and_decode(self):
+        """USR-style format=4,2 widens both type and length fields."""
+        pkt = self._make_packet(
+            "VENDOR Big 100 format=4,2\nBEGIN-VENDOR Big\n"
+            "ATTRIBUTE Big-Attr 7 string\nEND-VENDOR Big\n"
+        )
+        encoded = pkt._pkt_encode_attribute((100, 7), b"hi")
+        # [26][total_len=14][vendor=4][type=4 bytes 0x00000007][len=2 bytes 0x0008][hi]
+        self.assertEqual(
+            encoded,
+            b"\x1a\x0e\x00\x00\x00\x64\x00\x00\x00\x07\x00\x08hi",
+        )
+
+        # Decode round-trip: peel off the outer [26][len] header (2 bytes).
+        decoded = pkt._pkt_decode_vendor_attribute(encoded[2:])
+        self.assertEqual(decoded, [((100, 7), b"hi")])
+
+    def test_format_2_1_encode_and_decode(self):
+        pkt = self._make_packet(
+            "VENDOR Mid 200 format=2,1\nBEGIN-VENDOR Mid\n"
+            "ATTRIBUTE Mid-Attr 0x010f string\nEND-VENDOR Mid\n"
+        )
+        encoded = pkt._pkt_encode_attribute((200, 0x010F), b"abc")
+        # Outer [26][len]; then vendor=4 bytes, type=2 bytes, length=1 byte, value=3 bytes.
+        self.assertEqual(encoded[2:6], b"\x00\x00\x00\xc8")  # vendor=200
+        self.assertEqual(encoded[6:8], b"\x01\x0f")  # 2-byte type
+        self.assertEqual(encoded[8:9], b"\x06")  # 1-byte length = type(2)+len(1)+value(3)
+        self.assertEqual(encoded[9:], b"abc")
+
+        decoded = pkt._pkt_decode_vendor_attribute(encoded[2:])
+        self.assertEqual(decoded, [((200, 0x010F), b"abc")])
+
+    def test_format_4_0_no_length_field(self):
+        """format=4,0 means the inner VSA fills the encapsulating AVP exactly."""
+        pkt = self._make_packet(
+            "VENDOR No-Len 429 format=4,0\nBEGIN-VENDOR No-Len\n"
+            "ATTRIBUTE No-Len-Attr 5 string\nEND-VENDOR No-Len\n"
+        )
+        encoded = pkt._pkt_encode_attribute((429, 5), b"value")
+        # No length field — value extends to the end of the buffer.
+        self.assertEqual(encoded[2:6], b"\x00\x00\x01\xad")  # vendor=429
+        self.assertEqual(encoded[6:10], b"\x00\x00\x00\x05")  # 4-byte type
+        self.assertEqual(encoded[10:], b"value")
+
+        decoded = pkt._pkt_decode_vendor_attribute(encoded[2:])
+        self.assertEqual(decoded, [((429, 5), b"value")])
+
+    def test_decode_rejects_truncated_length(self):
+        pkt = self._make_packet("VENDOR Foo 11\n")
+        # length=99 but only 5 bytes of payload available.
+        bad = b"\x00\x00\x00\x0b\x02\x63value"
+        self.assertEqual(pkt._pkt_decode_vendor_attribute(bad), [(26, bad)])
+
+
+class ConcatAttributeTests(unittest.TestCase):
+    """Attributes flagged with ``concat`` split on encode and merge on decode."""
+
+    def _make_dict(self):
+        return Dictionary(StringIO("ATTRIBUTE Long-Octets 30 octets concat\n"))
+
+    def _make_packet(self):
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=self._make_dict(),
+        )
+
+    def test_encode_splits_value_into_253_byte_chunks(self):
+        pkt = self._make_packet()
+        pkt[30] = [b"A" * 300]
+        encoded = pkt._pkt_encode_attributes()
+        # Expect two AVPs: [30][255][253 bytes A], then [30][49][47 bytes A]
+        self.assertEqual(encoded[0], 30)
+        self.assertEqual(encoded[1], 255)  # 253 value + 2 header
+        self.assertEqual(encoded[2:255], b"A" * 253)
+        rest = encoded[255:]
+        self.assertEqual(rest[0], 30)
+        self.assertEqual(rest[1], 49)  # 47 value + 2 header
+        self.assertEqual(rest[2:], b"A" * 47)
+
+    def test_encode_leaves_short_value_alone(self):
+        pkt = self._make_packet()
+        pkt[30] = [b"short"]
+        encoded = pkt._pkt_encode_attributes()
+        self.assertEqual(encoded, b"\x1e\x07short")
+
+    def test_decode_merges_split_chunks(self):
+        d = self._make_dict()
+        pkt = packet.Packet(
+            id=1, secret=b"secret", authenticator=b"0123456789ABCDEF", dict=d
+        )
+        chunk1 = b"A" * 253
+        chunk2 = b"A" * 47
+        attrs = (
+            struct.pack("!BB", 30, len(chunk1) + 2)
+            + chunk1
+            + struct.pack("!BB", 30, len(chunk2) + 2)
+            + chunk2
+        )
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + attrs)
+        # After concat-merge there is exactly one entry of 300 bytes.
+        self.assertEqual(len(pkt[30]), 1)
+        self.assertEqual(pkt[30][0], b"A" * 300)
+
+    def test_decode_does_not_merge_non_concat_attributes(self):
+        d = Dictionary(StringIO("ATTRIBUTE Multi-String 31 string\n"))
+        pkt = packet.Packet(
+            id=1, secret=b"secret", authenticator=b"0123456789ABCDEF", dict=d
+        )
+        attrs = (
+            struct.pack("!BB", 31, 5)
+            + b"AAA"
+            + struct.pack("!BB", 31, 5)
+            + b"BBB"
+        )
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+        pkt.decode_packet(header + attrs)
+        # Two entries remain — concat must not affect plain string attributes.
+        self.assertEqual(len(pkt[31]), 2)

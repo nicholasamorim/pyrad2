@@ -61,18 +61,24 @@ The datatypes currently supported are:
 +---------------+----------------------------------------------+
 ```
 
-These datatypes are parsed but not supported:
+Attribute options recognized after the type column:
 
 ```
-+---------------+----------------------------------------------+
-| type          | description                                  |
-+===============+==============================================+
-| ifid          | 8 octets in network byte order               |
-+---------------+----------------------------------------------+
-| ether         | 6 octets of hh:hh:hh:hh:hh:hh                |
-|               | where 'h' is hex digits, upper or lowercase. |
-+---------------+----------------------------------------------+
+has_tag    attribute carries a one-byte tag prefix (RFC 2868)
+encrypt=N  apply encryption flavour N (1, 2, or 3)
+concat     attribute may be split across multiple AVPs whose
+           values the receiver must concatenate (RFC 7268 §3.6).
+           Typical examples: EAP-Message, CHAP-Challenge.
 ```
+
+Vendor format specifications honor the ``format=type_len,len_len`` syntax
+where ``type_len`` is 1, 2, or 4 and ``len_len`` is 0, 1, or 2. The
+default (RFC 2865 §5.26) is ``format=1,1``. Stored formats are applied
+when encoding and decoding Vendor-Specific Attributes for that vendor.
+
+Limitations:
+    * Nested TLVs deeper than two levels are not yet supported.
+    * RFC 6929 extended/long-extended attributes are not yet supported.
 """
 
 from copy import copy
@@ -95,6 +101,8 @@ class Attribute:
         vendor (int): Vendor ID (0 if standard)
         has_tag (bool): Whether attribute supports tags
         encrypt (int): Encryption type (0 = none)
+        concat (bool): Whether values longer than 253 bytes are split
+            across multiple AVPs on the wire and concatenated on decode.
         values (bidict.BiDict): Mapping of named values to their codes
     """
 
@@ -108,6 +116,7 @@ class Attribute:
         values=None,
         encrypt: int = 0,
         has_tag: bool = False,
+        concat: bool = False,
     ):
         if datatype not in DATATYPES:
             raise ValueError("Invalid data type")
@@ -117,6 +126,7 @@ class Attribute:
         self.vendor = vendor
         self.encrypt = encrypt
         self.has_tag = has_tag
+        self.concat = concat
         self.values = bidict.BiDict()
         self.sub_attributes: dict = {}
         self.parent = None
@@ -124,6 +134,9 @@ class Attribute:
         if values:
             for key, value in values.items():
                 self.values.add(key, value)
+
+
+VENDOR_FORMAT_DEFAULT: tuple[int, int] = (1, 1)
 
 
 class Dictionary:
@@ -136,6 +149,9 @@ class Dictionary:
         vendors (bidict.BiDict): bidict mapping vendor name to vendor code
         attrindex (bidict.BiDict): bidict mapping
         attributes (bidict.BiDict): bidict mapping attribute name to attribute class
+        vendor_formats (dict[int, tuple[int, int]]): mapping vendor code to
+            its ``(type_len, len_len)`` VSA wire format. Vendors without an
+            explicit ``format=`` declaration default to ``(1, 1)``.
     """
 
     def __init__(self, dict: Optional[str] = None, *dicts):
@@ -149,6 +165,7 @@ class Dictionary:
         self.vendors.add("", 0)
         self.attrindex = bidict.BiDict()
         self.attributes: Dict[Hashable, Any] = {}
+        self.vendor_formats: Dict[int, tuple[int, int]] = {}
         self.defer_parse: list[tuple[Dict, list]] = []
 
         if dict:
@@ -156,6 +173,14 @@ class Dictionary:
 
         for i in dicts:
             self.read_dictionary(i)
+
+    def vendor_format(self, vendor_id: int) -> tuple[int, int]:
+        """Return the ``(type_len, len_len)`` VSA wire format for ``vendor_id``.
+
+        Vendors without an explicit ``format=`` declaration use the RFC 2865
+        §5.26 default of one-byte type and one-byte length.
+        """
+        return self.vendor_formats.get(vendor_id, VENDOR_FORMAT_DEFAULT)
 
     def __len__(self) -> int:
         """Return the number of attributes defined."""
@@ -183,6 +208,7 @@ class Dictionary:
         vendor = state["vendor"]
         has_tag = False
         encrypt = 0
+        concat = False
         if len(tokens) >= 5:
 
             def keyval(o):
@@ -193,9 +219,11 @@ class Dictionary:
                     return (kv[0], None)
 
             options = [keyval(o) for o in tokens[4].split(",")]
+            options_recognized = False
             for key, val in options:
                 if key == "has_tag":
                     has_tag = True
+                    options_recognized = True
                 elif key == "encrypt":
                     if val not in ["1", "2", "3"]:
                         raise ParseError(
@@ -204,19 +232,22 @@ class Dictionary:
                             line=state["line"],
                         )
                     encrypt = int(val)
+                    options_recognized = True
+                elif key == "concat":
+                    concat = True
+                    options_recognized = True
 
-            if (not has_tag) and encrypt == 0:
+            # When the trailing column isn't a recognized option list, fall
+            # back to treating it as a vendor name (e.g. ``ATTRIBUTE Foo 1
+            # integer Cisco``).
+            if not options_recognized:
                 vendor = tokens[4]
                 if not self.vendors.has_forward(vendor):
-                    if vendor == "concat":
-                        # ignore attributes with concat (freeradius compat.)
-                        return None
-                    else:
-                        raise ParseError(
-                            "Unknown vendor " + vendor,
-                            file=state["file"],
-                            line=state["line"],
-                        )
+                    raise ParseError(
+                        "Unknown vendor " + vendor,
+                        file=state["file"],
+                        line=state["line"],
+                    )
 
         (attribute, code, datatype) = tokens[1:4]
 
@@ -269,6 +300,7 @@ class Dictionary:
             vendor,
             encrypt=encrypt,
             has_tag=has_tag,
+            concat=concat,
         )
         if datatype == "tlv":
             # save attribute in tlvs
@@ -315,8 +347,7 @@ class Dictionary:
                 line=state["line"],
             )
 
-        # Parse format specification, but do
-        # nothing about it for now
+        vsa_format = VENDOR_FORMAT_DEFAULT
         if len(tokens) == 4:
             fmt = tokens[3].split("=")
             if fmt[0] != "format":
@@ -333,6 +364,7 @@ class Dictionary:
                         file=state["file"],
                         line=state["line"],
                     )
+                vsa_format = (_type, length)
             except ValueError:
                 raise ParseError(
                     "Syntax error in vendor specification",
@@ -341,7 +373,10 @@ class Dictionary:
                 )
 
         (vendorname, vendor) = tokens[1:3]
-        self.vendors.add(vendorname, int(vendor, 0))
+        vendor_id = int(vendor, 0)
+        self.vendors.add(vendorname, vendor_id)
+        if vsa_format != VENDOR_FORMAT_DEFAULT:
+            self.vendor_formats[vendor_id] = vsa_format
 
     def __parse_begin_vendor(self, state: dict, tokens: list) -> None:
         """Start a block of attributes for a specific vendor."""

@@ -136,6 +136,26 @@ class DictionaryParsingTests(unittest.TestCase):
         )
         self.assertEqual(self.dict["Option-Type"].has_tag, True)
         self.assertEqual(self.dict["Option-Type"].encrypt, 1)
+        self.assertEqual(self.dict["Option-Type"].concat, False)
+
+    def testAttributeConcatOption(self):
+        # FreeRADIUS-style concat option keeps the attribute defined
+        # instead of silently dropping it (the old behaviour).
+        self.dict.read_dictionary(
+            StringIO("ATTRIBUTE Long-Octets 30 octets concat")
+        )
+        self.assertEqual(self.dict["Long-Octets"].concat, True)
+        self.assertEqual(self.dict["Long-Octets"].type, "octets")
+        self.assertEqual(self.dict["Long-Octets"].code, 30)
+
+    def testAttributeConcatCombinedWithOtherOptions(self):
+        self.dict.read_dictionary(
+            StringIO("ATTRIBUTE Frag-Octets 31 octets has_tag,concat,encrypt=2")
+        )
+        attr = self.dict["Frag-Octets"]
+        self.assertTrue(attr.has_tag)
+        self.assertTrue(attr.concat)
+        self.assertEqual(attr.encrypt, 2)
 
     def testAttributeEncryptionError(self):
         try:
@@ -286,6 +306,21 @@ class DictionaryParsingTests(unittest.TestCase):
             self.assertEqual("Syntax" in str(e), True)
         else:
             self.fail()
+
+    def testVendorFormatStoredAndRetrievable(self):
+        # Default format is (1, 1) when no format= is declared.
+        self.dict.read_dictionary(StringIO("VENDOR Cisco 9"))
+        self.assertEqual(self.dict.vendor_format(9), (1, 1))
+
+        # Explicit format= persists on the dictionary.
+        self.dict.read_dictionary(StringIO("VENDOR USR 429 format=4,0"))
+        self.assertEqual(self.dict.vendor_format(429), (4, 0))
+
+        self.dict.read_dictionary(StringIO("VENDOR Big-Type 100 format=2,1"))
+        self.assertEqual(self.dict.vendor_format(100), (2, 1))
+
+        # Unknown vendor ids fall back to the default.
+        self.assertEqual(self.dict.vendor_format(99999), (1, 1))
 
     def testBeginVendorTooFewColumns(self):
         try:

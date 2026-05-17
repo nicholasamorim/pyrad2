@@ -621,11 +621,38 @@ class Packet(OrderedDict):
             return False
         return True
 
+    # Mapping from byte width to struct format for the VSA inner header.
+    _VSA_TYPE_FORMATS = {1: "!B", 2: "!H", 4: "!I"}
+    _VSA_LEN_FORMATS = {1: "!B", 2: "!H"}
+
+    def _vendor_format(self, vendor_id: int) -> tuple[int, int]:
+        """Return the ``(type_len, len_len)`` VSA wire format for a vendor."""
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return (1, 1)
+        return dictionary.vendor_format(vendor_id)
+
+    @classmethod
+    def _pack_vsa_inner(
+        cls, vsa_type: int, value: bytes, type_len: int, len_len: int
+    ) -> bytes:
+        """Encode the inner VSA header per RFC 2865 §5.26 honoring vendor format.
+
+        ``len_len=0`` produces a header with no length field; the value
+        extends to the end of the encapsulating attribute.
+        """
+        encoded = struct.pack(cls._VSA_TYPE_FORMATS[type_len], vsa_type)
+        if len_len:
+            total = type_len + len_len + len(value)
+            encoded += struct.pack(cls._VSA_LEN_FORMATS[len_len], total)
+        return encoded + value
+
     def _pkt_encode_attribute(self, key: Hashable, value: Any):
         if isinstance(key, tuple):
-            value = struct.pack("!L", key[0]) + self._pkt_encode_attribute(
-                key[1], value
-            )
+            vendor_id, vsa_type = key
+            type_len, len_len = self._vendor_format(vendor_id)
+            inner = self._pack_vsa_inner(vsa_type, value, type_len, len_len)
+            value = struct.pack("!L", vendor_id) + inner
             key = 26
 
         return struct.pack("!BB", key, (len(value) + 2)) + value
@@ -667,42 +694,83 @@ class Packet(OrderedDict):
         else:
             return b"".join(tlv_avps)
 
+    def _is_concat_attribute(self, code: Hashable) -> bool:
+        """Return True when ``code`` refers to a dictionary attribute marked ``concat``."""
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return False
+        attr = dictionary.attributes.get(self._decode_key(code))
+        return attr is not None and getattr(attr, "concat", False)
+
     def _pkt_encode_attributes(self) -> bytes:
         result = b""
         for code, datalst in self.items():
             if self._pkt_is_tlv_attribute(code):
                 result += self._pkt_encode_tlv(code, datalst)
-            else:
-                for data in datalst:
+                continue
+            concat = self._is_concat_attribute(code)
+            for data in datalst:
+                if concat and len(data) > 253:
+                    # Split values larger than one AVP into 253-byte chunks;
+                    # the receiver concatenates per RFC 7268 §3.6.
+                    for start in range(0, len(data), 253):
+                        result += self._pkt_encode_attribute(
+                            code, data[start : start + 253]
+                        )
+                else:
                     result += self._pkt_encode_attribute(code, data)
         return result
 
     def _pkt_decode_vendor_attribute(self, data: bytes) -> list[tuple]:
-        # Check if this packet is long enough to be in the
-        # RFC2865 recommended form
-        if len(data) < 6:
+        if len(data) < 4:
             return [(26, data)]
 
-        (vendor, atype, length) = struct.unpack("!LBB", data[:6])[0:3]
-        try:
-            if self._pkt_is_tlv_attribute((vendor, atype)):
-                self._pkt_decode_tlv_attribute((vendor, atype), data[6 : length + 4])
-                tlvs = []  # tlv is added to the packet inside _pkt_decode_tlv_attribute
-            else:
-                tlvs = [((vendor, atype), data[6 : length + 4])]
-        except Exception:
+        (vendor,) = struct.unpack("!L", data[:4])
+        type_len, len_len = self._vendor_format(vendor)
+        header_len = type_len + len_len
+        inner = data[4:]
+
+        if len(inner) < header_len:
             return [(26, data)]
 
-        sumlength = 4 + length
-        while len(data) > sumlength:
+        tlvs: list[tuple] = []
+        offset = 0
+        while offset + header_len <= len(inner):
             try:
-                atype, length = struct.unpack("!BB", data[sumlength : sumlength + 2])[
-                    0:2
-                ]
+                (atype,) = struct.unpack(
+                    self._VSA_TYPE_FORMATS[type_len],
+                    inner[offset : offset + type_len],
+                )
+                if len_len == 0:
+                    payload_end = len(inner)
+                else:
+                    (length_value,) = struct.unpack(
+                        self._VSA_LEN_FORMATS[len_len],
+                        inner[offset + type_len : offset + header_len],
+                    )
+                    if length_value < header_len:
+                        return [(26, data)]
+                    payload_end = offset + length_value
+                    if payload_end > len(inner):
+                        return [(26, data)]
+            except struct.error:
+                return [(26, data)]
+
+            payload = inner[offset + header_len : payload_end]
+            try:
+                if self._pkt_is_tlv_attribute((vendor, atype)):
+                    self._pkt_decode_tlv_attribute((vendor, atype), payload)
+                else:
+                    tlvs.append(((vendor, atype), payload))
             except Exception:
                 return [(26, data)]
-            tlvs.append(((vendor, atype), data[sumlength + 2 : sumlength + length]))
-            sumlength += length
+
+            offset = payload_end
+            if len_len == 0:
+                break
+
+        if offset != len(inner):
+            return [(26, data)]
         return tlvs
 
     def _pkt_decode_tlv_attribute(self, code, data):
@@ -763,6 +831,25 @@ class Packet(OrderedDict):
                 self.setdefault(key, []).append(value)
 
             packet = packet[attrlen:]
+
+        self._merge_concat_attributes()
+
+    def _merge_concat_attributes(self) -> None:
+        """Concatenate split AVPs for attributes flagged with the ``concat`` option.
+
+        Operates on the raw bytes stored under each code, bypassing the
+        type-decoding overlays in ``__getitem__`` / ``__setitem__``.
+        """
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return
+        for code in list(OrderedDict.keys(self)):
+            attr = dictionary.attributes.get(self._decode_key(code))
+            if attr is None or not getattr(attr, "concat", False):
+                continue
+            chunks = OrderedDict.__getitem__(self, code)
+            if isinstance(chunks, list) and len(chunks) > 1:
+                OrderedDict.__setitem__(self, code, [b"".join(chunks)])
 
     def _salt_en_decrypt(self, data, salt):
         result = b""
