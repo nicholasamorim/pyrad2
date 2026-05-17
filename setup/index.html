@@ -997,6 +997,59 @@
 <h1 id="how-does-pyrad2-work">How does pyrad2 work</h1>
 <p>pyrad2 allows you to build servers and clients for the <a href="https://en.wikipedia.org/wiki/RADIUS">RADIUS</a> protocol.</p>
 <p>It is not meant to be a standalone implementation like <a href="https://freeradius.org">FreeRADIUS</a>, but rather as a tool to allow you to build your own server and client.</p>
+<h2 id="learning-by-running">Learning by running</h2>
+<p>The fastest way to understand pyrad2 is to run a working exchange end-to-end and watch what crosses the wire. The repository ships two complementary surfaces:</p>
+<table>
+<thead>
+<tr>
+<th>Folder</th>
+<th>Purpose</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/nicholasamorim/pyrad2/tree/master/examples"><code>examples/</code></a></td>
+<td>Operational scripts — a server, a client, intended to be <strong>copied into your own project</strong> and edited.</td>
+<td>When you're ready to write your own integration.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/nicholasamorim/pyrad2/tree/master/scenarios"><code>scenarios/</code></a></td>
+<td>Single-process end-to-end demos — one event loop runs both a server <strong>and</strong> a client so the full exchange shows up on a single log. <strong>Not meant to be edited.</strong></td>
+<td>When you want to understand what a flow looks like, top to bottom.</td>
+</tr>
+</tbody>
+</table>
+<p>Each scenario is one <code>python scenarios/&lt;name&gt;.py</code> away:</p>
+<div class="language-bash highlight"><span class="filename">Run individual scenarios</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>make<span class="w"> </span>scenario_auth<span class="w">     </span><span class="c1"># Access-Request → Access-Accept (UDP, RFC 2865)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span>scenario_acct<span class="w">     </span><span class="c1"># Accounting-Request → Accounting-Response</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>make<span class="w"> </span>scenario_coa<span class="w">      </span><span class="c1"># CoA-Request → CoA-ACK (RFC 5176)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>make<span class="w"> </span>scenario_status<span class="w">   </span><span class="c1"># Status-Server health check (RFC 5997)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>make<span class="w"> </span>scenario_radsec<span class="w">   </span><span class="c1"># RadSec (RFC 6614) — mutual TLS, Access-Request</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>make<span class="w"> </span>demo<span class="w">              </span><span class="c1"># all five sequentially</span>
+</span></code></pre></div>
+<p>The RadSec scenario uses the test certificates that ship in
+<code>examples/certs/</code> and exercises the same surface as UDP scenarios with
+mutual TLS layered on top — useful for confirming that the dictionary,
+encoding, and decoding features work identically across transports.</p>
+<h3 id="wire-level-visibility-pyrad2_trace">Wire-level visibility: PYRAD2_TRACE</h3>
+<p>The scenarios become a protocol-learning tool when paired with the <code>PYRAD2_TRACE</code> environment variable. Set it to <code>1</code> (or <code>true</code>/<code>yes</code>/<code>on</code>) on any script — scenario, example, or your own code — and pyrad2 dumps every packet that flows through <code>request_packet</code>, <code>reply_packet</code>, and <code>decode_packet</code>:</p>
+<div class="language-bash highlight"><span class="filename">Watch the bytes</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nv">PYRAD2_TRACE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>make<span class="w"> </span>scenario_auth
+</span></code></pre></div>
+<p>Each dump shows direction (<code>→</code> outgoing, <code>←</code> incoming), packet type, id, length, authenticator, the decoded AVPs, and an xxd-style hex view of the raw bytes:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>[pyrad2 trace] → AccessRequest id=5 len=39
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    authenticator: de0f04abde127b093c5e456b9f51ed81
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    attributes:
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>      User-Name: [&#39;alice&#39;]
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>      NAS-IP-Address: [&#39;192.168.1.10&#39;]
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>      Service-Type: [&#39;Login-User&#39;]
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    raw:
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>        0000  01 05 00 27 de 0f 04 ab de 12 7b 09 3c 5e 45 6b  ...&#39;......{.&lt;^Ek
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>        0010  9f 51 ed 81 01 07 61 6c 69 63 65 04 06 c0 a8 01  .Q....alice.....
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        0020  0a 06 06 00 00 00 01                             .......
+</span></code></pre></div>
+<p>It is gated by the env var, costs nothing when off, and routes through the same <code>loguru</code> pipeline as the rest of pyrad2 — so you can filter, redirect, or format it like any other log message in your application.</p>
+<p><code>PYRAD2_TRACE</code> is the recommended way to debug "why didn't this packet do what I expected?" without dropping to Wireshark.</p>
 <h2 id="radius-concepts">RADIUS Concepts</h2>
 <h3 id="dictionary">Dictionary</h3>
 <p>For the purpose of using pyrad2, the most important concept is the <em>Dictionary</em>. The dictionary is an actual file on the filesystem.</p>
@@ -1007,14 +1060,14 @@
 <p>RADIUS uses dictionaries to define the attributes that can
 be used in packets. The Dictionary class stores the attribute definitions from one or more dictionary files and allows Server/Client to understand what an <em>attribute code</em> means.</p>
 <p>Here's an example of how it looks:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ATTRIBUTE   User-Name           1   string
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ATTRIBUTE   User-Password       2   string
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>ATTRIBUTE   CHAP-Password       3   octets
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>ATTRIBUTE   User-Name           1   string
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ATTRIBUTE   User-Password       2   string
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>ATTRIBUTE   CHAP-Password       3   octets
 </span></code></pre></div>
 <p>You can find a reference dictionary file <a href="https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary">here</a>. Another dictionary is provided <a href="https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary.freeradius">here</a> with FreeRADIUS vendor-specific attributes.</p>
 <p>For our example, download <em>both files</em> and place it into your project folder.</p>
 <p>When you see code like this:</p>
-<div class="language-py highlight"><span class="filename">Loading a dictionary</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">dictfile</span> <span class="o">=</span> <span class="n">dictionary</span><span class="o">.</span><span class="n">Dictionary</span><span class="p">(</span><span class="s2">&quot;dictionary&quot;</span><span class="p">)</span>
+<div class="language-py highlight"><span class="filename">Loading a dictionary</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">dictfile</span> <span class="o">=</span> <span class="n">dictionary</span><span class="o">.</span><span class="n">Dictionary</span><span class="p">(</span><span class="s2">&quot;dictionary&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p>You are actually passing a <em>path</em> to a file (or a <a href="https://docs.python.org/3/library/io.html">file-like object</a>) called <code>dictionary</code>, so make sure the file you pass is accessible from your code and it's a valid dictionary file.</p>
 <h4 id="supported-dictionary-features">Supported dictionary features</h4>
@@ -1043,12 +1096,12 @@ declared follows RFC 2865 §5.26 (<code>1,1</code>).</p>
 <p><strong>RFC 6929 extended attributes</strong> (types 241–246): declare the wrapper as
 <code>extended</code> (241–244) or <code>long-extended</code> (245–246), then add sub-attributes
 using dotted-code notation:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ATTRIBUTE Extended-Attribute-1  241    extended
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>ATTRIBUTE Frag-Status           241.1  integer
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>ATTRIBUTE Auth-Lifetime         241.2  integer
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>ATTRIBUTE Extended-Attribute-5  245    long-extended
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>ATTRIBUTE WiMAX-Blob            245.1  octets
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>ATTRIBUTE Extended-Attribute-1  241    extended
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>ATTRIBUTE Frag-Status           241.1  integer
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>ATTRIBUTE Auth-Lifetime         241.2  integer
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>ATTRIBUTE Extended-Attribute-5  245    long-extended
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>ATTRIBUTE WiMAX-Blob            245.1  octets
 </span></code></pre></div>
 <p>Values are accessed by name on the packet (<code>pkt["Frag-Status"] = 5</code>) and
 read back through the parent (<code>pkt["Extended-Attribute-1"]</code> returns a
@@ -1059,15 +1112,15 @@ receive — callers see one logical value either way.</p>
 sub-attribute of an extended wrapper that carries a vendor-specific
 payload. FreeRADIUS's <code>BEGIN-VENDOR &lt;name&gt; parent=&lt;evs-attr&gt;</code> syntax
 scopes the vendor's attributes underneath:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>ATTRIBUTE Extended-Attribute-1        241     extended
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ATTRIBUTE Extended-Vendor-Specific-1  241.26  evs
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>VENDOR Example 12345
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>ATTRIBUTE Example-Attr-1  1  string
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>ATTRIBUTE Example-Attr-2  2  integer
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>END-VENDOR Example
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>ATTRIBUTE Extended-Attribute-1        241     extended
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ATTRIBUTE Extended-Vendor-Specific-1  241.26  evs
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>VENDOR Example 12345
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>ATTRIBUTE Example-Attr-1  1  string
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>ATTRIBUTE Example-Attr-2  2  integer
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>END-VENDOR Example
 </span></code></pre></div>
 <p>EVS attributes are accessed by name (<code>pkt["Example-Attr-1"] = "hello"</code>).
 The wire encoding wraps the vendor id and vendor type into the extended
