@@ -70,6 +70,25 @@ def create_request(client, user):
 
 You can find a list of standard RADIUS attributes [here](https://datatracker.ietf.org/doc/html/rfc2865#page-22). Note that these do not include vendor-specific attributes.
 
+## Message-Authenticator
+
+PyRad2 validates reply `Message-Authenticator` attributes whenever they are
+present. If you construct an `Access-Request` with `EAP-Message`, the sync and
+async UDP clients automatically add `Message-Authenticator` before sending it.
+
+Use `enforce_ma=True` when the client should also require replies to include a
+valid `Message-Authenticator`:
+
+```py
+client = ClientAsync(
+    server="localhost",
+    secret=b"Kah3choteereethiejeimaeziecumi",
+    timeout=4,
+    dict=Dictionary("dictionary"),
+    enforce_ma=True,
+)
+```
+
 # Setting attributes
 
 To set attributes in the `Client` object, you need to replace underscores with hyphens. So instead of `User_Name`, you use `User-Name`. The former is used in python code and the latter is used directly in the underlying data.

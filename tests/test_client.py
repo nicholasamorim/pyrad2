@@ -1,10 +1,13 @@
 import select
 import socket
 import unittest
+import os
 from .mock import MockPacket
 from .mock import MockPoll
 from .mock import MockSocket
+from .base import TEST_ROOT_PATH
 from pyrad2.client import Client
+from pyrad2.dictionary import Dictionary
 from pyrad2.client import Timeout
 from pyrad2.packet import AuthPacket
 from pyrad2.packet import AcctPacket
@@ -183,6 +186,16 @@ class OtherTests(unittest.TestCase):
         self.assertTrue(packet.dict is self.client.dict)
         self.assertEqual(packet.id, 15)
         self.assertEqual(packet.secret, b"zeer geheim")
+
+    def test_prepare_outgoing_auth_packet_adds_ma_for_eap_message(self):
+        dictionary = Dictionary(os.path.join(TEST_ROOT_PATH, "data/full"))
+        client = Client(self.server, secret=b"secret", dict=dictionary)
+        packet = client.create_auth_packet(id=15)
+        packet[79] = [b"\x02\x01\x00\x05\x01"]
+
+        client._prepare_outgoing_packet(packet)
+
+        self.assertTrue(packet.has_message_authenticator())
 
     def test_create_acct_packet(self):
         packet = self.client.create_acct_packet(id=15)

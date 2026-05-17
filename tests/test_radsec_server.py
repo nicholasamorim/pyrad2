@@ -371,6 +371,27 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(PacketError):
             await server.packet_received(bytes(data), "127.0.0.1")
 
+    async def test_message_authenticator_policy_rejects_eap_without_ma(self):
+        request = self.client.create_auth_packet(
+            code=PacketType.AccessRequest, User_Name="wichert"
+        )
+        request[79] = [b"\x02\x01\x00\x05\x01"]
+
+        with self.assertRaisesRegex(PacketError, "EAP-Message requires"):
+            await self.server.packet_received(request.request_packet(), "127.0.0.1")
+
+    async def test_message_authenticator_policy_accepts_valid_ma(self):
+        request = self.client.create_auth_packet(
+            code=PacketType.AccessRequest, User_Name="wichert"
+        )
+        request[79] = [b"\x02\x01\x00\x05\x01"]
+        request.add_message_authenticator()
+
+        reply = await self.server.packet_received(request.request_packet(), "127.0.0.1")
+
+        self.assertEqual(reply.code, PacketType.AccessAccept)
+        self.assertTrue(reply.has_message_authenticator())
+
     async def test_handle_client_reads_multiple_packets_from_one_stream(self):
         server = RadSecServer(
             certfile=SERVER_CERTFILE,

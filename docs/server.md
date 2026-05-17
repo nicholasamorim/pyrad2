@@ -53,6 +53,12 @@ class MyRadiusServer(ServerAsync):
 
 When a packet arrives at these functions it has already been parsed, validated and instantiated into a [pyrad2.packet.Packet](https://github.com/nicholasamorim/pyrad2/blob/master/pyrad2/packet.py) class.
 
+PyRad2 validates `Message-Authenticator` whenever the attribute is present. By
+default, incoming packets containing `EAP-Message` must include a valid
+`Message-Authenticator`; other packets remain compatible with older clients. To
+require it on every incoming packet, pass `require_message_authenticator=True`
+when constructing `Server`, `ServerAsync`, or `RadSecServer`.
+
 The example implementation provided *simply logs* details of the request it has just received and it's meant to illustrate the contents of the packet being received.
 
 ``` py

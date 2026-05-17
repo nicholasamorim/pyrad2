@@ -47,5 +47,8 @@ async with RadSecClient(...) as client:
     reply = await client.send_packet(request)
 ```
 
+`RadSecClient` automatically adds `Message-Authenticator` to outgoing
+`Access-Request` packets that contain `EAP-Message`.
+
 ::: pyrad2.radsec.client
     handler: python

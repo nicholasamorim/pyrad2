@@ -64,6 +64,8 @@ class Server(host.Host):
         auth_enabled: bool = True,
         acct_enabled: bool = True,
         coa_enabled: bool = False,
+        require_message_authenticator: bool = False,
+        require_eap_message_authenticator: bool = True,
     ):
         """Initializes a sync server.
 
@@ -77,6 +79,10 @@ class Server(host.Host):
             auth_enabled (bool): Enable auth server (default: True).
             acct_enabled (bool): Enable accounting server (default: True).
             coa_enabled (bool): Enable CoA server (default: False).
+            require_message_authenticator (bool): Require
+                Message-Authenticator on incoming packets.
+            require_eap_message_authenticator (bool): Require
+                Message-Authenticator on packets containing EAP-Message.
         """
         super().__init__(authport, acctport, coaport, dict)
 
@@ -87,10 +93,21 @@ class Server(host.Host):
         self.acctfds: list = []
         self.coa_enabled = coa_enabled
         self.coafds: list = []
+        self.require_message_authenticator = require_message_authenticator
+        self.require_eap_message_authenticator = require_eap_message_authenticator
 
         if addresses:
             for addr in addresses:
                 self.bind_to_address(addr)
+
+    def _validate_message_authenticator_policy(self, pkt: packet.Packet) -> None:
+        """Validate incoming Message-Authenticator policy for a packet."""
+        if not isinstance(pkt, packet.Packet):
+            return
+        pkt.validate_message_authenticator_policy(
+            require_message_authenticator=self.require_message_authenticator,
+            require_eap_message_authenticator=self.require_eap_message_authenticator,
+        )
 
     def _get_addr_info(
         self, addr: str
@@ -209,6 +226,7 @@ class Server(host.Host):
             raise ServerPacketError(
                 "Received non-authentication packet on authentication port"
             )
+        self._validate_message_authenticator_policy(pkt)
         self.handle_auth_packet(pkt)
 
     def _handle_acct_packet(self, pkt: packet.Packet) -> None:
@@ -226,6 +244,7 @@ class Server(host.Host):
             PacketType.AccountingResponse,
         ]:
             raise ServerPacketError("Received non-accounting packet on accounting port")
+        self._validate_message_authenticator_policy(pkt)
         self.handle_acct_packet(pkt)
 
     def _handle_coa_packet(self, pkt: packet.Packet) -> None:
@@ -239,8 +258,10 @@ class Server(host.Host):
         """
         self._add_secret(pkt)
         if pkt.code == PacketType.CoARequest:
+            self._validate_message_authenticator_policy(pkt)
             self.handle_coa_packet(pkt)
         elif pkt.code == PacketType.DisconnectRequest:
+            self._validate_message_authenticator_policy(pkt)
             self.handle_disconnect_packet(pkt)
         else:
             raise ServerPacketError("Received non-coa packet on coa port")
@@ -288,7 +309,23 @@ class Server(host.Host):
         """
         reply = pkt.create_reply(**attributes)
         reply.source = pkt.source
+        packet.prepare_reply_message_authenticator(
+            pkt,
+            reply,
+            require_message_authenticator=self.require_message_authenticator,
+            require_eap_message_authenticator=self.require_eap_message_authenticator,
+        )
         return reply
+
+    def send_reply_packet(self, fd: socket.socket, pkt: packet.Packet) -> None:
+        """Send a reply packet after applying Message-Authenticator policy."""
+        if self.require_message_authenticator or (
+            self.require_eap_message_authenticator
+            and isinstance(pkt, packet.Packet)
+            and pkt.has_eap_message()
+        ):
+            pkt.ensure_message_authenticator()
+        super().send_reply_packet(fd, pkt)
 
     def _process_input(self, fd: socket.socket) -> None:
         """Process available data.

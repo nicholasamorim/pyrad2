@@ -14,6 +14,7 @@ from pyrad2.packet import (
     CoAPacket,
     Packet,
     PacketImplementation,
+    prepare_request_message_authenticator,
 )
 
 
@@ -219,6 +220,7 @@ class ClientAsync:
             dict (pyrad.dictionary.Dictionary): RADIUS dictionary.
             retries (int): Number of times to retry sending a RADIUS request.
             timeout (int): Number of seconds to wait for an answer.
+            enforce_ma (bool): Enforce usage of Message-Authenticator.
         """
         self.server = server
         self.secret = secret
@@ -235,6 +237,13 @@ class ClientAsync:
 
         self.protocol_coa: Optional[DatagramProtocolClient] = None
         self.coa_port = coa_port
+
+    def _prepare_outgoing_packet(self, pkt: Packet) -> None:
+        """Apply Message-Authenticator policy before a packet is sent."""
+        prepare_request_message_authenticator(
+            pkt,
+            require_message_authenticator=self.enforce_ma,
+        )
 
     async def initialize_transports(
         self,
@@ -415,6 +424,7 @@ class ClientAsync:
         """
 
         ans: asyncio.Future = asyncio.Future(loop=asyncio.get_event_loop())
+        self._prepare_outgoing_packet(pkt)
 
         if isinstance(pkt, AuthPacket):
             if not self.protocol_auth:

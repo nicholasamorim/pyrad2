@@ -24,6 +24,42 @@ CURRENT_ID = random_generator.randrange(1, 255)
 PacketImplementation = Union["AuthPacket", "AcctPacket", "CoAPacket"]
 
 
+def prepare_request_message_authenticator(
+    pkt: Any, *, require_message_authenticator: bool = False
+) -> None:
+    """Add Message-Authenticator to outgoing Access-Requests when required."""
+    if getattr(pkt, "code", None) != PacketType.AccessRequest:
+        return
+
+    has_eap_message = getattr(pkt, "has_eap_message", lambda: False)
+    if require_message_authenticator or has_eap_message():
+        ensure_message_authenticator = getattr(pkt, "ensure_message_authenticator", None)
+        if ensure_message_authenticator is not None:
+            ensure_message_authenticator()
+
+
+def prepare_reply_message_authenticator(
+    request: Any,
+    reply: Any,
+    *,
+    require_message_authenticator: bool = False,
+    require_eap_message_authenticator: bool = True,
+) -> None:
+    """Add Message-Authenticator to a reply when request or policy requires it."""
+    request_has_ma = getattr(request, "has_message_authenticator", lambda: False)
+    request_has_eap = getattr(request, "has_eap_message", lambda: False)
+    reply_has_eap = getattr(reply, "has_eap_message", lambda: False)
+    ensure_reply_ma = getattr(reply, "ensure_message_authenticator", None)
+
+    if (
+        require_message_authenticator
+        or request_has_ma()
+        or (require_eap_message_authenticator and (request_has_eap() or reply_has_eap()))
+    ):
+        if ensure_reply_ma is not None:
+            ensure_reply_ma()
+
+
 class Packet(OrderedDict):
     """Packet acts like a standard python map to provide simple access
     to the RADIUS attributes. Since RADIUS allows for repeated
@@ -111,6 +147,32 @@ class Packet(OrderedDict):
             self.authenticator = self.create_authenticator()
             self._refresh_message_authenticator()
 
+    def _has_attribute(self, name: str, code: int) -> bool:
+        """Return whether an attribute is present by name or numeric code."""
+        try:
+            if name in self:
+                return True
+        except AttributeError:
+            pass
+        return code in self
+
+    def has_message_authenticator(self) -> bool:
+        """Return whether this packet includes a Message-Authenticator."""
+        return bool(self.message_authenticator) or self._has_attribute(
+            "Message-Authenticator", 80
+        )
+
+    def has_eap_message(self) -> bool:
+        """Return whether this packet includes an EAP-Message."""
+        return self._has_attribute("EAP-Message", 79)
+
+    def ensure_message_authenticator(self) -> None:
+        """Ensure the packet will be sent with a Message-Authenticator."""
+        if not self._has_attribute("Message-Authenticator", 80):
+            self.add_message_authenticator()
+        else:
+            self.message_authenticator = True
+
     def get_message_authenticator(self) -> Optional[bool]:
         self._refresh_message_authenticator()
         return self.message_authenticator
@@ -146,11 +208,44 @@ class Packet(OrderedDict):
         hmac_constructor.update(attr)
         self["Message-Authenticator"] = hmac_constructor.digest()
 
+    @staticmethod
+    def _zero_message_authenticator(attr: bytes) -> bytes:
+        """Return attributes with the Message-Authenticator value zeroed."""
+        zeroed = bytearray(attr)
+        offset = 0
+        found = 0
+
+        while offset < len(attr):
+            if offset + 2 > len(attr):
+                raise PacketError("Attribute header is corrupt")
+
+            key = attr[offset]
+            length = attr[offset + 1]
+            if length < 2:
+                raise PacketError("Attribute length is too small (%d)" % length)
+            if offset + length > len(attr):
+                raise PacketError("Attribute length exceeds packet length")
+
+            if key == 80:
+                if length != 18:
+                    raise PacketError("Message-Authenticator must be 16 bytes")
+                found += 1
+                zeroed[offset + 2 : offset + length] = 16 * b"\00"
+
+            offset += length
+
+        if found == 0:
+            raise PacketError("No Message-Authenticator AVP present")
+        if found > 1:
+            raise PacketError("Multiple Message-Authenticator AVPs present")
+
+        return bytes(zeroed)
+
     def verify_message_authenticator(
         self,
         secret: Optional[bytes] = None,
         original_authenticator: Optional[bytes] = None,
-        original_code: Optional[PacketType] = None,
+        original_code: Optional[int] = None,
     ) -> bool:
         """Verify packet Message-Authenticator.
 
@@ -185,7 +280,7 @@ class Packet(OrderedDict):
         # attributes exactly as sent.
         if self.raw_packet:
             attr = self.raw_packet[20:]
-            attr = attr.replace(prev_ma[0], 16 * b"\00")
+            attr = self._zero_message_authenticator(attr)
         else:
             self["Message-Authenticator"] = 16 * b"\00"
             attr = self._pkt_encode_attributes()
@@ -224,6 +319,41 @@ class Packet(OrderedDict):
         hmac_constructor.update(attr)
         self["Message-Authenticator"] = prev_ma[0]
         return prev_ma[0] == hmac_constructor.digest()
+
+    def require_valid_message_authenticator(
+        self,
+        secret: Optional[bytes] = None,
+        original_authenticator: Optional[bytes] = None,
+        original_code: Optional[int] = None,
+    ) -> None:
+        """Raise PacketError unless this packet has a valid Message-Authenticator."""
+        try:
+            is_valid = self.verify_message_authenticator(
+                secret=secret,
+                original_authenticator=original_authenticator,
+                original_code=original_code,
+            )
+        except Exception as exc:
+            raise PacketError("Message-Authenticator is invalid") from exc
+
+        if not is_valid:
+            raise PacketError("Message-Authenticator is invalid")
+
+    def validate_message_authenticator_policy(
+        self,
+        *,
+        require_message_authenticator: bool = False,
+        require_eap_message_authenticator: bool = True,
+    ) -> None:
+        """Validate Message-Authenticator presence and integrity policy."""
+        if not self.has_message_authenticator():
+            if require_message_authenticator:
+                raise PacketError("Message-Authenticator attribute is required")
+            if require_eap_message_authenticator and self.has_eap_message():
+                raise PacketError("EAP-Message requires Message-Authenticator")
+            return
+
+        self.require_valid_message_authenticator()
 
     def create_reply(self, **attributes) -> "Packet":
         """Create a new packet as a reply to this one. This method
@@ -448,11 +578,17 @@ class Packet(OrderedDict):
         if hash != rawreply[4:20]:
             return False
 
-        if enforce_ma:
-            if self.message_authenticator is None:
+        if reply.has_message_authenticator():
+            try:
+                reply.require_valid_message_authenticator(
+                    secret=self.secret,
+                    original_authenticator=self.authenticator,
+                    original_code=self.code,
+                )
+            except PacketError:
                 return False
-            if not self.verify_message_authenticator():
-                return False
+        elif enforce_ma:
+            return False
         return True
 
     def _pkt_encode_attribute(self, key: Hashable, value: Any):

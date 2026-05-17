@@ -15,6 +15,7 @@ from pyrad2.packet import (
     Packet,
     PacketError,
     PacketImplementation,
+    prepare_request_message_authenticator,
 )
 from pyrad2.tools import read_radius_packet
 from pyrad2.tools import cert_fingerprint_matches, normalize_cert_fingerprint
@@ -208,8 +209,13 @@ class RadSecClient:
         self, writer: asyncio.StreamWriter, packet: PacketImplementation
     ) -> None:
         """Write one RADIUS packet to the RadSec stream within the client timeout."""
+        self._prepare_outgoing_packet(packet)
         writer.write(packet.request_packet())
         await asyncio.wait_for(writer.drain(), timeout=self.timeout)
+
+    def _prepare_outgoing_packet(self, packet: PacketImplementation) -> None:
+        """Apply Message-Authenticator policy before a packet is sent."""
+        prepare_request_message_authenticator(packet)
 
     async def _read_packet(self, reader: asyncio.StreamReader) -> bytes:
         """Read one RADIUS packet from the RadSec stream within the client timeout."""
