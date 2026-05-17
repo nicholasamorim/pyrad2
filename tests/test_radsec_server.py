@@ -462,6 +462,50 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(writer.writes), 2)
         self.assertTrue(writer.closed)
 
+    async def test_handle_client_closes_after_max_packets(self):
+        server = RadSecServer(
+            certfile=SERVER_CERTFILE,
+            keyfile=SERVER_KEYFILE,
+            ca_certfile=CA_CERTFILE,
+            dictionary=self.dictionary,
+            max_packets_per_connection=1,
+        )
+        server.hosts = {"127.0.0.1": TEST_HOST}
+        request1 = self.client.create_auth_packet(
+            code=PacketType.AccessRequest, User_Name="one"
+        )
+        request2 = self.client.create_auth_packet(
+            code=PacketType.AccessRequest, User_Name="two"
+        )
+        reader = FakeRadSecReader(request1.request_packet(), request2.request_packet())
+        writer = FakeRadSecWriter(peername=("127.0.0.1", 44001))
+
+        await server._handle_client(reader, writer)
+
+        # The limit must close the connection after the first packet — the
+        # second request is never serviced even though the reader has it
+        # queued.
+        self.assertEqual(len(writer.writes), 1)
+        self.assertTrue(writer.closed)
+
+    async def test_handle_client_closes_on_read_timeout(self):
+        server = RadSecServer(
+            certfile=SERVER_CERTFILE,
+            keyfile=SERVER_KEYFILE,
+            ca_certfile=CA_CERTFILE,
+            dictionary=self.dictionary,
+            connection_read_timeout=0.01,
+        )
+        server.hosts = {"127.0.0.1": TEST_HOST}
+        # Reader sleeps longer than the timeout, so the read must abort.
+        reader = FakeRadSecReader(delay=0.2)
+        writer = FakeRadSecWriter(peername=("127.0.0.1", 44002))
+
+        await server._handle_client(reader, writer)
+
+        self.assertEqual(writer.writes, [])
+        self.assertTrue(writer.closed)
+
     async def test_default_coa_handler_returns_nak(self):
         server = AuthAcctOnlyRadSecServer(
             certfile=SERVER_CERTFILE,
