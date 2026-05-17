@@ -16,6 +16,7 @@ python scenarios/auth.py
 python scenarios/acct.py
 python scenarios/coa.py
 python scenarios/status.py
+python scenarios/dedup.py
 python scenarios/radsec_auth.py
 ```
 
@@ -26,8 +27,9 @@ make scenario_auth     # Access-Request → Access-Accept (UDP, RFC 2865)
 make scenario_acct     # Accounting-Request → Accounting-Response
 make scenario_coa      # CoA-Request → CoA-ACK (RFC 5176)
 make scenario_status   # Status-Server health check (RFC 5997)
+make scenario_dedup    # Duplicate detection / response cache (RFC 5080)
 make scenario_radsec   # RadSec (RFC 6614) — mutual TLS, Access-Request
-make demo              # all five sequentially
+make demo              # all six sequentially
 ```
 
 The RadSec scenario uses the test certificates in `examples/certs/`,

@@ -23,6 +23,7 @@ nav:
         - Server: api/radsec_server.md
         - Client: api/radsec_client.md
       - packet: api/packet.md
+      - dedup: api/dedup.md
       - dictionary: api/dictionary.md
       - host: api/host.md
       - tools: api/tools.md

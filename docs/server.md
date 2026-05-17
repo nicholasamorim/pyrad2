@@ -4,6 +4,7 @@
   - [Handling packets](#handling-packets)
   - [Replying](#replying)
   - [Status-Server](#status-server)
+  - [Duplicate detection (RFC 5080)](#duplicate-detection-rfc-5080)
 - [RadSec (Radius Over TLS)](#radsec-radius-over-tls)
 
 
@@ -139,6 +140,40 @@ When a Status-Server packet arrives on the authentication port, the server
 responds with `Access-Accept`. When it arrives on the accounting port, the
 server responds with `Accounting-Response`. These replies do not run your
 authentication or accounting side effects.
+
+# Duplicate detection (RFC 5080)
+
+UDP loses packets. Clients retransmit. [RFC 5080 §2.2.2](https://datatracker.ietf.org/doc/html/rfc5080#section-2.2.2) requires servers to **detect duplicates and resend the original reply instead of re-running the handler**. That matters most for EAP: each Access-Challenge carries a fresh `State` attribute, and re-processing a retransmission would issue a new `State` that breaks the conversation. It also matters for accounting (avoid double counting) and CoA/Disconnect (avoid double-applying authorization changes).
+
+Both `Server` and `ServerAsync` enable this by default. The key is the RFC-mandated tuple `(source IP, source UDP port, code, Identifier, Request Authenticator)`. Retransmissions of:
+
+- Access-Request
+- Accounting-Request
+- CoA-Request
+- Disconnect-Request
+
+receive the byte-identical cached reply for `dedup_ttl` seconds (default 30s); your handler runs exactly once. Duplicates that arrive while the original is still being processed are dropped silently — exactly what the RFC requires.
+
+You can tune or disable it via constructor arguments:
+
+``` py title="Tuning the dedup cache"
+from pyrad2.server_async import ServerAsync
+
+server = ServerAsync(
+    # ... your usual kwargs ...
+    dedup_enabled=True,        # default
+    dedup_ttl=30.0,            # seconds a cached reply stays valid
+    dedup_max_entries=4096,    # LRU cap before old entries get evicted
+)
+```
+
+Pass `dedup_enabled=False` to opt out entirely, or pass `dedup_cache=...` (a `pyrad2.dedup.ResponseCache` instance) to share one cache across servers or inject a custom clock for tests.
+
+Status-Server requests, CoA/Disconnect-NAK replies, and packets where the parsed source doesn't match an allowed `RemoteHost` are never cached.
+
+!!! Note
+
+    RadSec runs over TCP/TLS, where the transport already handles retransmission of lost segments. RFC 5080 §2.2.2 targets UDP specifically and the dedup cache is therefore **not** wired into `RadSecServer`.
 
 # RadSec (Radius Over TLS)
 

@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Optional
 
 from loguru import logger
 
+from pyrad2 import dedup
 from pyrad2.constants import ErrorCause, PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.packet import (
@@ -59,7 +60,12 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
 
     def send_response(self, reply: Packet, addr: tuple[str | Any, int]) -> None:
         self.server.prepare_reply_packet(reply)
-        self.transport.sendto(reply.reply_packet(), addr)
+        # Encode once and cache the bytes for RFC 5080 replay: a
+        # retransmission must receive a byte-identical reply (matters
+        # for EAP State and Message-Authenticator).
+        raw = reply.reply_packet()
+        self.transport.sendto(raw, addr)
+        dedup.record_if_keyed(self.server._dedup_cache, reply, raw)
 
     def _handle_status_server(
         self, data: bytes, remote_host: RemoteHost, addr: tuple[str | Any, int]
@@ -216,6 +222,10 @@ class ServerAsync(ABC):
         debug: bool = False,
         require_message_authenticator: bool = False,
         require_eap_message_authenticator: bool = True,
+        dedup_enabled: bool = True,
+        dedup_ttl: float = 30.0,
+        dedup_max_entries: int = 4096,
+        dedup_cache: Optional[dedup.ResponseCache] = None,
     ):
         """Initialize an async server.
 
@@ -230,6 +240,13 @@ class ServerAsync(ABC):
                 on incoming packets.
             require_eap_message_authenticator (bool): Require
                 Message-Authenticator on packets containing EAP-Message.
+            dedup_enabled (bool): Enable RFC 5080 duplicate detection and
+                response caching (default: True).
+            dedup_ttl (float): Lifetime in seconds of a cached reply.
+            dedup_max_entries (int): Maximum number of cached replies before
+                LRU eviction kicks in.
+            dedup_cache (ResponseCache): Provide a pre-built cache to share
+                between servers or to inject a custom clock for tests.
         """
         self.hosts = hosts or {}
         self.dict = dictionary
@@ -237,6 +254,14 @@ class ServerAsync(ABC):
         self.debug = debug
         self.require_message_authenticator = require_message_authenticator
         self.require_eap_message_authenticator = require_eap_message_authenticator
+        if dedup_cache is not None:
+            self._dedup_cache: Optional[dedup.ResponseCache] = dedup_cache
+        elif dedup_enabled:
+            self._dedup_cache = dedup.ResponseCache(
+                ttl=dedup_ttl, max_entries=dedup_max_entries
+            )
+        else:
+            self._dedup_cache = None
 
         self.auth_port = auth_port
         self.acct_port = acct_port
@@ -278,6 +303,22 @@ class ServerAsync(ABC):
         """Add an RFC 5176 Error-Cause value without requiring dictionary support."""
         reply[ERROR_CAUSE_ATTRIBUTE] = [int(cause).to_bytes(4, "big")]
 
+    def _select_handler(
+        self, protocol: "DatagramProtocolServer", req: Packet
+    ) -> Callable[["DatagramProtocolServer", Packet, tuple[str | Any, int]], None]:
+        """Map (server_type, packet code) to the user-overridable handler."""
+        if protocol.server_type == ServerType.Acct:
+            return self.handle_acct_packet
+        if protocol.server_type == ServerType.Auth:
+            return self.handle_auth_packet
+        if protocol.server_type == ServerType.Coa:
+            if req.code == PacketType.CoARequest:
+                return self.handle_coa_packet
+            if req.code == PacketType.DisconnectRequest:
+                return self.handle_disconnect_packet
+            raise ServerPacketError("Unexpected CoA request type")
+        raise ServerPacketError(f"Unknown server type {protocol.server_type}")
+
     def _request_handler(
         self,
         protocol: DatagramProtocolServer,
@@ -285,23 +326,57 @@ class ServerAsync(ABC):
         addr: tuple[str | Any, int],
     ):
         try:
-            if protocol.server_type == ServerType.Acct:
-                self.handle_acct_packet(protocol, req, addr)
-            elif protocol.server_type == ServerType.Auth:
-                self.handle_auth_packet(protocol, req, addr)
-            elif protocol.server_type == ServerType.Coa:
-                if req.code == PacketType.CoARequest:
-                    self.handle_coa_packet(protocol, req, addr)
-                elif req.code == PacketType.DisconnectRequest:
-                    self.handle_disconnect_packet(protocol, req, addr)
-                else:
-                    raise ServerPacketError("Unexpected CoA request type")
+            handler = self._select_handler(protocol, req)
+            self._dedup_dispatch(protocol, req, addr, handler)
         except Exception as exc:
             msg = "[{}:{}] Unexpected error: {}".format(protocol.ip, protocol.port, exc)
             if self.debug:
                 logger.exception(msg, protocol.ip, protocol.port, exc)
             else:
                 logger.error(msg, protocol.ip, protocol.port, exc)
+
+    def _dedup_dispatch(
+        self,
+        protocol: "DatagramProtocolServer",
+        req: Packet,
+        addr: tuple[str | Any, int],
+        handler: Callable[["DatagramProtocolServer", Packet, tuple[str | Any, int]], None],
+    ) -> None:
+        """Wrap ``handler(protocol, req, addr)`` with RFC 5080 dedup."""
+        key = (
+            dedup.key_for(req, source=addr)
+            if self._dedup_cache is not None
+            else None
+        )
+
+        def _resend(raw: bytes) -> None:
+            protocol.transport.sendto(raw, addr)
+
+        action = dedup.consult_cache(self._dedup_cache, key, _resend)
+        if action is dedup.DispatchAction.DROP:
+            logger.debug(
+                "[{}:{}] Dropping duplicate in-flight request from {}",
+                protocol.ip,
+                protocol.port,
+                addr,
+            )
+            return
+        if action is dedup.DispatchAction.RESENT:
+            logger.debug(
+                "[{}:{}] Resent cached reply for duplicate request from {}",
+                protocol.ip,
+                protocol.port,
+                addr,
+            )
+            return
+
+        if key is not None:
+            req._dedup_key = key  # type: ignore[attr-defined]
+        try:
+            handler(protocol, req, addr)
+        finally:
+            if key is not None and self._dedup_cache is not None:
+                self._dedup_cache.drop_in_flight(key)
 
     async def initialize_transports(
         self,
@@ -386,6 +461,11 @@ class ServerAsync(ABC):
                 require_message_authenticator=server.require_message_authenticator,
                 require_eap_message_authenticator=server.require_eap_message_authenticator,
             )
+        # Carry the request's dedup key forward so DatagramProtocolServer.
+        # send_response can cache the encoded bytes.
+        request_key = getattr(request, "_dedup_key", None)
+        if request_key is not None:
+            reply._dedup_key = request_key  # type: ignore[attr-defined]
         return reply
 
     @abstractmethod
