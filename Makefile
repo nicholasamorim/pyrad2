@@ -78,4 +78,7 @@ scenario_dedup:
 scenario_radsec:
 	uv run python scenarios/radsec_auth.py
 
-demo: scenario_auth scenario_acct scenario_coa scenario_status scenario_dedup scenario_radsec
+scenario_radsec_v11:
+	uv run python scenarios/radsec_v11.py
+
+demo: scenario_auth scenario_acct scenario_coa scenario_status scenario_dedup scenario_radsec scenario_radsec_v11

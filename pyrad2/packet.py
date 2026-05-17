@@ -12,6 +12,7 @@ from pyrad2 import tools
 from pyrad2.constants import PacketType
 from pyrad2.dictionary import Attribute, Dictionary, RadiusAttributeValue
 from pyrad2.exceptions import PacketError
+from pyrad2.radsec.v11 import RadiusVersion
 
 
 def hmac_new(*args, **kwargs):
@@ -94,10 +95,58 @@ PacketImplementation = Union["AuthPacket", "AcctPacket", "CoAPacket", "StatusPac
 ReplyPacketT = TypeVar("ReplyPacketT", bound="Packet")
 
 
+def _is_radius_11(pkt: Any) -> bool:
+    """Return True when this packet carries RFC 9765 RADIUS/1.1 semantics."""
+    return getattr(pkt, "radius_version", RadiusVersion.V1_0) == RadiusVersion.V1_1
+
+
+def _pack_v11_header(
+    code: int,
+    length: int,
+    token: Optional[bytes],
+    *,
+    zero_token: bool = False,
+) -> bytes:
+    """Build a RFC 9765 §4.1 packet header.
+
+    Layout (20 bytes): Code(1) | Reserved-1(1, zero) | Length(2) |
+    Token(4) | Reserved-2(12, zero).
+
+    A real RADIUS/1.1 packet MUST carry a Token from the per-connection
+    counter (§4.1). Missing or wrong-sized Tokens raise ``PacketError``
+    rather than silently emitting zeros — a zero Token on the wire is a
+    distinct signal (RFC 9765 §6.1 Protocol-Error) and shouldn't be
+    indistinguishable from a programming error.
+
+    Pass ``zero_token=True`` only when emitting a Protocol-Error reply
+    where the server couldn't determine the original Token.
+    """
+    if zero_token:
+        if token not in (None, b"\x00\x00\x00\x00"):
+            raise PacketError(
+                "zero_token=True requires token to be None or zero"
+            )
+        token = b"\x00\x00\x00\x00"
+    if token is None:
+        raise PacketError(
+            "RADIUS/1.1 packet requires a Token (RFC 9765 §4.1). "
+            "Set packet.token from a per-connection TokenCounter, or "
+            "pass zero_token=True for a Protocol-Error reply."
+        )
+    if len(token) != 4:
+        raise PacketError(
+            f"RADIUS/1.1 Token must be exactly 4 bytes, got {len(token)}"
+        )
+    return struct.pack("!BBH4s12s", code, 0, length, token, b"\x00" * 12)
+
+
 def prepare_request_message_authenticator(
     pkt: Any, *, require_message_authenticator: bool = False
 ) -> None:
     """Add Message-Authenticator to outgoing request packets when required."""
+    if _is_radius_11(pkt):
+        # RFC 9765 §5.2: Message-Authenticator MUST NOT be sent in v1.1.
+        return
     code = getattr(pkt, "code", None)
     if code not in (PacketType.AccessRequest, PacketType.StatusServer):
         return
@@ -121,6 +170,9 @@ def prepare_reply_message_authenticator(
     require_eap_message_authenticator: bool = True,
 ) -> None:
     """Add Message-Authenticator to a reply when request or policy requires it."""
+    if _is_radius_11(request) or _is_radius_11(reply):
+        # RFC 9765 §5.2: Message-Authenticator MUST NOT be sent in v1.1.
+        return
     request_has_ma = getattr(request, "has_message_authenticator", lambda: False)
     request_has_eap = getattr(request, "has_eap_message", lambda: False)
     reply_has_eap = getattr(reply, "has_eap_message", lambda: False)
@@ -167,8 +219,24 @@ class Packet(OrderedDict):
             secret (str): Secret needed to communicate with a RADIUS server.
             authenticator (bytes): Optional authenticator
             attributes (dict): Attributes to set in the packet
+            radius_version (RadiusVersion): RFC 9765 protocol version. Default
+                ``V1_0`` preserves historic MD5 behavior; ``V1_1`` flips the
+                packet over to the TLS-only profile (no MD5 obfuscation, no
+                Message-Authenticator, Token in place of Request/Response
+                Authenticator). Set this *before* decoding raw bytes.
         """
         super().__init__()
+        # radius_version must be set before decode_packet runs so attribute
+        # de-obfuscation (salt_decrypt etc.) knows which profile to use.
+        self.radius_version: RadiusVersion = attributes.pop(
+            "radius_version", RadiusVersion.V1_0
+        )
+        # Sidecar for attributes whose obfuscation depends on the
+        # negotiated radius_version. ``set_obfuscated()`` writes here; the
+        # actual encoding happens just before ``request_packet`` /
+        # ``reply_packet`` builds the wire bytes. This lets dual-advertise
+        # clients assign passwords before the TLS handshake completes.
+        self._deferred_obfuscated: "OrderedDict[str, list[Any]]" = OrderedDict()
         self.code = code
         if id is not None:
             self.id = id
@@ -180,6 +248,11 @@ class Packet(OrderedDict):
         if authenticator is not None and not isinstance(authenticator, bytes):
             raise TypeError("authenticator must be a binary string")
         self.authenticator = authenticator
+        # RFC 9765 §4.1: per-connection 32-bit Token, distinct from the
+        # legacy 16-byte Authenticator. Kept separate so v1.0 paths can
+        # freely reseed self.authenticator (e.g. for pw_crypt) without
+        # leaking 12 random bytes into the v1.1 Reserved-2 slot.
+        self.token: bytes | None = None
         self.request_authenticator: bytes | None = (
             None  # store request authenticator in reply packets
         )
@@ -212,6 +285,9 @@ class Packet(OrderedDict):
             self.add_attribute(key, value)
 
     def add_message_authenticator(self) -> None:
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 §5.2: Message-Authenticator MUST NOT be sent in v1.1.
+            return
         self.message_authenticator = True
         # Maintain a zero octets content for md5 and hmac calculation.
         self["Message-Authenticator"] = 16 * b"\00"
@@ -247,6 +323,9 @@ class Packet(OrderedDict):
 
     def ensure_message_authenticator(self) -> None:
         """Ensure the packet will be sent with a Message-Authenticator."""
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 §5.2: Message-Authenticator MUST NOT be sent in v1.1.
+            return
         if not self._has_attribute("Message-Authenticator", 80):
             self.add_message_authenticator()
         else:
@@ -436,6 +515,10 @@ class Packet(OrderedDict):
         require_eap_message_authenticator: bool = True,
     ) -> None:
         """Validate Message-Authenticator presence and integrity policy."""
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 §5.2: any Message-Authenticator received in v1.1 must
+            # be silently discarded; the policy checks below don't apply.
+            return
         if not self.has_message_authenticator():
             if self.code == PacketType.StatusServer:
                 raise PacketError("Status-Server requires Message-Authenticator")
@@ -452,6 +535,7 @@ class Packet(OrderedDict):
         makes sure the authenticator and secret are copied over
         to the new instance.
         """
+        attributes.setdefault("radius_version", self.radius_version)
         return self._set_reply_context(
             Packet(
                 id=self.id,
@@ -465,11 +549,15 @@ class Packet(OrderedDict):
     def _set_reply_context(self, reply: ReplyPacketT) -> ReplyPacketT:
         """Store the request code needed for reply authenticators."""
         reply.original_code = self.code
+        # RFC 9765 §4.1: the reply MUST echo the request's Token so the
+        # client can correlate. Carries over None for v1.0 packets.
+        reply.token = self.token
         return reply
 
     def _decode_value(self, attr: Attribute, value: bytes) -> bytes | str:
-        if attr.encrypt == 2:
-            # salt decrypt attribute
+        if attr.encrypt == 2 and self.radius_version != RadiusVersion.V1_1:
+            # salt decrypt attribute. Skipped in RADIUS/1.1 (RFC 9765 §5.1.3,
+            # §5.1.4) — Tunnel-Password / MS-MPPE keys flow as plain octets.
             value = self.salt_decrypt(value)
 
         if attr.values.has_backward(value):
@@ -483,8 +571,9 @@ class Packet(OrderedDict):
         else:
             result = tools.encode_attr(attr.type, value)
 
-        if attr.encrypt == 2:
-            # salt encrypt attribute
+        if attr.encrypt == 2 and self.radius_version != RadiusVersion.V1_1:
+            # salt encrypt attribute. Skipped in RADIUS/1.1 (RFC 9765 §5.1.3,
+            # §5.1.4) — Tunnel-Password / MS-MPPE keys ride plain over TLS.
             result = self.salt_crypt(result)
 
         return result
@@ -560,6 +649,172 @@ class Packet(OrderedDict):
             encoded = self.setdefault(key, [])
 
         encoded.extend(value)
+
+    def set_obfuscated(self, name: str, value: Any) -> None:
+        """Store an obfuscated attribute, deferring encoding until send.
+
+        Use this for attributes whose wire format depends on the negotiated
+        RADIUS version (``User-Password``, ``Tunnel-Password``, ``MS-MPPE-*-Key``
+        etc.). The plaintext is held aside until the packet is serialized
+        — at that point, v1.0 applies ``pw_crypt`` / ``salt_crypt`` and v1.1
+        emits the value as plain bytes (RFC 9765 §5.1).
+
+        For RadSec clients that advertise both ``radius/1.0`` and
+        ``radius/1.1`` this is the only correct way to assign passwords:
+        a direct ``packet["User-Password"] = pw_crypt(...)`` baked-in for
+        v1.0 would be unreadable in v1.1 and vice versa.
+        """
+        self._deferred_obfuscated.setdefault(name, []).append(value)
+
+    def _deferred_storage_key(self, base_name: str) -> Any:
+        """Return the ``self``-storage key a deferred attribute would occupy.
+
+        Mirrors ``add_attribute``'s container-shape decision so the main
+        encoding loop can skip stored entries that the deferred path
+        will re-emit. For TLV sub-attributes that means the parent code
+        (not the sub-attribute code); for EVS the 4-tuple flat key; for
+        plain vendor attributes the ``(vendor_id, code)`` 2-tuple; for
+        standard top-level the raw code.
+        """
+        attr = self.dict.attributes[base_name]
+        if self._is_tlv_sub_attribute(attr):
+            return self._encode_key(attr.parent.name)
+        return self._encode_key(base_name)
+
+    def _deferred_attribute_codes(self) -> set:
+        """Return the storage keys owned by the deferred-obfuscation sidecar.
+
+        ``_pkt_encode_attributes`` uses this to skip stored entries that
+        would otherwise duplicate (or contradict) the version-aware
+        bytes emitted from the sidecar.
+        """
+        codes: set = set()
+        for name in self._deferred_obfuscated:
+            codes.add(self._deferred_storage_key(name.partition(":")[0]))
+        return codes
+
+    def _is_tlv_sub_attribute(self, attr: Attribute) -> bool:
+        """Return True for TLV / extended / long-extended sub-attributes.
+
+        These nest under a parent code in ``self``'s storage; EVS
+        sub-attributes use a 4-tuple flat key instead.
+        """
+        return attr.is_sub_attribute and not (
+            attr.parent and attr.parent.type == "evs"
+        )
+
+    def _encode_deferred_value_list(
+        self, attr: Attribute, values: list, tag: str
+    ) -> list[bytes]:
+        """Turn one deferred attribute's plaintext list into wire bytes.
+
+        Applies version-aware obfuscation (``pw_crypt`` for encrypt=1 /
+        attribute code 2 in v1.0, ``_encode_value``'s salt path for
+        encrypt=2, plain encoding in v1.1) and prefixes a tag byte when
+        the deferred key carried one (``"Name:tag"``).
+        """
+        needs_pw_crypt = (
+            attr.code == 2 or attr.encrypt == 1
+        ) and self.radius_version != RadiusVersion.V1_1
+        encoded_values: list[bytes] = []
+        for value in values:
+            if needs_pw_crypt:
+                pw_crypt = getattr(self, "pw_crypt", None)
+                if pw_crypt is None:
+                    raise PacketError(
+                        "set_obfuscated requires an AuthPacket for "
+                        "User-Password obfuscation in RADIUS/1.0"
+                    )
+                encoded = pw_crypt(value)
+            else:
+                encoded = self._encode_value(attr, value)
+            if tag:
+                tag_bytes = struct.pack("B", int(tag))
+                if attr.type == "integer":
+                    encoded = tag_bytes + encoded[1:]
+                else:
+                    encoded = tag_bytes + encoded
+            encoded_values.append(encoded)
+        return encoded_values
+
+    def _seed_parent_from_stored_siblings(
+        self, parent_key: Any, owned_sub_codes: set
+    ) -> "OrderedDict":
+        """Return a copy of the stored ``{sub_code: [...]}`` for ``parent_key``
+        with ``owned_sub_codes`` removed.
+
+        Lets the deferred-obfuscation path overlay its own sub-codes onto
+        a parent container without dropping non-deferred siblings stored
+        directly under the same parent. Returns an empty ``OrderedDict``
+        if no parent is stored or the stored value isn't a sub-dict.
+        """
+        if not OrderedDict.__contains__(self, parent_key):
+            return OrderedDict()
+        stored = OrderedDict.__getitem__(self, parent_key)
+        if not isinstance(stored, dict):
+            return OrderedDict()
+        return OrderedDict(
+            (sub_code, list(values))
+            for sub_code, values in stored.items()
+            if sub_code not in owned_sub_codes
+        )
+
+    def _encode_deferred_obfuscated(self) -> bytes:
+        """Encode ``set_obfuscated`` plaintext into ready-to-ship AVPs.
+
+        Pure function: no mutation of ``self`` or the sidecar. Called
+        from ``_pkt_encode_attributes`` on every serialization so a retry
+        that lands under a different negotiated version regenerates the
+        bytes fresh (RFC 9765 §3.5).
+
+        Builds a temporary ``OrderedDict`` mirroring ``self``'s storage
+        shape — standard top-level, vendor 2-tuple, EVS 4-tuple, or TLV
+        ``{parent: {sub_code: [...]}}`` — then dispatches every entry
+        through ``_encode_avp_group``. That shared helper is the same one
+        the main loop uses, so deferred and stored attributes can never
+        disagree on container framing.
+
+        For TLV / extended / long-extended sub-attributes the deferred
+        path also folds in non-deferred stored siblings under the same
+        parent. Per-version obfuscation and tag handling live in
+        ``_encode_deferred_value_list``; the parent-container merge
+        lives in ``_seed_parent_from_stored_siblings``. This function
+        is the orchestration that wires the two together.
+        """
+        if not self._deferred_obfuscated:
+            return b""
+
+        owned_sub_codes: "OrderedDict[Any, set]" = OrderedDict()
+        for name in self._deferred_obfuscated:
+            attr = self.dict.attributes[name.partition(":")[0]]
+            if self._is_tlv_sub_attribute(attr):
+                parent_key = self._encode_key(attr.parent.name)
+                owned_sub_codes.setdefault(parent_key, set()).add(attr.code)
+
+        pending: "OrderedDict[Any, Any]" = OrderedDict()
+        for parent_key, sub_codes in owned_sub_codes.items():
+            pending[parent_key] = self._seed_parent_from_stored_siblings(
+                parent_key, sub_codes
+            )
+
+        for name, values in self._deferred_obfuscated.items():
+            base_name, _, tag = name.partition(":")
+            attr = self.dict.attributes[base_name]
+            encoded_values = self._encode_deferred_value_list(attr, values, tag)
+            if self._is_tlv_sub_attribute(attr):
+                parent_key = self._encode_key(attr.parent.name)
+                pending[parent_key].setdefault(attr.code, []).extend(
+                    encoded_values
+                )
+            else:
+                # EVS (4-tuple flat key), plain vendor (2-tuple), or
+                # standard top-level (int).
+                key = self._encode_key(base_name)
+                pending.setdefault(key, []).extend(encoded_values)
+
+        return b"".join(
+            self._encode_avp_group(code, datalst) for code, datalst in pending.items()
+        )
 
     def get(self, key: Hashable, failobj: Any = None) -> Any:
         try:
@@ -637,6 +892,18 @@ class Packet(OrderedDict):
         """
         return random_generator.randrange(0, 256)
 
+    def _serialize_v11(self) -> bytes:
+        """Build the on-wire bytes for a RADIUS/1.1 packet.
+
+        Single owner of the v1.1 emission path so every request/reply
+        method goes through the same Token / Reserved-2 logic. Returns
+        the fully traced raw bytes.
+        """
+        attr = self._pkt_encode_attributes()
+        raw = _pack_v11_header(self.code, 20 + len(attr), self.token) + attr
+        _trace_packet("out", raw, self)
+        return raw
+
     def reply_packet(self) -> bytes:
         """Create a ready-to-transmit authentication reply packet.
         Returns a RADIUS packet which can be directly transmitted
@@ -646,8 +913,13 @@ class Packet(OrderedDict):
         Returns:
             bytes: Raw packet
         """
-        assert self.authenticator
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 §4.1 emission. The request's Token was propagated
+            # to the reply via create_reply(); the legacy secret /
+            # authenticator are unused — TLS authenticates the bytes.
+            return self._serialize_v11()
 
+        assert self.authenticator
         assert self.secret is not None
 
         if self.message_authenticator:
@@ -670,6 +942,15 @@ class Packet(OrderedDict):
         rawreply: Optional[bytes] = None,
         enforce_ma: bool = False,
     ) -> bool:
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 §4.1: match request and reply by the 4-byte Token.
+            # The MD5 Response Authenticator check is skipped — TLS already
+            # authenticated the bytes, and Message-Authenticator must not
+            # appear in v1.1 (§5.2).
+            if self.token is None or reply.token is None:
+                return False
+            return reply.token == self.token
+
         if reply.id != self.id:
             return False
 
@@ -897,33 +1178,50 @@ class Packet(OrderedDict):
             + value
         )
 
+    def _encode_avp_group(self, code: Any, datalst: Any) -> bytes:
+        """Encode one stored ``(storage-key, [encoded-values])`` group.
+
+        Single owner of the per-key container dispatch — EVS 4-tuples,
+        TLV parents, extended / long-extended parents, vendor 2-tuples,
+        and standard top-level codes all flow through here. Used by
+        both ``_pkt_encode_attributes`` and ``_encode_deferred_obfuscated``
+        so the two paths can never diverge on framing.
+        """
+        if isinstance(code, tuple) and len(code) == 4:
+            # EVS-VSA: (parent_code, evs_slot, vendor_id, vendor_type)
+            return b"".join(self._pkt_encode_evs(code, v) for v in datalst)
+        container = self._container_type(code)
+        if container == "tlv":
+            return self._pkt_encode_tlv(code, datalst)
+        if container == "extended":
+            return self._pkt_encode_extended(code, datalst)
+        if container == "long-extended":
+            return self._pkt_encode_long_extended(code, datalst)
+        out = b""
+        concat = self._is_concat_attribute(code)
+        for data in datalst:
+            if concat and len(data) > 253:
+                # Split values larger than one AVP into 253-byte chunks;
+                # the receiver concatenates per RFC 7268 §3.6.
+                for chunk in self._split_into_chunks(data, 253):
+                    out += self._pkt_encode_attribute(code, chunk)
+            else:
+                out += self._pkt_encode_attribute(code, data)
+        return out
+
     def _pkt_encode_attributes(self) -> bytes:
+        # Side-effect free serialization: the deferred-obfuscation sidecar
+        # is encoded inline at the end and never mutates ``self``. Stored
+        # entries that share a code with a deferred attribute are skipped
+        # so the deferred declaration wins (its plaintext is authoritative
+        # across version flips per RFC 9765 §3.5).
+        deferred_codes = self._deferred_attribute_codes()
         result = b""
         for code, datalst in self.items():
-            if isinstance(code, tuple) and len(code) == 4:
-                # EVS-VSA: (parent_code, evs_slot, vendor_id, vendor_type)
-                for value in datalst:
-                    result += self._pkt_encode_evs(code, value)
+            if code in deferred_codes:
                 continue
-            container = self._container_type(code)
-            if container == "tlv":
-                result += self._pkt_encode_tlv(code, datalst)
-                continue
-            if container == "extended":
-                result += self._pkt_encode_extended(code, datalst)
-                continue
-            if container == "long-extended":
-                result += self._pkt_encode_long_extended(code, datalst)
-                continue
-            concat = self._is_concat_attribute(code)
-            for data in datalst:
-                if concat and len(data) > 253:
-                    # Split values larger than one AVP into 253-byte chunks;
-                    # the receiver concatenates per RFC 7268 §3.6.
-                    for chunk in self._split_into_chunks(data, 253):
-                        result += self._pkt_encode_attribute(code, chunk)
-                else:
-                    result += self._pkt_encode_attribute(code, data)
+            result += self._encode_avp_group(code, datalst)
+        result += self._encode_deferred_obfuscated()
         return result
 
     def _pkt_decode_vendor_attribute(self, data: bytes) -> list[tuple]:
@@ -1081,6 +1379,14 @@ class Packet(OrderedDict):
 
         except struct.error:
             raise PacketError("Packet header is corrupt")
+
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 §4.1: Reserved-1 + Reserved-2 are ignored on receipt.
+            # Surface the 4-byte Token separately; keep authenticator==None
+            # so v1.0-style consumers can't accidentally read garbage.
+            self.token = self.authenticator[:4]
+            self.authenticator = None
+            self.id = 0
         if len(packet) != length:
             raise PacketError("Packet has invalid length")
         if length > 8192:
@@ -1106,9 +1412,16 @@ class Packet(OrderedDict):
                 for key, value in self._pkt_decode_vendor_attribute(value):
                     self.setdefault(key, []).append(value)
             elif key == 80:
-                # POST: Message Authenticator AVP is present.
-                self.message_authenticator = True
-                self.setdefault(key, []).append(value)
+                # RFC 9765 §5.2: Message-Authenticator MUST NOT appear in
+                # RADIUS/1.1 packets. When it does, the receiver MUST
+                # silently discard it or treat it as an invalid attribute
+                # per RFC 6929 §2.8. Skip both the attribute storage and
+                # the message_authenticator flag so handlers can't observe
+                # the AVP and so reply-side MA validation is impossible to
+                # trigger.
+                if self.radius_version != RadiusVersion.V1_1:
+                    self.message_authenticator = True
+                    self.setdefault(key, []).append(value)
             else:
                 container = self._container_type(key)
                 if container == "tlv":
@@ -1217,6 +1530,9 @@ class Packet(OrderedDict):
         Returns:
             bool: True if verification passed else False
         """
+        if self.radius_version == RadiusVersion.V1_1:
+            # No request Authenticator MD5 in v1.1 — TLS authenticates.
+            return True
         assert self.raw_packet
         hash = hashlib.md5(
             self.raw_packet[0:4] + 16 * b"\x00" + self.raw_packet[20:] + self.secret
@@ -1242,6 +1558,7 @@ class StatusPacket(Packet):
         self, code: int = PacketType.AccessAccept, **attributes
     ) -> "Packet":
         """Create a response packet for this Status-Server request."""
+        attributes.setdefault("radius_version", self.radius_version)
         return self._set_reply_context(
             Packet(
                 code=code,
@@ -1255,11 +1572,18 @@ class StatusPacket(Packet):
 
     def request_packet(self) -> bytes:
         """Create a ready-to-transmit RFC 5997 Status-Server request."""
-        if self.authenticator is None:
-            self.authenticator = self.create_authenticator()
-
         if self.id is None:
             self.id = self.create_id()
+
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765: Token in the 4-byte slot, Reserved-1 and Reserved-2
+            # zero. Status-Server has no Message-Authenticator in v1.1.
+            # Take this branch before seeding self.authenticator so v1.1
+            # packets don't end up carrying misleading legacy state.
+            return self._serialize_v11()
+
+        if self.authenticator is None:
+            self.authenticator = self.create_authenticator()
 
         prepare_request_message_authenticator(self)
         if self.message_authenticator:
@@ -1272,6 +1596,27 @@ class StatusPacket(Packet):
         raw = header + attr
         _trace_packet("out", raw, self)
         return raw
+
+    def verify_status_request(self) -> bool:
+        """Verify an incoming RFC 5997 Status-Server request.
+
+        Mirrors the ``verify_*_request`` methods on the other typed
+        packets so callers (e.g. ``RadSecServer._verify_packet``) don't
+        need version-specific knowledge.
+
+        - RADIUS/1.0: Status-Server packets MUST carry a valid
+          Message-Authenticator (RFC 5997 §3). Returns ``False`` if
+          the AVP is missing or its HMAC doesn't match.
+        - RADIUS/1.1: Message-Authenticator is forbidden (RFC 9765 §5.2)
+          and was already discarded at decode. TLS authenticated the
+          bytes — return ``True``.
+        """
+        if self.radius_version == RadiusVersion.V1_1:
+            return True
+        try:
+            return self.verify_message_authenticator()
+        except Exception:
+            return False
 
 
 class AuthPacket(Packet):
@@ -1302,6 +1647,7 @@ class AuthPacket(Packet):
         makes sure the authenticator and secret are copied over
         to the new instance.
         """
+        attributes.setdefault("radius_version", self.radius_version)
         return self._set_reply_context(
             AuthPacket(
                 PacketType.AccessAccept,
@@ -1322,11 +1668,19 @@ class AuthPacket(Packet):
         Returns:
             bytes: Raw packet
         """
-        if self.authenticator is None:
-            self.authenticator = self.create_authenticator()
-
         if self.id is None:
             self.id = self.create_id()
+
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 emission. The caller (RadSecClient) is responsible
+            # for stamping a per-connection Token into self.token before
+            # invoking this method. Take this branch *before* seeding
+            # self.authenticator so v1.1 packets don't carry misleading
+            # legacy state.
+            return self._serialize_v11()
+
+        if self.authenticator is None:
+            self.authenticator = self.create_authenticator()
 
         if self.message_authenticator:
             self._refresh_message_authenticator()
@@ -1372,6 +1726,9 @@ class AuthPacket(Packet):
         Returns:
             str: Plaintext passsword
         """
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 §5.1.1: User-Password is plain "string" over TLS.
+            return password.decode("utf-8", errors="ignore")
         buf = password
         pw = b""
 
@@ -1408,6 +1765,11 @@ class AuthPacket(Packet):
         Returns:
             bytes: Obfuscated version of the password
         """
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 §5.1.1: User-Password is plain "string" over TLS.
+            if isinstance(password, str):
+                password = password.encode("utf-8")
+            return password
         if self.authenticator is None:
             self.authenticator = self.create_authenticator()
 
@@ -1438,11 +1800,16 @@ class AuthPacket(Packet):
 
         Returns:
             bool: True if verification is ok else False
+
+        Raises:
+            PacketError: when ``radius_version == V1_1`` and the packet
+                doesn't carry a ``CHAP-Challenge`` attribute. In v1.1 the
+                Request Authenticator slot is the Token (RFC 9765 §4.1),
+                not the legacy random challenge — CHAP-Password without
+                CHAP-Challenge is invalid (RFC 9765 §5.1.2). Failing
+                loudly here beats falling back to a synthetic random
+                authenticator that would silently never match.
         """
-
-        if not self.authenticator:
-            self.authenticator = self.create_authenticator()
-
         if isinstance(userpwd, str):
             userpwd = userpwd.strip().encode("utf-8")
 
@@ -1453,9 +1820,19 @@ class AuthPacket(Packet):
         chapid = chap_password[:1]
         password = chap_password[1:]
 
-        challenge = self.authenticator
-        if "CHAP-Challenge" in self:
+        if self.radius_version == RadiusVersion.V1_1:
+            if "CHAP-Challenge" not in self:
+                raise PacketError(
+                    "CHAP-Password in RADIUS/1.1 requires an explicit "
+                    "CHAP-Challenge attribute (RFC 9765 §5.1.2)"
+                )
             challenge = self["CHAP-Challenge"][0]
+        else:
+            if not self.authenticator:
+                self.authenticator = self.create_authenticator()
+            challenge = self.authenticator
+            if "CHAP-Challenge" in self:
+                challenge = self["CHAP-Challenge"][0]
 
         return password == hashlib.md5(chapid + userpwd + challenge).digest()
 
@@ -1503,6 +1880,7 @@ class AcctPacket(Packet):
         makes sure the authenticator and secret are copied over
         to the new instance.
         """
+        attributes.setdefault("radius_version", self.radius_version)
         return self._set_reply_context(
             AcctPacket(
                 PacketType.AccountingResponse,
@@ -1533,6 +1911,10 @@ class AcctPacket(Packet):
 
         if self.id is None:
             self.id = self.create_id()
+
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 emission; Token comes from per-connection counter.
+            return self._serialize_v11()
 
         if self.message_authenticator:
             self._refresh_message_authenticator()
@@ -1577,6 +1959,7 @@ class CoAPacket(Packet):
         makes sure the authenticator and secret are copied over
         to the new instance.
         """
+        attributes.setdefault("radius_version", self.radius_version)
         return self._set_reply_context(
             CoAPacket(
                 PacketType.CoAACK,
@@ -1605,10 +1988,14 @@ class CoAPacket(Packet):
         :rtype:  string
         """
 
-        attr = self._pkt_encode_attributes()
-
         if self.id is None:
             self.id = self.create_id()
+
+        if self.radius_version == RadiusVersion.V1_1:
+            # RFC 9765 emission.
+            return self._serialize_v11()
+
+        attr = self._pkt_encode_attributes()
 
         header = struct.pack("!BBH", self.code, self.id, (20 + len(attr)))
         self.authenticator = hashlib.md5(
@@ -1639,7 +2026,12 @@ def create_id() -> int:
     return CURRENT_ID
 
 
-def parse_packet(data: bytes, secret: bytes, dictionary: Optional[Dictionary]):
+def parse_packet(
+    data: bytes,
+    secret: bytes,
+    dictionary: Optional[Dictionary],
+    radius_version: RadiusVersion = RadiusVersion.V1_0,
+):
     code = data[0]
     packet_class: type[Packet]
 
@@ -1654,4 +2046,6 @@ def parse_packet(data: bytes, secret: bytes, dictionary: Optional[Dictionary]):
     else:
         packet_class = Packet
 
-    return packet_class(packet=data, dict=dictionary, secret=secret)
+    return packet_class(
+        packet=data, dict=dictionary, secret=secret, radius_version=radius_version
+    )

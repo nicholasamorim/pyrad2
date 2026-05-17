@@ -640,7 +640,7 @@ wheels = [
 
 [[package]]
 name = "pyrad2"
-version = "2.2"
+version = "2.3"
 source = { virtual = "." }
 dependencies = [
     { name = "loguru" },

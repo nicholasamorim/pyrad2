@@ -78,13 +78,17 @@ def key_for(pkt: Any, source: Any = None) -> Optional[DedupKey]:
     src = source if source is not None else getattr(pkt, "source", None)
     if not src or len(src) < 2:
         return None
-    auth = getattr(pkt, "authenticator", None)
-    if not auth:
+    # RFC 9765 §4.1: in RADIUS/1.1 the Request Authenticator is replaced
+    # by a 4-byte Token. Dedup keys on whichever field carries the
+    # client-chosen correlator: token first (v1.1), authenticator
+    # otherwise (v1.0).
+    correlator = getattr(pkt, "token", None) or getattr(pkt, "authenticator", None)
+    if not correlator:
         return None
     ident = getattr(pkt, "id", None)
     if ident is None:
         return None
-    return DedupKey(src[0], src[1], int(code), int(ident), bytes(auth))
+    return DedupKey(src[0], src[1], int(code), int(ident), bytes(correlator))
 
 
 class ResponseCache:
