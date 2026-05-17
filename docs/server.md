@@ -39,18 +39,30 @@ You should see the logs:
 
     You may want to jump ahead to the client section in order to make a test request to your server.
 
-Fundamentally, you have to subclass the `pyrad2` server and implement four methods.
+Fundamentally, you subclass the `pyrad2` server and implement the packet
+handlers for the roles you enable.
 
 ``` py title="Methods you have to implement"
 class MyRadiusServer(ServerAsync):
     def handle_auth_packet(self, protocol, pkt, addr):
 
     def handle_acct_packet(self, protocol, pkt, addr):
+```
 
-    def handle_coa_packet(self, protocol:, pkt, addr):
+CoA and Disconnect are part of RADIUS Dynamic Authorization (RFC 5176). They are
+usually received by a NAS or proxy acting as a Dynamic Authorization Server, not
+by a normal authentication/accounting server. If you enable the CoA listener
+with `enable_coa=True`, you can override these handlers too:
+
+``` py title="Optional Dynamic Authorization handlers"
+class MyDynamicAuthorizationServer(ServerAsync):
+    def handle_coa_packet(self, protocol, pkt, addr):
 
     def handle_disconnect_packet(self, protocol, pkt, addr):
 ```
+
+If you do not override them, PyRad2 responds with `CoA-NAK` or
+`Disconnect-NAK` and `Error-Cause = Unsupported-Extension`.
 
 When a packet arrives at these functions it has already been parsed, validated and instantiated into a [pyrad2.packet.Packet](https://github.com/nicholasamorim/pyrad2/blob/master/pyrad2/packet.py) class.
 
@@ -142,19 +154,24 @@ We provide an [example implementation](https://github.com/nicholasamorim/pyrad2/
 
 *Test* SSL certificates can be downloaded from the [certs folder](https://github.com/nicholasamorim/pyrad2/blob/master/examples/certs/).
 
-The princinple is the same as the classic UDP server. You inherit from the base class and implement four methods.
+The principle is the same as the classic UDP server, except RadSec carries all
+packet types over the same TLS/TCP listener. You inherit from the base class and
+implement authentication and accounting handlers. Dynamic Authorization handlers
+are optional; by default, unsupported CoA or Disconnect requests receive NAK
+responses.
 
 ``` py title="RadSec Server"
 from pyrad2.radsec.server import RadSecServer as BaseRadSecServer
 
 class RadSecServer(BaseRadSecServer):
-    # You must implement these four methods
+    # You must implement these two methods
     async def handle_access_request(self, packet: AuthPacket):
         pass
     
-     async def handle_accounting(self, packet: AcctPacket):
+    async def handle_accounting(self, packet: AcctPacket):
         pass
 
+    # Override these only when acting as a Dynamic Authorization Server
     async def handle_disconnect(self, packet: CoAPacket):
         pass
     

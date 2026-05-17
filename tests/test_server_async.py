@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 
 from pyrad2 import packet
-from pyrad2.constants import PacketType
+from pyrad2.constants import ErrorCause, PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.exceptions import PacketError
 from pyrad2.server import RemoteHost
@@ -15,6 +15,14 @@ from pyrad2.server_async import (
 )
 
 from .base import DummyServer, TEST_ROOT_PATH, capture_logs
+
+
+class AuthAcctOnlyServer(ServerAsync):
+    def handle_auth_packet(self, protocol, pkt, addr):
+        self.auth_called = True
+
+    def handle_acct_packet(self, protocol, pkt, addr):
+        self.acct_called = True
 
 
 class DatagramProtocolServerTests(unittest.TestCase):
@@ -189,3 +197,46 @@ class ServerAsyncTests(unittest.IsolatedAsyncioTestCase):
         proto = MagicMock(server_type=ServerType.Coa)
         self.server._request_handler(proto, mock_pkt, "127.0.0.1")
         self.assertTrue(self.server.disconnect_called)
+
+    def test_auth_acct_only_subclass_is_concrete(self):
+        server = AuthAcctOnlyServer()
+
+        self.assertIsInstance(server, ServerAsync)
+
+    def test_default_coa_handler_sends_nak(self):
+        server = AuthAcctOnlyServer()
+        protocol = MagicMock()
+        request = packet.CoAPacket(
+            code=PacketType.CoARequest,
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=Dictionary(os.path.join(TEST_ROOT_PATH, "data/full")),
+        )
+
+        server.handle_coa_packet(protocol, request, ("127.0.0.1", 12345))
+
+        reply = protocol.send_response.call_args.args[0]
+        self.assertEqual(reply.code, PacketType.CoANAK)
+        self.assertEqual(
+            int.from_bytes(reply[101][0], "big"), ErrorCause.UnsupportedExtension
+        )
+
+    def test_default_disconnect_handler_sends_nak(self):
+        server = AuthAcctOnlyServer()
+        protocol = MagicMock()
+        request = packet.CoAPacket(
+            code=PacketType.DisconnectRequest,
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=Dictionary(os.path.join(TEST_ROOT_PATH, "data/full")),
+        )
+
+        server.handle_disconnect_packet(protocol, request, ("127.0.0.1", 12345))
+
+        reply = protocol.send_response.call_args.args[0]
+        self.assertEqual(reply.code, PacketType.DisconnectNAK)
+        self.assertEqual(
+            int.from_bytes(reply[101][0], "big"), ErrorCause.UnsupportedExtension
+        )

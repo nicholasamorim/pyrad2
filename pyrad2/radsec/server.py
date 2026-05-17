@@ -5,7 +5,7 @@ from typing import Iterable, Optional
 
 from loguru import logger
 
-from pyrad2.constants import PacketType
+from pyrad2.constants import ErrorCause, PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.packet import (
     AcctPacket,
@@ -24,6 +24,9 @@ from pyrad2.tools import (
     normalize_cert_fingerprint,
     read_radius_packet,
 )
+
+
+ERROR_CAUSE_ATTRIBUTE = 101
 
 
 class UnknownHost(Exception):
@@ -67,6 +70,8 @@ class RadSecServer:
         max_packets_per_connection: Optional[int] = None,
         require_message_authenticator: bool = False,
         require_eap_message_authenticator: bool = True,
+        enable_coa: bool = True,
+        enable_disconnect: bool = True,
     ):
         """Initializes a RadSec server.
 
@@ -92,6 +97,10 @@ class RadSecServer:
                 on incoming packets.
             require_eap_message_authenticator (bool): Require
                 Message-Authenticator on packets containing EAP-Message.
+            enable_coa (bool): Dispatch CoA-Request packets to `handle_coa`;
+                disabled requests receive CoA-NAK.
+            enable_disconnect (bool): Dispatch Disconnect-Request packets to
+                `handle_disconnect`; disabled requests receive Disconnect-NAK.
         """
         self.listen_address = listen_address
         self.listen_port = listen_port
@@ -102,6 +111,8 @@ class RadSecServer:
         self.max_packets_per_connection = max_packets_per_connection
         self.require_message_authenticator = require_message_authenticator
         self.require_eap_message_authenticator = require_eap_message_authenticator
+        self.enable_coa = enable_coa
+        self.enable_disconnect = enable_disconnect
         self.allowed_client_fingerprints = {
             normalize_cert_fingerprint(fingerprint)
             for fingerprint in (allowed_client_fingerprints or [])
@@ -294,6 +305,18 @@ class RadSecServer:
             require_eap_message_authenticator=self.require_eap_message_authenticator,
         )
 
+    @staticmethod
+    def _add_error_cause(reply: Packet, cause: ErrorCause) -> None:
+        """Add an RFC 5176 Error-Cause value without requiring dictionary support."""
+        reply[ERROR_CAUSE_ATTRIBUTE] = [int(cause).to_bytes(4, "big")]
+
+    def _create_unsupported_coa_reply(self, packet: CoAPacket, code: PacketType) -> Packet:
+        """Create a NAK response for unsupported Dynamic Authorization requests."""
+        reply = packet.create_reply()
+        reply.code = code
+        self._add_error_cause(reply, ErrorCause.UnsupportedExtension)
+        return reply
+
     async def packet_received(self, data: bytes, host: str) -> Packet:
         if host in self.hosts:
             remote_host = self.hosts[host]
@@ -325,9 +348,17 @@ class RadSecServer:
         ):
             reply = await self.handle_accounting(packet)
         elif packet.code == PacketType.CoARequest:
-            reply = await self.handle_coa(packet)
+            if self.enable_coa:
+                reply = await self.handle_coa(packet)
+            else:
+                reply = self._create_unsupported_coa_reply(packet, PacketType.CoANAK)
         elif packet.code == PacketType.DisconnectRequest:
-            reply = await self.handle_disconnect(packet)
+            if self.enable_disconnect:
+                reply = await self.handle_disconnect(packet)
+            else:
+                reply = self._create_unsupported_coa_reply(
+                    packet, PacketType.DisconnectNAK
+                )
         else:
             raise ServerPacketError("Unsupported packet code: {}".format(packet.code))
 
@@ -344,12 +375,18 @@ class RadSecServer:
         """Handle an Accounting-Request or Accounting-Response packet."""
         raise NotImplementedError("Subclasses must implement this method")
 
-    @abstractmethod
     async def handle_coa(self, packet: CoAPacket) -> Packet:
-        """Handle a CoA-Request packet."""
-        raise NotImplementedError("Subclasses must implement this method")
+        """Handle an unsupported CoA-Request with a CoA-NAK by default.
 
-    @abstractmethod
+        Override this method when the RadSec server is acting as a Dynamic
+        Authorization Server and can apply authorization changes.
+        """
+        return self._create_unsupported_coa_reply(packet, PacketType.CoANAK)
+
     async def handle_disconnect(self, packet: CoAPacket) -> Packet:
-        """Handle a Disconnect-Request packet."""
-        raise NotImplementedError("Subclasses must implement this method")
+        """Handle an unsupported Disconnect-Request with a NAK by default.
+
+        Override this method when the RadSec server is acting as a Dynamic
+        Authorization Server and can terminate sessions.
+        """
+        return self._create_unsupported_coa_reply(packet, PacketType.DisconnectNAK)

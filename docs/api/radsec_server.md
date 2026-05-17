@@ -59,6 +59,27 @@ Use `verify_packet=True` when the server should verify request authenticators
 before dispatching to your handlers. Access-Request, Accounting, CoA, and
 Disconnect packets are verified with their packet-specific verifier.
 
+RadSec carries all RADIUS packet types on the same TLS/TCP listener. A subclass
+must implement `handle_access_request()` and `handle_accounting()`. CoA and
+Disconnect handlers are optional because they are Dynamic Authorization Server
+behavior; by default PyRad2 responds to unsupported requests with `CoA-NAK` or
+`Disconnect-NAK` and `Error-Cause = Unsupported-Extension`.
+
+If a subclass does implement those handlers but you want to disable dispatch,
+set `enable_coa=False` or `enable_disconnect=False`:
+
+```python
+server = RadSecServer(
+    hosts=hosts,
+    dictionary=dictionary,
+    certfile="certs/server/server.cert.pem",
+    keyfile="certs/server/server.key.pem",
+    ca_certfile="certs/ca/ca.cert.pem",
+    enable_coa=False,
+    enable_disconnect=False,
+)
+```
+
 ## Message-Authenticator policy
 
 PyRad2 validates `Message-Authenticator` whenever the attribute is present. By

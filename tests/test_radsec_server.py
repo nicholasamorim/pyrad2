@@ -4,7 +4,7 @@ import ssl
 import struct
 import unittest
 
-from pyrad2.constants import PacketType
+from pyrad2.constants import ErrorCause, PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.exceptions import PacketError
 from pyrad2.radsec.client import RadSecClient
@@ -200,6 +200,16 @@ class RadSecServer(BaseRadSecServer):
         return packet.create_reply()
 
 
+class AuthAcctOnlyRadSecServer(BaseRadSecServer):
+    async def handle_access_request(self, packet):
+        reply = packet.create_reply()
+        reply.code = PacketType.AccessAccept
+        return reply
+
+    async def handle_accounting(self, packet):
+        return packet.create_reply()
+
+
 class ServerTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.dictionary = Dictionary(os.path.join(TEST_ROOT_PATH, "dicts/dictionary"))
@@ -227,11 +237,23 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.server.hosts, {"127.0.0.1": TEST_HOST})
         self.assertEqual(self.server.dict, self.dictionary)
         self.assertEqual(self.server.verify_packet, False)
+        self.assertTrue(self.server.enable_coa)
+        self.assertTrue(self.server.enable_disconnect)
         self.assertEqual(self.server.ssl_ctx.verify_mode, ssl.CERT_REQUIRED)
         self.assertEqual(
             self.server.ssl_ctx.minimum_version,
             BaseRadSecServer.DEFAULT_MINIMUM_TLS_VERSION,
         )
+
+    def test_auth_acct_only_subclass_is_concrete(self):
+        server = AuthAcctOnlyRadSecServer(
+            certfile=SERVER_CERTFILE,
+            keyfile=SERVER_KEYFILE,
+            ca_certfile=CA_CERTFILE,
+            dictionary=self.dictionary,
+        )
+
+        self.assertIsInstance(server, BaseRadSecServer)
 
     def test_client_uses_secure_tls_defaults(self):
         self.assertTrue(self.client.ssl_ctx.check_hostname)
@@ -439,6 +461,48 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(writer.writes), 2)
         self.assertTrue(writer.closed)
+
+    async def test_default_coa_handler_returns_nak(self):
+        server = AuthAcctOnlyRadSecServer(
+            certfile=SERVER_CERTFILE,
+            keyfile=SERVER_KEYFILE,
+            ca_certfile=CA_CERTFILE,
+            dictionary=self.dictionary,
+        )
+        server.hosts = {"127.0.0.1": TEST_HOST}
+        request = self.client.create_coa_packet(code=PacketType.CoARequest)
+
+        reply = await server.packet_received(request.request_packet(), "127.0.0.1")
+
+        self.assertEqual(reply.code, PacketType.CoANAK)
+        self.assertEqual(
+            int.from_bytes(reply[101][0], "big"), ErrorCause.UnsupportedExtension
+        )
+
+    async def test_default_disconnect_handler_returns_nak(self):
+        server = AuthAcctOnlyRadSecServer(
+            certfile=SERVER_CERTFILE,
+            keyfile=SERVER_KEYFILE,
+            ca_certfile=CA_CERTFILE,
+            dictionary=self.dictionary,
+        )
+        server.hosts = {"127.0.0.1": TEST_HOST}
+        request = self.client.create_coa_packet(code=PacketType.DisconnectRequest)
+
+        reply = await server.packet_received(request.request_packet(), "127.0.0.1")
+
+        self.assertEqual(reply.code, PacketType.DisconnectNAK)
+        self.assertEqual(
+            int.from_bytes(reply[101][0], "big"), ErrorCause.UnsupportedExtension
+        )
+
+    async def test_disabled_coa_returns_nak_without_handler(self):
+        self.server.enable_coa = False
+        request = self.client.create_coa_packet(code=PacketType.CoARequest)
+
+        reply = await self.server.packet_received(request.request_packet(), "127.0.0.1")
+
+        self.assertEqual(reply.code, PacketType.CoANAK)
 
 
 class RadSecClientConnectionTests(unittest.IsolatedAsyncioTestCase):
