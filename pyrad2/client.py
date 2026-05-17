@@ -1,4 +1,3 @@
-import hashlib
 import os
 
 if os.name == "nt":
@@ -6,12 +5,11 @@ if os.name == "nt":
 else:
     import select
 import socket
-import struct
 import time
 from typing import Optional
 
-from pyrad2 import host, packet
-from pyrad2.constants import EAPPacketType, EAPType, PacketType
+from pyrad2 import eap, host, packet
+from pyrad2.constants import PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.exceptions import Timeout
 
@@ -245,47 +243,14 @@ class Client(host.Host):
             return self.send_status_packet(pkt)
         if isinstance(pkt, packet.AuthPacket):
             if pkt.auth_type == "eap-md5":
-                # Creating EAP-Identity
-                password = pkt[2][0] if 2 in pkt else pkt[1][0]
-                pkt[79] = [
-                    struct.pack(
-                        "!BBHB%ds" % len(password),
-                        EAPPacketType.RESPONSE,
-                        packet.CURRENT_ID,
-                        len(password) + 5,
-                        EAPType.IDENTITY,
-                        password,
-                    )
-                ]
+                eap.inject_eap_identity(pkt)
             reply = self._send_packet(pkt, self.authport)
             if (
                 reply
                 and reply.code == PacketType.AccessChallenge
                 and pkt.auth_type == "eap-md5"
             ):
-                # Got an Access-Challenge
-                eap_code, eap_id, eap_size, eap_type, eap_md5 = struct.unpack(
-                    "!BBHB%ds" % (len(reply[79][0]) - 5), reply[79][0]
-                )
-                # Sending back an EAP-Type-MD5-Challenge
-                # Thank god for http://www.secdev.org/python/eapy.py
-                client_pw = pkt[2][0] if 2 in pkt else pkt[1][0]
-                md5_challenge = hashlib.md5(
-                    struct.pack("!B", eap_id) + client_pw + eap_md5[1:]
-                ).digest()
-                pkt[79] = [
-                    struct.pack(
-                        "!BBHBB",
-                        2,
-                        eap_id,
-                        len(md5_challenge) + 6,
-                        4,
-                        len(md5_challenge),
-                    )
-                    + md5_challenge
-                ]
-                # Copy over Challenge-State
-                pkt[24] = reply[24]
+                eap.apply_eap_md5_challenge(pkt, reply)
                 reply = self._send_packet(pkt, self.authport)
             return reply
         elif isinstance(pkt, packet.CoAPacket):

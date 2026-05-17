@@ -7,6 +7,8 @@ from typing import Optional
 
 from loguru import logger
 
+from pyrad2 import eap
+from pyrad2.constants import PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.packet import (
     AcctPacket,
@@ -44,16 +46,29 @@ class DatagramProtocolClient(asyncio.Protocol):
         self.timeout_future = None
 
     async def __timeout_handler__(self):
+        """Background task that retries or fails timed-out pending requests.
+
+        Runs once per `next_wake_up` seconds. For each pending request we
+        compare elapsed time against `self.timeout`; if elapsed has expired,
+        we either resend the packet (consuming one retry) or surface a
+        TimeoutError on the request's future. `next_wake_up` is the minimum
+        remaining-time-to-timeout across all pending requests, so the loop
+        wakes exactly when the next request needs servicing.
+        """
         try:
             while True:
                 req2delete = []
                 now = datetime.now()
-                next_weak_up = self.timeout
+                next_wake_up = float(self.timeout)
 
                 for id, req in self.pending_requests.items():
-                    secs = (req["send_date"] - now).seconds
-                    if secs > self.timeout:
-                        if req["retries"] == self.retries:
+                    # send_date is always <= now, so compute elapsed as a
+                    # positive float. Using timedelta.seconds here would
+                    # wrap negative deltas to ~86399 and prematurely
+                    # trigger the timeout branch.
+                    elapsed = (now - req["send_date"]).total_seconds()
+                    if elapsed >= self.timeout:
+                        if req["retries"] >= self.retries:
                             logger.debug(
                                 "[{}:{}] For request {} execute all retries",
                                 self.server,
@@ -75,15 +90,19 @@ class DatagramProtocolClient(asyncio.Protocol):
                                 id,
                                 req["retries"],
                             )
-                            self.transport.sendto(req["packet"].RequestPacket())
-                    elif next_weak_up > secs:
-                        next_weak_up = secs
+                            self.transport.sendto(req["packet"].request_packet())
+                    else:
+                        remaining = self.timeout - elapsed
+                        if remaining < next_wake_up:
+                            next_wake_up = remaining
 
                 for id in req2delete:
                     # Remove request for map
                     del self.pending_requests[id]
 
-                await asyncio.sleep(next_weak_up)
+                # Floor sleeps at 0 so a just-expired request gets serviced
+                # on the next loop iteration instead of busy-spinning.
+                await asyncio.sleep(max(0.0, next_wake_up))
 
         except asyncio.CancelledError:
             pass
@@ -192,10 +211,18 @@ class DatagramProtocolClient(asyncio.Protocol):
 
 
 class ClientAsync:
-    """Basic RADIUS client.
-    This class implements a basic RADIUS client. It can send requests
-    to a RADIUS server, taking care of timeouts and retries, and
-    validate its replies.
+    """Asyncio-based RADIUS client.
+
+    Sends Access-Request, Accounting-Request, CoA, and Status-Server
+    packets over UDP, validates replies (including
+    ``Message-Authenticator`` when present), and retries timed-out
+    requests up to ``retries`` times with a per-request budget of
+    ``timeout`` seconds.
+
+    EAP-MD5 is handled transparently: setting ``auth_type="eap-md5"``
+    on the request makes ``send_packet`` perform the EAP-Identity /
+    Access-Challenge / EAP-MD5-Response round-trip and return only
+    the final reply.
     """
 
     def __init__(
@@ -452,6 +479,14 @@ class ClientAsync:
     def send_packet(self, pkt: Packet) -> asyncio.Future:
         """Send a packet to a RADIUS server.
 
+        Handles EAP-MD5 challenge/response automatically when
+        ``pkt.auth_type == "eap-md5"``: an EAP-Identity is injected
+        before the first send, and an Access-Challenge reply triggers
+        a transparent second exchange that carries the MD5 response
+        back to the server. The returned Future resolves with the
+        final reply (Access-Accept or Access-Reject) or rejects with
+        ``TimeoutError`` if retries are exhausted.
+
         Args:
             pkt (Packet): The packet to send
 
@@ -462,15 +497,15 @@ class ClientAsync:
         if isinstance(pkt, StatusPacket):
             return self.send_status_packet(pkt)
 
-        ans: asyncio.Future = asyncio.Future(loop=asyncio.get_event_loop())
-        self._prepare_outgoing_packet(pkt)
         if isinstance(pkt, AuthPacket):
             if not self.protocol_auth:
                 raise Exception("Transport not initialized")
+            return self._send_auth_packet(pkt)
 
-            self.protocol_auth.send_packet(pkt, ans)
+        ans: asyncio.Future = asyncio.Future(loop=asyncio.get_event_loop())
+        self._prepare_outgoing_packet(pkt)
 
-        elif isinstance(pkt, AcctPacket):
+        if isinstance(pkt, AcctPacket):
             if not self.protocol_acct:
                 raise Exception("Transport not initialized")
 
@@ -486,3 +521,74 @@ class ClientAsync:
             raise Exception("Unsupported packet")
 
         return ans
+
+    def _send_auth_packet(self, pkt: AuthPacket) -> asyncio.Future:
+        """Send an Access-Request, handling the EAP-MD5 challenge round-trip."""
+        assert self.protocol_auth is not None
+        # Capture the protocol locally so the nested callback can use it
+        # without re-asserting (mypy cannot prove self.protocol_auth is
+        # still non-None when the callback fires).
+        protocol = self.protocol_auth
+
+        if pkt.auth_type == "eap-md5":
+            eap.inject_eap_identity(pkt)
+
+        outer: asyncio.Future = asyncio.Future(loop=asyncio.get_event_loop())
+        self._prepare_outgoing_packet(pkt)
+
+        first: asyncio.Future = asyncio.Future(loop=asyncio.get_event_loop())
+        protocol.send_packet(pkt, first)
+
+        def _on_first_reply(fut: asyncio.Future) -> None:
+            if outer.done():
+                return
+            if fut.cancelled():
+                outer.cancel()
+                return
+            first_exc = fut.exception()
+            if first_exc is not None:
+                outer.set_exception(first_exc)
+                return
+
+            reply = fut.result()
+            if (
+                pkt.auth_type == "eap-md5"
+                and reply is not None
+                and reply.code == PacketType.AccessChallenge
+            ):
+                try:
+                    eap.apply_eap_md5_challenge(pkt, reply)
+                except Exception as challenge_exc:  # noqa: BLE001
+                    outer.set_exception(challenge_exc)
+                    return
+
+                # The retry uses the same Packet object, so it needs a
+                # fresh id/authenticator before re-entering the transport.
+                pkt.id = protocol.create_id()
+                pkt.authenticator = pkt.create_authenticator()
+                self._prepare_outgoing_packet(pkt)
+
+                second: asyncio.Future = asyncio.Future(
+                    loop=asyncio.get_event_loop()
+                )
+                protocol.send_packet(pkt, second)
+
+                def _on_second_reply(fut2: asyncio.Future) -> None:
+                    if outer.done():
+                        return
+                    if fut2.cancelled():
+                        outer.cancel()
+                        return
+                    exc2 = fut2.exception()
+                    if exc2 is not None:
+                        outer.set_exception(exc2)
+                    else:
+                        outer.set_result(fut2.result())
+
+                second.add_done_callback(_on_second_reply)
+                return
+
+            outer.set_result(reply)
+
+        first.add_done_callback(_on_first_reply)
+        return outer
