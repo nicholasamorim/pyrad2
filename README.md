@@ -10,7 +10,7 @@
 
 **A modern Python toolkit for building RADIUS clients and servers.**
 
-pyrad2 gives you the protocol — packet encoding, dictionary parsing, transport handling, retransmission, TLS — so you can write the business logic. Build an authentication backend, a CoA proxy, a RadSec accounting collector, or a network-access controller without touching wire formats.
+pyrad2 gives you the protocol - packet encoding, dictionary parsing, transport handling, retransmission, TLS - so you can write the business logic. Build an authentication backend, a CoA proxy, a RadSec accounting collector, or a network-access controller without touching wire formats.
 
 > 📚 **Full documentation: [nicholasamorim.github.io/pyrad2](https://nicholasamorim.github.io/pyrad2/)**
 
@@ -46,7 +46,7 @@ Head to the [Getting Started guide](https://nicholasamorim.github.io/pyrad2/setu
 | Feature | Spec |
 | --- | --- |
 | RADIUS client & server (sync + async) | [RFC 2865](https://datatracker.ietf.org/doc/html/rfc2865) |
-| RadSec — RADIUS over TLS | [RFC 6614](https://datatracker.ietf.org/doc/html/rfc6614) |
+| RadSec - RADIUS over TLS | [RFC 6614](https://datatracker.ietf.org/doc/html/rfc6614) |
 | RADIUS/1.1 over RadSec (experimental) | [RFC 9765](https://datatracker.ietf.org/doc/html/rfc9765) |
 | CoA & Disconnect (Dynamic Authorization) | [RFC 5176](https://datatracker.ietf.org/doc/html/rfc5176) |
 | Status-Server health checks | [RFC 5997](https://datatracker.ietf.org/doc/html/rfc5997) |
@@ -60,8 +60,8 @@ pyrad2 is a **library**, not a daemon. It is not a drop-in replacement for [Free
 
 Two complementary surfaces ship with the repo:
 
-- **[`scenarios/`](scenarios)** — single-process, end-to-end demos. A server **and** a client run in the same event loop so the full exchange shows up on one log. **Don't edit them — they're runnable explanations.**
-- **[`examples/`](examples)** — operational scripts you copy into your project and edit.
+- **[`scenarios/`](scenarios)** - single-process, end-to-end demos. A server **and** a client run in the same event loop so the full exchange shows up on one log. **Don't edit them - they're runnable explanations.**
+- **[`examples/`](examples)** - operational scripts you copy into your project and edit.
 
 ```bash
 make demo                  # all scenarios sequentially
@@ -83,11 +83,11 @@ PYRAD2_TRACE=1 make scenario_auth
 
 ## Documentation
 
-- **[Getting Started](https://nicholasamorim.github.io/pyrad2/setup/)** — install, RADIUS in one minute, run an exchange
-- **[Running a Server](https://nicholasamorim.github.io/pyrad2/server/)** — auth, accounting, CoA, RadSec, RADIUS/1.1
-- **[Making Requests](https://nicholasamorim.github.io/pyrad2/client/)** — clients, EAP, health checks, RadSec
-- **[Dictionary Reference](https://nicholasamorim.github.io/pyrad2/dictionary/)** — every supported type and option
-- **[Migrating from pyrad](https://nicholasamorim.github.io/pyrad2/compatibility/)** — breaking changes since 2.0
+- **[Getting Started](https://nicholasamorim.github.io/pyrad2/setup/)** - install, RADIUS in one minute, run an exchange
+- **[Running a Server](https://nicholasamorim.github.io/pyrad2/server/)** - auth, accounting, CoA, RadSec, RADIUS/1.1
+- **[Making Requests](https://nicholasamorim.github.io/pyrad2/client/)** - clients, EAP, health checks, RadSec
+- **[Dictionary Reference](https://nicholasamorim.github.io/pyrad2/dictionary/)** - every supported type and option
+- **[Migrating from pyrad](https://nicholasamorim.github.io/pyrad2/compatibility/)** - breaking changes since 2.0
 
 ## Tests
 
@@ -101,6 +101,6 @@ pyrad2 is currently maintained by Nicholas Amorim.
 
 pyrad was written by [Wichert Akkerman](wichert@wiggy.net) and is maintained by Christian Giese (GIC-de) and Istvan Ruzman (Istvan91).
 
-This project is licensed under a BSD license. Copyright and license information can be found in `LICENSE.txt`.
+This project is licensed under a BSD license. Copyright and license information can be found in [LICENSE.txt](https://github.com/nicholasamorim/pyrad2/blob/master/LICENSE.txt).
 
 Bugs and wishes can be submitted in the pyrad2 [issue tracker](https://github.com/nicholasamorim/pyrad2/issues) on GitHub. PRs are very welcome.
