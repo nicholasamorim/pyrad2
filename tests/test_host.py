@@ -3,6 +3,7 @@ from pyrad2.host import Host
 from pyrad2.packet import Packet
 from pyrad2.packet import AuthPacket
 from pyrad2.packet import AcctPacket
+from pyrad2.packet import StatusPacket
 
 
 class ConstructionTests(unittest.TestCase):
@@ -45,6 +46,12 @@ class PacketCreationTests(unittest.TestCase):
     def testCreateAcctPacket(self):
         packet = self.host.create_acct_packet(id=15)
         self.assertTrue(isinstance(packet, AcctPacket))
+        self.assertTrue(packet.dict is self.host.dict)
+        self.assertEqual(packet.id, 15)
+
+    def testCreateStatusPacket(self):
+        packet = self.host.create_status_packet(id=15)
+        self.assertTrue(isinstance(packet, StatusPacket))
         self.assertTrue(packet.dict is self.host.dict)
         self.assertEqual(packet.id, 15)
 

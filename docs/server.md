@@ -3,6 +3,7 @@
 - [UDP Server](#udp)
   - [Handling packets](#handling-packets)
   - [Replying](#replying)
+  - [Status-Server](#status-server)
 - [RadSec (Radius Over TLS)](#radsec-radius-over-tls)
 
 
@@ -105,6 +106,17 @@ CoAACK = 44
 CoANAK = 45
 ```
 
+# Status-Server
+
+PyRad2 handles RFC 5997 Status-Server health checks before dispatching to your
+normal authentication or accounting handlers. Status-Server requests must
+include a valid `Message-Authenticator`; requests without one are dropped.
+
+When a Status-Server packet arrives on the authentication port, the server
+responds with `Access-Accept`. When it arrives on the accounting port, the
+server responds with `Accounting-Response`. These replies do not run your
+authentication or accounting side effects.
+
 # RadSec (Radius Over TLS)
 
 ## Overview
@@ -178,3 +190,13 @@ Running this file shows us the server ready to accept requests.
 ```
 2026-05-16 22:18:35.415 | INFO | pyrad2.radsec.server:run:101 - RADSEC Server with mutual TLS running on ('0.0.0.0', 2083)
 ```
+
+RadSec Status-Server health checks use the same TLS/TCP connection as other
+RadSec packets. To check the example RadSec server, run:
+
+```bash
+PYTHONPATH=. uv run examples/status_radsec.py
+```
+
+The UDP `examples/status.py` script only talks to normal RADIUS servers on
+UDP/1812 or UDP/1813.

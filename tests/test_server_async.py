@@ -20,7 +20,7 @@ from .base import DummyServer, TEST_ROOT_PATH, capture_logs
 class DatagramProtocolServerTests(unittest.TestCase):
     def setUp(self):
         self.server = DummyServer(debug=True)
-        self.remote_host = RemoteHost("127.0.0.1", "secret", "name")
+        self.remote_host = RemoteHost("127.0.0.1", b"secret", "name")
         self.hosts = {"127.0.0.1": self.remote_host}
         self.protocol = DatagramProtocolServer(
             ip="127.0.0.1",
@@ -59,12 +59,59 @@ class DatagramProtocolServerTests(unittest.TestCase):
         self.protocol.send_response(mock_packet, ("127.0.0.1", 12345))
         self.transport.sendto.assert_called_once_with(b"response", ("127.0.0.1", 12345))
 
+    def test_auth_status_server_replies_without_callback(self):
+        dictionary = Dictionary(os.path.join(TEST_ROOT_PATH, "data/full"))
+        self.server.dict = dictionary
+        request = packet.StatusPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=dictionary,
+        )
+        self.protocol.connection_made(self.transport)
+        self.protocol.request_callback = MagicMock()
+
+        self.protocol.datagram_received(request.request_packet(), ("127.0.0.1", 12345))
+
+        self.protocol.request_callback.assert_not_called()
+        rawreply = self.transport.sendto.call_args.args[0]
+        reply = request.create_reply(packet=rawreply)
+        self.assertEqual(reply.code, PacketType.AccessAccept)
+        self.assertTrue(request.verify_reply(reply, rawreply=rawreply))
+
+    def test_accounting_status_server_replies_with_accounting_response(self):
+        dictionary = Dictionary(os.path.join(TEST_ROOT_PATH, "data/full"))
+        server = DummyServer(dictionary=dictionary)
+        remote_host = RemoteHost("127.0.0.1", b"secret", "name")
+        protocol = DatagramProtocolServer(
+            ip="127.0.0.1",
+            port=1813,
+            server=server,
+            server_type=ServerType.Acct,
+            hosts={"127.0.0.1": remote_host},
+            request_callback=MagicMock(),
+        )
+        protocol.connection_made(self.transport)
+        request = packet.StatusPacket(
+            id=1,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=dictionary,
+        )
+
+        protocol.datagram_received(request.request_packet(), ("127.0.0.1", 12345))
+
+        rawreply = self.transport.sendto.call_args.args[0]
+        reply = request.create_reply(packet=rawreply)
+        self.assertEqual(reply.code, PacketType.AccountingResponse)
+        self.assertTrue(request.verify_reply(reply, rawreply=rawreply))
+
 
 class ServerAsyncTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.server = DummyServer()
         self.server.dict = MagicMock()
-        self.remote_host = RemoteHost("127.0.0.1", "secret", "name")
+        self.remote_host = RemoteHost("127.0.0.1", b"secret", "name")
         self.server.hosts = {"127.0.0.1": self.remote_host}
 
     @patch.object(DummyServer, "_start_transport", new_callable=AsyncMock)

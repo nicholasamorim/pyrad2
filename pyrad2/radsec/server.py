@@ -13,6 +13,7 @@ from pyrad2.packet import (
     CoAPacket,
     Packet,
     PacketError,
+    StatusPacket,
     parse_packet,
     prepare_reply_message_authenticator,
 )
@@ -270,6 +271,11 @@ class RadSecServer:
             return packet.verify_acct_request()
         if isinstance(packet, CoAPacket):
             return packet.verify_coa_request()
+        if isinstance(packet, StatusPacket):
+            try:
+                return packet.verify_message_authenticator()
+            except Exception:
+                return False
         return packet.verify_packet()
 
     def _validate_message_authenticator_policy(self, packet: Packet) -> None:
@@ -304,7 +310,14 @@ class RadSecServer:
 
         self._validate_message_authenticator_policy(packet)
 
-        if packet.code == PacketType.AccessRequest:
+        if packet.code == PacketType.StatusServer:
+            reply = packet.create_reply(code=PacketType.AccessAccept)
+            logger.debug(
+                "Received RadSec Status-Server from {}; replying with {}",
+                host,
+                PacketType(reply.code).name,
+            )
+        elif packet.code == PacketType.AccessRequest:
             reply = await self.handle_access_request(packet)
         elif packet.code in (
             PacketType.AccountingRequest,

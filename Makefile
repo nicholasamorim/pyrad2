@@ -51,4 +51,5 @@ acct_radsec:
 coa:
 	PYTHONPATH=. uv run examples/client_coa.py coa daemon-1234
 
-
+status_radsec:
+	PYTHONPATH=. uv run examples/status_radsec.py
