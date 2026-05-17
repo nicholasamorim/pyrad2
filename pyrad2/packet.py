@@ -1,9 +1,12 @@
 import hashlib
 import hmac
+import os
 import secrets
 import struct
 from collections import OrderedDict
 from typing import Any, Hashable, Optional, Union, Sequence, TypeVar
+
+from loguru import logger
 
 from pyrad2 import tools
 from pyrad2.constants import PacketType
@@ -13,6 +16,72 @@ from pyrad2.exceptions import PacketError
 
 def hmac_new(*args, **kwargs):
     return hmac.new(*args, digestmod="MD5", **kwargs)
+
+
+# --- Wire trace ----------------------------------------------------------
+# Set PYRAD2_TRACE=1 (or true/yes/on) to dump every packet that crosses
+# request_packet / reply_packet / decode_packet. The dump is rendered as
+# a single multi-line ``loguru`` INFO message tagged ``[pyrad2 trace]``
+# so it interleaves cleanly with the rest of the application's logging.
+
+_TRACE_ENABLED: bool = os.environ.get("PYRAD2_TRACE", "").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+
+
+def _trace_hexdump(data: bytes, indent: str = "        ", width: int = 16) -> str:
+    """xxd-style hex dump with offset prefix and ASCII gutter."""
+    lines = []
+    for offset in range(0, len(data), width):
+        chunk = data[offset : offset + width]
+        hex_part = " ".join(f"{b:02x}" for b in chunk)
+        ascii_part = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
+        lines.append(f"{indent}{offset:04x}  {hex_part:<{width * 3 - 1}}  {ascii_part}")
+    return "\n".join(lines)
+
+
+def _trace_packet(direction: str, raw: bytes, pkt: "Packet") -> None:
+    """Log a packet in human-readable form when PYRAD2_TRACE is on."""
+    if not _TRACE_ENABLED:
+        return
+    arrow = "→" if direction == "out" else "←"
+    try:
+        code_name = PacketType(pkt.code).name
+    except ValueError:
+        code_name = f"Code-{pkt.code}"
+
+    lines = [
+        f"[pyrad2 trace] {arrow} {code_name} id={pkt.id} len={len(raw)}"
+    ]
+    authenticator = getattr(pkt, "authenticator", None)
+    if authenticator:
+        lines.append(f"    authenticator: {authenticator.hex()}")
+    try:
+        keys = list(pkt.keys())
+    except Exception:
+        keys = []
+    if keys:
+        lines.append("    attributes:")
+        for key in keys:
+            try:
+                value = pkt[key]
+            except Exception as exc:
+                lines.append(f"      {key}: <decode error: {exc!s}>")
+                continue
+            if isinstance(value, dict):
+                # TLV / extended / long-extended container.
+                for sub_name, sub_values in value.items():
+                    lines.append(f"      {key} / {sub_name}: {sub_values!r}")
+            else:
+                lines.append(f"      {key}: {value!r}")
+    lines.append("    raw:")
+    lines.append(_trace_hexdump(raw))
+    # loguru only prepends its timestamp/level prefix to the first line of
+    # a multi-line message, so the hex dump's alignment is preserved.
+    logger.info("\n".join(lines))
 
 
 random_generator = secrets.SystemRandom()
@@ -591,7 +660,9 @@ class Packet(OrderedDict):
             header[0:4] + self.authenticator + attr + self.secret
         ).digest()
 
-        return header + authenticator + attr
+        raw = header + authenticator + attr
+        _trace_packet("out", raw, self)
+        return raw
 
     def verify_reply(
         self,
@@ -1002,6 +1073,7 @@ class Packet(OrderedDict):
         Args:
             packet packet.Packet: Raw packet
         """
+        raw = packet  # preserved for the optional PYRAD2_TRACE dump below
         try:
             (self.code, self.id, length, self.authenticator) = struct.unpack(
                 "!BBH16s", packet[0:20]
@@ -1051,6 +1123,7 @@ class Packet(OrderedDict):
             packet = packet[attrlen:]
 
         self._merge_concat_attributes()
+        _trace_packet("in", raw, self)
 
     def _merge_concat_attributes(self) -> None:
         """Concatenate split AVPs for attributes flagged with the ``concat`` option.
@@ -1196,7 +1269,9 @@ class StatusPacket(Packet):
         header = struct.pack(
             "!BBH16s", self.code, self.id, (20 + len(attr)), self.authenticator
         )
-        return header + attr
+        raw = header + attr
+        _trace_packet("out", raw, self)
+        return raw
 
 
 class AuthPacket(Packet):
@@ -1267,17 +1342,21 @@ class AuthPacket(Packet):
                 + attr
                 + struct.pack("!BB16s", 80, struct.calcsize("!BB16s"), b""),
             ).digest()
-            return (
+            raw = (
                 header
                 + attr
                 + struct.pack("!BB16s", 80, struct.calcsize("!BB16s"), digest)
             )
+            _trace_packet("out", raw, self)
+            return raw
 
         header = struct.pack(
             "!BBH16s", self.code, self.id, (20 + len(attr)), self.authenticator
         )
 
-        return header + attr
+        raw = header + attr
+        _trace_packet("out", raw, self)
+        return raw
 
     def pw_decrypt(self, password: bytes) -> str:
         """De-Obfuscate a RADIUS password. RADIUS hides passwords in packets by
@@ -1465,7 +1544,7 @@ class AcctPacket(Packet):
         ).digest()
 
         ans = header + self.authenticator + attr
-
+        _trace_packet("out", ans, self)
         return ans
 
 
@@ -1543,7 +1622,9 @@ class CoAPacket(Packet):
                 header[0:4] + 16 * b"\x00" + attr + self.secret
             ).digest()
 
-        return header + self.authenticator + attr
+        raw = header + self.authenticator + attr
+        _trace_packet("out", raw, self)
+        return raw
 
 
 def create_id() -> int:

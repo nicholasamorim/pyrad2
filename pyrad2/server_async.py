@@ -98,9 +98,15 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                 addr,
                 data.hex(),
             )
-            req = Packet(packet=data, dict=self.server.dict)
+            # Peek at the code byte directly so we only decode once — the
+            # subsequent typed construction (AuthPacket / AcctPacket /
+            # CoAPacket) does the real parse.
+            if len(data) < 1:
+                raise ServerPacketError("Packet too short to contain a code byte")
+            code = data[0]
+            req: Packet  # one of the typed subclasses below
 
-            if req.code in (
+            if code in (
                 PacketType.AccountingResponse,
                 PacketType.AccessAccept,
                 PacketType.AccessReject,
@@ -109,13 +115,13 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                 PacketType.DisconnectNAK,
                 PacketType.DisconnectACK,
             ):
-                raise ServerPacketError(f"Invalid response packet {req.code}")
+                raise ServerPacketError(f"Invalid response packet {code}")
 
             if self.server_type == ServerType.Auth:
-                if req.code == PacketType.StatusServer:
+                if code == PacketType.StatusServer:
                     self._handle_status_server(data, remote_host, addr)
                     return
-                if req.code != PacketType.AccessRequest:
+                if code != PacketType.AccessRequest:
                     raise ServerPacketError("Received non-auth packet on auth port")
                 req = AuthPacket(
                     secret=remote_host.secret, dict=self.server.dict, packet=data
@@ -124,9 +130,9 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                     raise PacketError("Packet verification failed")
 
             elif self.server_type == ServerType.Coa:
-                if req.code == PacketType.StatusServer:
+                if code == PacketType.StatusServer:
                     raise ServerPacketError("Received status packet on coa port")
-                if req.code not in (
+                if code not in (
                     PacketType.DisconnectRequest,
                     PacketType.CoARequest,
                 ):
@@ -138,16 +144,18 @@ class DatagramProtocolServer(asyncio.DatagramProtocol):
                     raise PacketError("Packet verification failed")
 
             elif self.server_type == ServerType.Acct:
-                if req.code == PacketType.StatusServer:
+                if code == PacketType.StatusServer:
                     self._handle_status_server(data, remote_host, addr)
                     return
-                if req.code != PacketType.AccountingRequest:
+                if code != PacketType.AccountingRequest:
                     raise ServerPacketError("Received non-acct packet on acct port")
                 req = AcctPacket(
                     secret=remote_host.secret, dict=self.server.dict, packet=data
                 )
                 if self.server.enable_pkt_verify and not req.verify_packet():
                     raise PacketError("Packet verification failed")
+            else:
+                raise ServerPacketError(f"Unknown server type {self.server_type}")
 
             self.server.validate_message_authenticator_policy(req)
             self.request_callback(self, req, addr)

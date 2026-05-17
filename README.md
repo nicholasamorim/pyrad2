@@ -29,15 +29,29 @@ Note that this is _not_ a stand-alone Radius implementation like [FreeRadius](ht
 
 pyrad2 requires Python 3.12 and uses [uv](https://github.com/astral-sh/uv). On a Mac, you can simply run `brew install uv`.
 
-# Examples
+# Examples and scenarios
 
 See the [Getting Started guide](https://nicholasamorim.github.io/pyrad2/setup/) for a better overview.
 
-There are a few examples in the `examples` folder. You can either install pyrad2 and use the examples or clone the repo. If you clone the repo, make commands are useful.
+The repo ships two complementary surfaces depending on what you want:
 
-The easiest way to start a server is by running `make server`. This will run the example server in `examples/server_async.py`.
+- **[`examples/`](examples)** — operational scripts to **copy into your project** and edit. Server runs in one terminal, client in another. Targets: `make server`, `make auth`, `make server_radsec`, `make server_coa`, `make acct`, etc.
+- **[`scenarios/`](scenarios)** — single-process end-to-end demos that run a server **and** client in one event loop. Not meant to be edited — they're runnable explanations of what a RADIUS flow looks like, top to bottom, on one log. This is the fastest way to learn what pyrad2 actually does.
 
-If you want to see a request in action, leave the server running, open another terminal and type `make auth`. Several other commands are available such as `make server_radsec`, `make server_coa`, `make_acct`, etc.
+```bash
+make scenario_auth     # Access-Request → Access-Accept (UDP, RFC 2865)
+make scenario_acct     # Accounting-Request → Accounting-Response
+make scenario_coa      # CoA-Request → CoA-ACK (RFC 5176)
+make scenario_status   # Status-Server health check (RFC 5997)
+make scenario_radsec   # RadSec (RFC 6614) — mutual TLS, Access-Request
+make demo              # all five sequentially
+```
+
+Set `PYRAD2_TRACE=1` on any script — scenario, example, or your own code — to dump every packet's wire bytes and decoded AVPs as they cross `request_packet` / `reply_packet` / `decode_packet`. Pair it with a scenario for a "watch a full RADIUS exchange one byte at a time" view:
+
+```bash
+PYRAD2_TRACE=1 make scenario_auth
+```
 
 # Tests
 
