@@ -10,7 +10,7 @@ from typing import Callable, Optional
 
 from loguru import logger
 
-from pyrad2 import host, packet
+from pyrad2 import dedup, host, packet
 from pyrad2.dictionary import Dictionary
 from pyrad2.exceptions import ServerPacketError
 from pyrad2.constants import PacketType
@@ -66,6 +66,10 @@ class Server(host.Host):
         coa_enabled: bool = False,
         require_message_authenticator: bool = False,
         require_eap_message_authenticator: bool = True,
+        dedup_enabled: bool = True,
+        dedup_ttl: float = 30.0,
+        dedup_max_entries: int = 4096,
+        dedup_cache: Optional[dedup.ResponseCache] = None,
     ):
         """Initializes a sync server.
 
@@ -83,6 +87,16 @@ class Server(host.Host):
                 Message-Authenticator on incoming packets.
             require_eap_message_authenticator (bool): Require
                 Message-Authenticator on packets containing EAP-Message.
+            dedup_enabled (bool): Enable RFC 5080 duplicate detection and
+                response caching (default: True). Retransmissions of an
+                Access-Request, Accounting-Request, CoA-Request, or
+                Disconnect-Request will be answered by replaying the cached
+                reply bytes instead of re-running the handler.
+            dedup_ttl (float): Lifetime in seconds of a cached reply.
+            dedup_max_entries (int): Maximum number of cached replies before
+                LRU eviction kicks in.
+            dedup_cache (ResponseCache): Provide a pre-built cache to share
+                between servers or to inject a custom clock for tests.
         """
         super().__init__(authport, acctport, coaport, dict)
 
@@ -95,6 +109,14 @@ class Server(host.Host):
         self.coafds: list = []
         self.require_message_authenticator = require_message_authenticator
         self.require_eap_message_authenticator = require_eap_message_authenticator
+        if dedup_cache is not None:
+            self._dedup_cache: Optional[dedup.ResponseCache] = dedup_cache
+        elif dedup_enabled:
+            self._dedup_cache = dedup.ResponseCache(
+                ttl=dedup_ttl, max_entries=dedup_max_entries
+            )
+        else:
+            self._dedup_cache = None
 
         if addresses:
             for addr in addresses:
@@ -217,6 +239,44 @@ class Server(host.Host):
             pkt (packet.Packet): Packet to process
         """
 
+    def _dedup_dispatch(
+        self, pkt: packet.Packet, handler: Callable[[packet.Packet], None]
+    ) -> None:
+        """Wrap ``handler(pkt)`` with RFC 5080 dedup.
+
+        On a cached duplicate, replays the stored reply bytes via the
+        request's socket and skips the handler entirely. On an in-flight
+        duplicate, drops silently. Otherwise runs the handler and lets
+        ``send_reply_packet`` populate the cache.
+        """
+        key = dedup.key_for(pkt) if self._dedup_cache is not None else None
+        fd = getattr(pkt, "fd", None)
+
+        def _resend(raw: bytes) -> None:
+            if fd is not None:
+                fd.sendto(raw, pkt.source)
+
+        action = dedup.consult_cache(self._dedup_cache, key, _resend)
+        if action is dedup.DispatchAction.DROP:
+            logger.debug(
+                "Dropping duplicate in-flight request from {}", pkt.source
+            )
+            return
+        if action is dedup.DispatchAction.RESENT:
+            logger.debug(
+                "Resent cached reply for duplicate request from {}", pkt.source
+            )
+            return
+
+        if key is not None:
+            pkt._dedup_key = key  # type: ignore[attr-defined]
+        try:
+            handler(pkt)
+        finally:
+            if key is not None and self._dedup_cache is not None:
+                # No-op if the handler already recorded a reply.
+                self._dedup_cache.drop_in_flight(key)
+
     def _add_secret(self, pkt: packet.Packet) -> None:
         """Add secret to packets received and raise ServerPacketError
         for unknown hosts.
@@ -248,7 +308,7 @@ class Server(host.Host):
                 "Received non-authentication packet on authentication port"
             )
         self._validate_message_authenticator_policy(pkt)
-        self.handle_auth_packet(pkt)
+        self._dedup_dispatch(pkt, self.handle_auth_packet)
 
     def _handle_acct_packet(self, pkt: packet.Packet) -> None:
         """Process a packet received on the accounting port.
@@ -268,7 +328,7 @@ class Server(host.Host):
         ]:
             raise ServerPacketError("Received non-accounting packet on accounting port")
         self._validate_message_authenticator_policy(pkt)
-        self.handle_acct_packet(pkt)
+        self._dedup_dispatch(pkt, self.handle_acct_packet)
 
     def _handle_coa_packet(self, pkt: packet.Packet) -> None:
         """Process a packet received on the coa port.
@@ -282,10 +342,10 @@ class Server(host.Host):
         self._add_secret(pkt)
         if pkt.code == PacketType.CoARequest:
             self._validate_message_authenticator_policy(pkt)
-            self.handle_coa_packet(pkt)
+            self._dedup_dispatch(pkt, self.handle_coa_packet)
         elif pkt.code == PacketType.DisconnectRequest:
             self._validate_message_authenticator_policy(pkt)
-            self.handle_disconnect_packet(pkt)
+            self._dedup_dispatch(pkt, self.handle_disconnect_packet)
         else:
             raise ServerPacketError("Received non-coa packet on coa port")
 
@@ -338,6 +398,11 @@ class Server(host.Host):
             require_message_authenticator=self.require_message_authenticator,
             require_eap_message_authenticator=self.require_eap_message_authenticator,
         )
+        # Carry the request's dedup key forward so send_reply_packet can
+        # cache the resulting bytes without re-deriving the key.
+        request_key = getattr(pkt, "_dedup_key", None)
+        if request_key is not None:
+            reply._dedup_key = request_key  # type: ignore[attr-defined]
         return reply
 
     def send_reply_packet(self, fd: socket.socket, pkt: packet.Packet) -> None:
@@ -348,7 +413,12 @@ class Server(host.Host):
             and pkt.has_eap_message()
         ):
             pkt.ensure_message_authenticator()
-        super().send_reply_packet(fd, pkt)
+        # Encode once: we need the exact bytes for RFC 5080 replay so a
+        # retransmission gets a byte-identical answer (which matters for
+        # the EAP State attribute and the Message-Authenticator).
+        raw = pkt.reply_packet()
+        fd.sendto(raw, pkt.source)  # type: ignore[call-overload]
+        dedup.record_if_keyed(self._dedup_cache, pkt, raw)
 
     def _process_input(self, fd: socket.socket) -> None:
         """Process available data.

@@ -72,7 +72,10 @@ scenario_coa:
 scenario_status:
 	uv run python scenarios/status.py
 
+scenario_dedup:
+	uv run python scenarios/dedup.py
+
 scenario_radsec:
 	uv run python scenarios/radsec_auth.py
 
-demo: scenario_auth scenario_acct scenario_coa scenario_status scenario_radsec
+demo: scenario_auth scenario_acct scenario_coa scenario_status scenario_dedup scenario_radsec
