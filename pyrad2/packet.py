@@ -449,6 +449,11 @@ class Packet(OrderedDict):
             return key
 
         attr = self.dict.attributes[key]
+        if attr.is_sub_attribute and attr.parent and attr.parent.type == "evs":
+            # EVS-VSA: the dictionary already stores the canonical 4-tuple
+            # (extended_wrapper, evs_slot, vendor_id, vendor_type) — that's
+            # the only place all four are reachable from this attribute.
+            return self.dict.attrindex.get_forward(key)
         if (
             attr.vendor and not attr.is_sub_attribute
         ):  # sub attribute keys don't need vendor
@@ -474,7 +479,12 @@ class Packet(OrderedDict):
 
         (key, value) = self._encode_key_values(key, value)
 
-        if attr.is_sub_attribute:
+        if attr.is_sub_attribute and not (
+            attr.parent and attr.parent.type == "evs"
+        ):
+            # TLV-style nesting under the parent code. EVS-VSAs skip this:
+            # their 4-tuple key already identifies the slot uniquely so they
+            # live flat at the top level of the packet dict.
             tlv = self.setdefault(self._encode_key(attr.parent.name), {})
             encoded = tlv.setdefault(key, [])
         else:
@@ -774,9 +784,56 @@ class Packet(OrderedDict):
                     )
         return result
 
+    def _pkt_encode_evs(self, key: tuple, value: bytes) -> bytes:
+        """Encode one RFC 6929 EVS-VSA AVP (or fragment chain in long form).
+
+        ``key`` is the flat 4-tuple ``(parent, evs_slot, vendor_id,
+        vendor_type)``. For extended parents the value is capped at 247
+        bytes; for long-extended parents it is fragmented into 246-byte
+        chunks, each carrying the same vendor-id and vendor-type with the
+        More flag set on every fragment except the last.
+        """
+        from pyrad2.constants import (
+            LONG_EXTENDED_ATTRIBUTE_TYPES,
+            LONG_EXTENDED_MORE_FLAG,
+        )
+
+        parent_code, ext_type, vendor_id, vsa_type = key
+        evs_header = struct.pack("!L", vendor_id) + struct.pack("!B", vsa_type)
+
+        if parent_code in LONG_EXTENDED_ATTRIBUTE_TYPES:
+            result = b""
+            chunks = self._split_into_chunks(value, 246)
+            for index, chunk in enumerate(chunks):
+                more = LONG_EXTENDED_MORE_FLAG if index < len(chunks) - 1 else 0
+                result += (
+                    struct.pack(
+                        "!BBBB", parent_code, 9 + len(chunk), ext_type, more
+                    )
+                    + evs_header
+                    + chunk
+                )
+            return result
+
+        if len(value) > 247:
+            raise ValueError(
+                "EVS value too large for extended wrapper; declare the "
+                "wrapper as long-extended to enable fragmentation"
+            )
+        return (
+            struct.pack("!BBB", parent_code, 8 + len(value), ext_type)
+            + evs_header
+            + value
+        )
+
     def _pkt_encode_attributes(self) -> bytes:
         result = b""
         for code, datalst in self.items():
+            if isinstance(code, tuple) and len(code) == 4:
+                # EVS-VSA: (parent_code, evs_slot, vendor_id, vendor_type)
+                for value in datalst:
+                    result += self._pkt_encode_evs(code, value)
+                continue
             container = self._container_type(code)
             if container == "tlv":
                 result += self._pkt_encode_tlv(code, datalst)
@@ -863,12 +920,41 @@ class Packet(OrderedDict):
         attr = self.dict.attributes.get(self._decode_key(code))
         return attr is not None and attr.type == "tlv"
 
+    def _is_evs_slot(self, parent_code: int, ext_type: int) -> bool:
+        """Return True if ``(parent_code, ext_type)`` is an EVS marker."""
+        dictionary = getattr(self, "dict", None)
+        if dictionary is None:
+            return False
+        parent_attr = dictionary.attributes.get(self._decode_key(parent_code))
+        if parent_attr is None:
+            return False
+        sub_name = parent_attr.sub_attributes.get(ext_type)
+        if sub_name is None:
+            return False
+        sub_attr = dictionary.attributes.get(sub_name)
+        return sub_attr is not None and sub_attr.type == "evs"
+
     def _pkt_decode_extended(self, parent_code: int, value: bytes) -> None:
-        """Decode one extended AVP (RFC 6929 §2.1) into ``self[parent][ext_type]``."""
+        """Decode one extended AVP (RFC 6929 §2.1).
+
+        If the extended-type slot is registered as an ``evs`` marker, the
+        payload is split into vendor-id + vendor-type + value and stored
+        under a flat 4-tuple key. Otherwise it stores under
+        ``self[parent][ext_type]`` as a regular extended sub-attribute.
+        """
         if not value:
             return
         ext_type = value[0]
         payload = value[1:]
+
+        if len(payload) >= 5 and self._is_evs_slot(parent_code, ext_type):
+            (vendor_id,) = struct.unpack("!L", payload[:4])
+            vsa_type = payload[4]
+            self.setdefault(
+                (parent_code, ext_type, vendor_id, vsa_type), []
+            ).append(payload[5:])
+            return
+
         parent_dict = self.setdefault(parent_code, {})
         parent_dict.setdefault(ext_type, []).append(payload)
 
@@ -879,6 +965,8 @@ class Packet(OrderedDict):
 
         Fragments accumulate in ``self._long_ext_buf`` until the More flag
         clears, at which point the joined value is appended to the parent.
+        EVS fragments key the buffer on the full 4-tuple so concurrent
+        vendor attributes under the same wrapper don't collide.
         """
         from pyrad2.constants import LONG_EXTENDED_MORE_FLAG
 
@@ -888,9 +976,20 @@ class Packet(OrderedDict):
         flags = value[1]
         payload = value[2:]
 
+        if len(payload) >= 5 and self._is_evs_slot(parent_code, ext_type):
+            (vendor_id,) = struct.unpack("!L", payload[:4])
+            vsa_type = payload[4]
+            chunk = payload[5:]
+            buf_key = (parent_code, ext_type, vendor_id, vsa_type)
+            buf = self._long_ext_buf.setdefault(buf_key, bytearray())
+            buf.extend(chunk)
+            if not flags & LONG_EXTENDED_MORE_FLAG:
+                self.setdefault(buf_key, []).append(bytes(buf))
+                del self._long_ext_buf[buf_key]
+            return
+
         buf = self._long_ext_buf.setdefault((parent_code, ext_type), bytearray())
         buf.extend(payload)
-
         if not flags & LONG_EXTENDED_MORE_FLAG:
             parent_dict = self.setdefault(parent_code, {})
             parent_dict.setdefault(ext_type, []).append(bytes(buf))
@@ -916,7 +1015,9 @@ class Packet(OrderedDict):
             raise PacketError("Packet length is too long (%d)" % length)
 
         self.clear()
-        self._long_ext_buf: dict[tuple[int, int], bytearray] = {}
+        # Keys are (parent_code, ext_type) for plain long-extended fragments
+        # and (parent_code, ext_type, vendor_id, vendor_type) for EVS ones.
+        self._long_ext_buf: dict[tuple[int, ...], bytearray] = {}
 
         packet = packet[20:]
         while packet:

@@ -51,6 +51,11 @@ You are actually passing a _path_ to a file (or a [file-like object](https://doc
 
 pyrad2 aims to load real-world FreeRADIUS dictionaries without modification.
 
+A runnable demo of every feature below lives in
+[`examples/dictionary_features.py`](https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary_features.py),
+backed by [`examples/dictionary.extended`](https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary.extended).
+Run it with `make dictionary_features`.
+
 **Data types**: `string`, `octets`, `integer`, `signed`, `short`, `byte`,
 `integer64`, `date`, `ipaddr`, `ipv6addr`, `ipv6prefix`, `ifid` (RFC 3162
 8-byte Interface-Id), `ether` (RFC 6911 MAC address), `abinary` (Ascend
@@ -89,5 +94,26 @@ dict of sub-attribute name → values). Long-extended values larger than
 251 bytes are fragmented across multiple AVPs on send and reassembled on
 receive — callers see one logical value either way.
 
-**Not yet supported**: TLV nesting deeper than two levels, and the
-Extended-Vendor-Specific (`evs`) type.
+**Extended-Vendor-Specific** (EVS, RFC 6929 §2.3): the `evs` type marks a
+sub-attribute of an extended wrapper that carries a vendor-specific
+payload. FreeRADIUS's `BEGIN-VENDOR <name> parent=<evs-attr>` syntax
+scopes the vendor's attributes underneath:
+
+```
+ATTRIBUTE Extended-Attribute-1        241     extended
+ATTRIBUTE Extended-Vendor-Specific-1  241.26  evs
+
+VENDOR Example 12345
+
+BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1
+ATTRIBUTE Example-Attr-1  1  string
+ATTRIBUTE Example-Attr-2  2  integer
+END-VENDOR Example
+```
+
+EVS attributes are accessed by name (`pkt["Example-Attr-1"] = "hello"`).
+The wire encoding wraps the vendor id and vendor type into the extended
+payload; long-extended EVS values are fragmented and reassembled the same
+way as plain long-extended attributes.
+
+**Not yet supported**: TLV nesting deeper than two levels.

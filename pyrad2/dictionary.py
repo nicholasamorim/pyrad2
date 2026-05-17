@@ -82,9 +82,13 @@ codes 241-246) is declared as ``extended`` or ``long-extended``. The
 fragmentation flag for ``long-extended`` is handled transparently on
 both encode and decode.
 
+Extended-Vendor-Specific (EVS, RFC 6929 §2.3) is supported through the
+``evs`` datatype combined with FreeRADIUS's ``BEGIN-VENDOR <name>
+parent=<evs-attr>`` syntax. Every ATTRIBUTE inside such a block becomes
+an EVS-VSA carried under the named extended wrapper.
+
 Limitations:
     * Nested TLVs deeper than two levels are not yet supported.
-    * Extended-Vendor-Specific (EVS, ``evs`` type) is not yet supported.
 """
 
 from copy import copy
@@ -286,7 +290,21 @@ class Dictionary:
             raise ParseError(
                 "Illegal type: " + datatype, file=state["file"], line=state["line"]
             )
-        if vendor:
+        if state.get("evs_parent"):
+            # Inside ``BEGIN-VENDOR ... parent=NAME``: this attribute is an
+            # EVS-VSA carried under the named extended wrapper. Key it as a
+            # 4-tuple (extended_wrapper_code, evs_slot, vendor_id,
+            # vendor_type) so encode/decode can find it without nesting.
+            evs_marker = self.attributes[state["evs_parent"]]
+            ext_wrapper = evs_marker.parent
+            key = (
+                ext_wrapper.code,
+                evs_marker.code,
+                self.vendors.get_forward(vendor),
+                code,
+            )
+            is_sub_attribute = True
+        elif vendor:
             if is_sub_attribute:
                 key = (self.vendors.get_forward(vendor), parent_code, code)
             else:
@@ -314,7 +332,9 @@ class Dictionary:
             # parent regardless of whether the wrapper is a TLV or an
             # RFC 6929 extended attribute.
             state["tlvs"][code] = self.attributes[attribute]
-        if is_sub_attribute:
+        if state.get("evs_parent"):
+            self.attributes[attribute].parent = self.attributes[state["evs_parent"]]
+        elif is_sub_attribute:
             state["tlvs"][parent_code].sub_attributes[code] = attribute
             self.attributes[attribute].parent = state["tlvs"][parent_code]
 
@@ -387,8 +407,13 @@ class Dictionary:
             self.vendor_formats[vendor_id] = vsa_format
 
     def __parse_begin_vendor(self, state: dict, tokens: list) -> None:
-        """Start a block of attributes for a specific vendor."""
-        if len(tokens) != 2:
+        """Start a block of attributes for a specific vendor.
+
+        Accepts the FreeRADIUS ``parent=NAME`` form which scopes the block
+        as an RFC 6929 EVS region: every ATTRIBUTE inside is an EVS-VSA
+        carried under the named extended wrapper.
+        """
+        if len(tokens) not in (2, 3):
             raise ParseError(
                 "Incorrect number of tokens for begin-vendor statement",
                 file=state["file"],
@@ -404,7 +429,33 @@ class Dictionary:
                 line=state["line"],
             )
 
+        evs_parent = None
+        if len(tokens) == 3:
+            opt = tokens[2]
+            if not opt.startswith("parent="):
+                raise ParseError(
+                    "Unknown option %s in begin-vendor statement" % opt,
+                    file=state["file"],
+                    line=state["line"],
+                )
+            evs_parent = opt.split("=", 1)[1]
+            marker = self.attributes.get(evs_parent)
+            if marker is None:
+                raise ParseError(
+                    "Unknown parent %s in begin-vendor statement" % evs_parent,
+                    file=state["file"],
+                    line=state["line"],
+                )
+            if marker.type != "evs":
+                raise ParseError(
+                    "begin-vendor parent %s must be of type evs (got %s)"
+                    % (evs_parent, marker.type),
+                    file=state["file"],
+                    line=state["line"],
+                )
+
         state["vendor"] = vendor
+        state["evs_parent"] = evs_parent
 
     def __parse_end_vendor(self, state: dict, tokens: list):
         """End a block of vendor-specific attributes."""
@@ -424,6 +475,7 @@ class Dictionary:
                 line=state["line"],
             )
         state["vendor"] = ""
+        state["evs_parent"] = None
 
     def read_dictionary(self, file: str) -> None:
         """Parse a dictionary file.
@@ -438,6 +490,7 @@ class Dictionary:
 
         state: Dict[str, Any] = {}
         state["vendor"] = ""
+        state["evs_parent"] = None
         state["tlvs"] = {}
         self.defer_parse = []
         for line in fil:

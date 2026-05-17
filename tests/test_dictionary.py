@@ -339,6 +339,46 @@ class DictionaryParsingTests(unittest.TestCase):
         self.assertTrue(sub.is_sub_attribute)
         self.assertIs(sub.parent, parent)
 
+    def testEvsParserStoresFourTupleKey(self):
+        # RFC 6929 §2.3 — EVS-VSA. The marker lives at 241.26 with type evs,
+        # then BEGIN-VENDOR parent= scopes the vendor block beneath it.
+        self.dict.read_dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Extended-Vendor-Specific-1 241.26 evs\n"
+                "VENDOR Example 12345\n"
+                "BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1\n"
+                "ATTRIBUTE Example-Attr-1 1 string\n"
+                "ATTRIBUTE Example-Attr-2 2 integer\n"
+                "END-VENDOR Example\n"
+            )
+        )
+        # The vendor attributes index under the canonical 4-tuple.
+        self.assertEqual(self.dict.attrindex["Example-Attr-1"], (241, 26, 12345, 1))
+        self.assertEqual(self.dict.attrindex["Example-Attr-2"], (241, 26, 12345, 2))
+        # And their parent points back at the EVS marker.
+        marker = self.dict["Extended-Vendor-Specific-1"]
+        self.assertEqual(marker.type, "evs")
+        self.assertIs(self.dict["Example-Attr-1"].parent, marker)
+        self.assertEqual(self.dict["Example-Attr-1"].vendor, "Example")
+        self.assertTrue(self.dict["Example-Attr-1"].is_sub_attribute)
+
+    def testEvsRejectsNonEvsParent(self):
+        # parent= must refer to an attribute whose type is "evs".
+        try:
+            self.dict.read_dictionary(
+                StringIO(
+                    "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                    "ATTRIBUTE Not-Evs 241.7 integer\n"
+                    "VENDOR Example 12345\n"
+                    "BEGIN-VENDOR Example parent=Not-Evs\n"
+                )
+            )
+        except ParseError as e:
+            self.assertIn("evs", str(e).lower())
+        else:
+            self.fail("expected ParseError for non-evs parent")
+
     def testVendorFormatStoredAndRetrievable(self):
         # Default format is (1, 1) when no format= is declared.
         self.dict.read_dictionary(StringIO("VENDOR Cisco 9"))

@@ -1,0 +1,48 @@
+#
+# Sample dictionary exercising the dictionary features pyrad2 added on top
+# of the classic RFC 2865 surface. Loaded by examples/dictionary_features.py.
+#
+
+# --- ifid (RFC 3162) ---------------------------------------------------
+# 8-byte Interface-Id in xxxx:xxxx:xxxx:xxxx form.
+ATTRIBUTE Framed-Interface-Id           96      ifid
+
+# --- ether (RFC 6911) --------------------------------------------------
+# 6-byte MAC address in hh:hh:hh:hh:hh:hh (or hh-hh-...) form.
+ATTRIBUTE Test-Mac-Address              190     ether
+
+# --- concat option (RFC 7268 §3.6) -------------------------------------
+# Values larger than 253 bytes are split across multiple AVPs on the wire
+# and rejoined on decode. Classic users: EAP-Message, CHAP-Challenge.
+ATTRIBUTE Long-Note                     200     octets  concat
+
+# --- Vendor with non-default format= ------------------------------------
+# USR-style 4-byte type, no length field — VSA fills the encapsulating AVP.
+VENDOR No-Len-Vendor                    429     format=4,0
+BEGIN-VENDOR No-Len-Vendor
+ATTRIBUTE No-Len-Attr                   5       string
+END-VENDOR No-Len-Vendor
+
+# --- RFC 6929 extended attributes (241-244) ----------------------------
+ATTRIBUTE Extended-Attribute-1          241     extended
+ATTRIBUTE Frag-Status                   241.1   integer
+ATTRIBUTE Auth-Lifetime                 241.2   integer
+
+VALUE Frag-Status   Fragmented          1
+VALUE Frag-Status   More-Data-Pending   2
+
+# --- RFC 6929 long-extended (245-246) with fragmentation ---------------
+ATTRIBUTE Extended-Attribute-5          245     long-extended
+ATTRIBUTE WiMAX-Blob                    245.1   octets
+
+# --- RFC 6929 §2.3 Extended-Vendor-Specific (EVS) ---------------------
+# The marker lives at 241.26 with type=evs, then BEGIN-VENDOR parent=NAME
+# scopes the vendor block beneath it.
+ATTRIBUTE Extended-Vendor-Specific-1    241.26  evs
+
+VENDOR Example                          12345
+
+BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1
+ATTRIBUTE Example-User-Tier             1       string
+ATTRIBUTE Example-Bandwidth-Mbps        2       integer
+END-VENDOR Example

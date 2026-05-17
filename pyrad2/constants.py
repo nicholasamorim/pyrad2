@@ -13,6 +13,11 @@ EXTENDED_ATTRIBUTE_TYPES: frozenset[int] = frozenset({241, 242, 243, 244})
 LONG_EXTENDED_ATTRIBUTE_TYPES: frozenset[int] = frozenset({245, 246})
 LONG_EXTENDED_MORE_FLAG: int = 0x80
 
+# RFC 6929 §2.3 — Extended-Vendor-Specific. EVS sub-attributes occupy
+# extended-type 26 inside an extended (241-244) or long-extended (245-246)
+# wrapper and carry a 4-byte vendor-id plus a 1-byte vendor type.
+EVS_EXTENDED_TYPE: int = 26
+
 
 class PacketType(IntEnum):
     """RADIUS packet codes as defined by the IANA registry.
@@ -76,5 +81,6 @@ DATATYPES = frozenset(
         "integer64",
         "extended",
         "long-extended",
+        "evs",
     ]
 )
