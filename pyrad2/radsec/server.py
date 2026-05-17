@@ -1,7 +1,7 @@
 import asyncio
 import ssl
 from abc import abstractmethod
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 from loguru import logger
 
@@ -16,6 +16,13 @@ from pyrad2.packet import (
     StatusPacket,
     parse_packet,
     prepare_reply_message_authenticator,
+)
+from pyrad2.radsec.v11 import (
+    NoCommonRadiusVersion,
+    RadiusVersion,
+    apply_alpn,
+    enforce_tls_version_floor,
+    negotiate,
 )
 from pyrad2.server import RemoteHost, ServerPacketError
 from pyrad2.tools import (
@@ -72,6 +79,7 @@ class RadSecServer:
         require_eap_message_authenticator: bool = True,
         enable_coa: bool = True,
         enable_disconnect: bool = True,
+        radius_versions: Sequence[RadiusVersion] = (RadiusVersion.V1_0,),
     ):
         """Initializes a RadSec server.
 
@@ -101,6 +109,12 @@ class RadSecServer:
                 disabled requests receive CoA-NAK.
             enable_disconnect (bool): Dispatch Disconnect-Request packets to
                 `handle_disconnect`; disabled requests receive Disconnect-NAK.
+            radius_versions (Sequence[RadiusVersion]): RFC 9765 protocol
+                versions to advertise via ALPN. Defaults to ``(V1_0,)`` —
+                identical handshake behavior to historic RadSec. Pass
+                ``(V1_0, V1_1)`` to advertise both; the highest mutually
+                supported version is chosen by Python's TLS stack.
+                **Experimental.**
         """
         self.listen_address = listen_address
         self.listen_port = listen_port
@@ -117,6 +131,15 @@ class RadSecServer:
             normalize_cert_fingerprint(fingerprint)
             for fingerprint in (allowed_client_fingerprints or [])
         }
+        self.radius_versions: tuple[RadiusVersion, ...] = tuple(radius_versions)
+        if not self.radius_versions:
+            raise ValueError("radius_versions must contain at least one entry")
+        # RFC 9765 §3.4: RADIUS/1.1 requires TLS 1.3+. Promote the floor
+        # silently when v1.1 is configured to keep the constructor friendly,
+        # but if the caller pinned something higher, respect that.
+        minimum_tls_version = enforce_tls_version_floor(
+            minimum_tls_version, self.radius_versions
+        )
 
         self.setup_ssl(
             certfile, keyfile, ca_certfile, verify_mode, minimum_tls_version, ciphers
@@ -168,6 +191,11 @@ class RadSecServer:
         ssl_ctx.load_verify_locations(cafile=ca_certfile)
         if ciphers is not None:
             ssl_ctx.set_ciphers(ciphers)
+
+        # RFC 9765 §3.1: advertise the supported RADIUS protocol versions via
+        # ALPN. No-op when only V1_0 is configured, so historic deployments
+        # see byte-identical TLS hellos.
+        apply_alpn(ssl_ctx, self.radius_versions)
 
         self.ssl_ctx = ssl_ctx
 
@@ -230,7 +258,29 @@ class RadSecServer:
             await writer.wait_closed()
             return
 
-        logger.info("RADSEC connection established from {}", peername)
+        ssl_object = writer.get_extra_info("ssl_object")
+        selected_alpn = (
+            ssl_object.selected_alpn_protocol() if ssl_object is not None else None
+        )
+        try:
+            radius_version = negotiate(self.radius_versions, selected_alpn)
+        except NoCommonRadiusVersion as exc:
+            # RFC 9765 §3.3: a strict-mode server (no v1.0 in
+            # radius_versions) MUST close when the client didn't pick a
+            # version we support. The MAY-send-Protocol-Error path is
+            # left out for now.
+            logger.warning(
+                "Closing RADSEC connection from {}: {}", peername, exc
+            )
+            writer.close()
+            await writer.wait_closed()
+            return
+        logger.info(
+            "RADSEC connection established from {} (ALPN={}, RADIUS/{})",
+            peername,
+            selected_alpn or "none",
+            "1.1" if radius_version == RadiusVersion.V1_1 else "1.0",
+        )
 
         packets_processed = 0
         try:
@@ -251,7 +301,9 @@ class RadSecServer:
                 logger.debug("Data (hex): {}", data.hex())
 
                 try:
-                    reply = await self.packet_received(data, host=peername[0])
+                    reply = await self.packet_received(
+                        data, host=peername[0], radius_version=radius_version
+                    )
                 except UnknownHost:
                     logger.warning("Drop package from unknown source {}", peername[0])
                     return
@@ -283,10 +335,7 @@ class RadSecServer:
         if isinstance(packet, CoAPacket):
             return packet.verify_coa_request()
         if isinstance(packet, StatusPacket):
-            try:
-                return packet.verify_message_authenticator()
-            except Exception:
-                return False
+            return packet.verify_status_request()
         return packet.verify_packet()
 
     def _validate_message_authenticator_policy(self, packet: Packet) -> None:
@@ -317,7 +366,12 @@ class RadSecServer:
         self._add_error_cause(reply, ErrorCause.UnsupportedExtension)
         return reply
 
-    async def packet_received(self, data: bytes, host: str) -> Packet:
+    async def packet_received(
+        self,
+        data: bytes,
+        host: str,
+        radius_version: RadiusVersion = RadiusVersion.V1_0,
+    ) -> Packet:
         if host in self.hosts:
             remote_host = self.hosts[host]
         elif "0.0.0.0" in self.hosts:
@@ -325,7 +379,9 @@ class RadSecServer:
         else:
             raise UnknownHost
 
-        packet = parse_packet(data, remote_host.secret, self.dict)
+        packet = parse_packet(
+            data, remote_host.secret, self.dict, radius_version=radius_version
+        )
 
         if self.verify_packet:
             if not self._verify_packet(packet):

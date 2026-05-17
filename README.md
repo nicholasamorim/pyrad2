@@ -14,9 +14,12 @@ pyrad2 is an implementation of a RADIUS client/server as described in RFC2865 an
 
 [pyrad2](https://github.com/nicholasamorim/pyrad2) is an implementation of a RADIUS client/server as described in RFC2865. It takes care of all the details like building RADIUS packets, sending them and decoding responses.
 
+# Differences from Pyrad
+
 What this fork does differently from upstream [pyrad](https://github.com/pyradius/pyrad):
    
 - Adds **RadSec** (RFC 6614) client and server (experimental)
+- Adds **RADIUS/1.1** (RFC 9765, experimental) over RadSec via TLS ALPN negotiation — drops MD5 obfuscation, Message-Authenticator, and Request/Response Authenticator MD5 since TLS already authenticates the bytes; falls back to historic RadSec when either side doesn't advertise the new ALPN
 - Adds **Status-Server** (RFC 5997) health checks across sync, async, and RadSec
 - Adds **RFC 5080 §2.2.2 duplicate detection / response cache** — retransmitted Access/Accounting/CoA/Disconnect-Requests replay the cached reply bytes instead of re-running the handler, which is what keeps EAP `State` continuity intact and stops accounting double-counts
 - Adds **Message-Authenticator** enforcement (validated whenever present, required for EAP, opt-in to require on every packet)
@@ -44,13 +47,15 @@ The repo ships two complementary surfaces depending on what you want:
 - **[`scenarios/`](scenarios)** — single-process end-to-end demos that run a server **and** client in one event loop. Not meant to be edited — they're runnable explanations of what a RADIUS flow looks like, top to bottom, on one log. This is the fastest way to learn what pyrad2 actually does.
 
 ```bash
-make scenario_auth     # Access-Request → Access-Accept (UDP, RFC 2865)
-make scenario_acct     # Accounting-Request → Accounting-Response
-make scenario_coa      # CoA-Request → CoA-ACK (RFC 5176)
-make scenario_status   # Status-Server health check (RFC 5997)
-make scenario_dedup    # Duplicate detection / response cache (RFC 5080)
-make scenario_radsec   # RadSec (RFC 6614) — mutual TLS, Access-Request
-make demo              # all six sequentially
+make demo                  # all seven sequentially
+
+make scenario_auth         # Access-Request → Access-Accept (UDP, RFC 2865)
+make scenario_acct         # Accounting-Request → Accounting-Response
+make scenario_coa          # CoA-Request → CoA-ACK (RFC 5176)
+make scenario_status       # Status-Server health check (RFC 5997)
+make scenario_dedup        # Duplicate detection / response cache (RFC 5080)
+make scenario_radsec       # RadSec (RFC 6614) — mutual TLS, Access-Request
+make scenario_radsec_v11   # RADIUS/1.1 (RFC 9765) — ALPN-negotiated v1.1 over RadSec
 ```
 
 Set `PYRAD2_TRACE=1` on any script — scenario, example, or your own code — to dump every packet's wire bytes and decoded AVPs as they cross `request_packet` / `reply_packet` / `decode_packet`. Pair it with a scenario for a "watch a full RADIUS exchange one byte at a time" view:
@@ -61,21 +66,16 @@ PYRAD2_TRACE=1 make scenario_auth
 
 # Tests
 
-Run `make test`.
+Run `make test`
 
 # Author, Copyright, Availability
 
-pyrad2 is currently maintaned by Nicholas Amorim \<<nicholas@santos.ee\>.
+pyrad2 is currently maintaned by Nicholas Amorim.
 
-pyrad was written by Wichert Akkerman \<<wichert@wiggy.net>\> and is
-maintained by Christian Giese (GIC-de) and Istvan Ruzman (Istvan91).
+pyrad was written by [Wichert Akkerman](wichert@wiggy.net) and is maintained by Christian Giese (GIC-de) and Istvan Ruzman (Istvan91).
 
 This project is licensed under a BSD license.
 
 Copyright and license information can be found in the LICENSE.txt file.
 
-The current version and documentation can be found on pypi:
-<https://pypi.org/project/pyrad2/>
-
-Bugs and wishes can be submitted in the pyrad issue tracker on github:
-<https://github.com/nicholasamorim/pyrad2/issues>
+Bugs and wishes can be submitted in the pyrad2 [issue tracker](https://github.com/nicholasamorim/pyrad2/issues) on GitHub.

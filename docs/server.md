@@ -263,3 +263,85 @@ PYTHONPATH=. uv run examples/status_radsec.py
 
 The UDP `examples/status.py` script only talks to normal RADIUS servers on
 UDP/1812 or UDP/1813.
+
+## RADIUS/1.1 (RFC 9765)
+
+!!! Warning
+
+    Experimental. The RFC was published in April 2025 and ecosystem support is still small.
+
+[RFC 9765](https://datatracker.ietf.org/doc/html/rfc9765) defines **RADIUS/1.1**, a TLS-only profile that drops the MD5 baggage now that TLS already provides authentication, integrity, and confidentiality on the wire. On the same RadSec port (2083), the two sides negotiate the protocol version via TLS ALPN:
+
+| ALPN string | Profile |
+| --- | --- |
+| `radius/1.0` | Historic RADIUS (RFC 2865), MD5-based |
+| `radius/1.1` | RFC 9765 — no MD5, no Message-Authenticator, Token instead of Request Authenticator |
+
+What changes once v1.1 is negotiated:
+
+- **No MD5 obfuscation** of `User-Password`, `Tunnel-Password`, or `MS-MPPE-*-Key` — they flow as plain `string` over the TLS connection (§5.1.1, §5.1.3, §5.1.4). In your handler, `packet["User-Password"]` is the literal cleartext bytes the client sent.
+- **No Message-Authenticator.** Sending one is forbidden (§5.2); any instance received is silently discarded.
+- **Token in place of Request Authenticator.** The first 4 bytes of the 16-byte authenticator slot become a per-connection 32-bit counter (§4.1); the remaining 12 are zero. Replies echo the same Token. The on-wire packet layout is otherwise unchanged.
+- **Identifier byte is zero on the wire** (§4.1, Reserved-1). Request/response matching uses the Token.
+- **All MD5-based verifiers short-circuit** (`verify_packet`, `verify_auth_request`, `verify_acct_request`, `verify_coa_request`) — TLS already authenticated the bytes.
+
+### Enabling RADIUS/1.1
+
+Pass `radius_versions=...` to the server constructor — the same kwarg exists on `RadSecClient`. Defaults to `(V1_0,)` on both sides for backward compatibility with existing deployments: no ALPN string is advertised when only v1.0 is requested, so historic peers see byte-identical TLS hellos.
+
+```py title="Advertising both v1.0 and v1.1"
+from pyrad2.radsec.server import RadSecServer
+from pyrad2.radsec.v11 import RadiusVersion
+
+server = RadSecServer(
+    # ... your usual kwargs ...
+    radius_versions=(RadiusVersion.V1_0, RadiusVersion.V1_1),
+)
+```
+
+Negotiation outcome:
+
+| Server advertises | Client advertises | Result |
+| --- | --- | --- |
+| `(V1_0,)` | `(V1_0,)` | v1.0 (no ALPN sent — identical to historic RadSec) |
+| `(V1_0, V1_1)` | `(V1_0, V1_1)` | **v1.1** — highest mutually supported wins |
+| `(V1_0,)` | `(V1_0, V1_1)` | v1.0 (server silent on ALPN, client falls back) |
+| `(V1_0, V1_1)` | `(V1_0,)` | v1.0 (client silent on ALPN, server falls back) |
+| `(V1_1,)` | `(V1_0,)` | **Connection closed** — server refuses to downgrade (RFC 9765 §3.3) |
+| `(V1_0,)` | `(V1_1,)` | Client raises `PacketError` and the call returns `None` — refuses to downgrade |
+| `(V1_1,)` | `(V1_1,)` | v1.1 (or TLS alert 120 if either side rejects the other's certs) |
+
+A connection is closed/rejected exactly when one side is configured *only* for v1.1 and the other side didn't advertise the `radius/1.1` ALPN. RFC 9765 §3.4 also mandates **TLS 1.3 or later** whenever v1.1 is in play — `RadSecServer` and `RadSecClient` automatically promote `minimum_tls_version` to `TLSv1_3` if v1.1 is configured.
+
+Once a connection is established, the negotiated version is available as `client._negotiated_version` (client side) and on every parsed packet as `packet.radius_version`. The RadSec server logs `RADSEC connection established from ... (ALPN=..., RADIUS/...)` on every handshake.
+
+### Writing a v1.1-aware handler
+
+Existing handlers work unchanged. On the receive side, in v1.1 the `User-Password` attribute is already in plaintext (TLS authenticated the bytes, so no obfuscation is needed); in v1.0 it's obfuscated and you call `pw_decrypt` as before:
+
+```py title="Cross-version handler"
+async def handle_access_request(self, packet):
+    if packet.radius_version == RadiusVersion.V1_1:
+        password = packet["User-Password"][0]          # plain string
+    else:
+        password = packet.pw_decrypt(packet[2][0])     # raw bytes → str
+    reply = packet.create_reply()
+    reply.code = PacketType.AccessAccept
+    return reply
+```
+
+The reply path is fully automatic — `create_reply()` propagates `radius_version` and the Token to the reply, and `reply_packet()` skips MD5 / Message-Authenticator when v1.1 is set.
+
+### Sending passwords from clients that advertise both versions
+
+A client that advertises both `radius/1.0` and `radius/1.1` doesn't know which one will be negotiated until the TLS handshake completes — but attribute assignment happens before that. Use `Packet.set_obfuscated()` to defer the encoding decision until send time:
+
+```py title="Version-agnostic password assignment"
+req = client.create_auth_packet(User_Name="alice")
+# Stores plaintext; pw_crypt() is applied at send time if v1.0 is
+# negotiated, or emitted as plain bytes if v1.1 wins.
+req.set_obfuscated("User-Password", "hunter2")
+reply = await client.send_packet(req)
+```
+
+The same helper works for `Tunnel-Password` and other `encrypt=2` attributes, where direct assignment also runs into the assignment-vs-handshake ordering problem.

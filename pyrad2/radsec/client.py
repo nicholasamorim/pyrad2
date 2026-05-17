@@ -1,6 +1,6 @@
 import asyncio
 import ssl
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Sequence
 
 from loguru import logger
 
@@ -15,6 +15,14 @@ from pyrad2.packet import (
     PacketImplementation,
     StatusPacket,
     prepare_request_message_authenticator,
+)
+from pyrad2.radsec.v11 import (
+    NoCommonRadiusVersion,
+    RadiusVersion,
+    TokenCounter,
+    apply_alpn,
+    enforce_tls_version_floor,
+    negotiate,
 )
 from pyrad2.tools import read_radius_packet
 from pyrad2.tools import cert_fingerprint_matches, normalize_cert_fingerprint
@@ -40,6 +48,7 @@ class RadSecClient:
         allowed_server_fingerprints: Optional[Iterable[str]] = None,
         reuse_connection: bool = True,
         reconnect_backoff: float = 0.25,
+        radius_versions: Sequence[RadiusVersion] = (RadiusVersion.V1_0,),
     ):
         """Initializes a RadSec client.
 
@@ -62,6 +71,11 @@ class RadSecClient:
             reuse_connection (bool): Reuse the TLS connection for multiple packets.
             reconnect_backoff (float): Seconds to wait before retrying after a
                 connection or read failure.
+            radius_versions (Sequence[RadiusVersion]): RFC 9765 protocol
+                versions to advertise via ALPN. Defaults to ``(V1_0,)`` —
+                identical handshake behavior to historic RadSec. Pass
+                ``(V1_0, V1_1)`` to advertise both; the server picks the
+                highest mutually supported version. **Experimental.**
 
         """
         self.server = server
@@ -80,6 +94,22 @@ class RadSecClient:
             normalize_cert_fingerprint(fingerprint)
             for fingerprint in (allowed_server_fingerprints or [])
         }
+        self.radius_versions: tuple[RadiusVersion, ...] = tuple(radius_versions)
+        if not self.radius_versions:
+            raise ValueError("radius_versions must contain at least one entry")
+        # RFC 9765 §3.4: RADIUS/1.1 requires TLS 1.3+. Auto-promote the
+        # configured floor when v1.1 is advertised.
+        minimum_tls_version = enforce_tls_version_floor(
+            minimum_tls_version, self.radius_versions
+        )
+        # Negotiated post-handshake. _token_counter is only meaningful for v1.1.
+        self._negotiated_version: RadiusVersion = RadiusVersion.V1_0
+        self._token_counter: TokenCounter | None = None
+        # Last fatal error from send_packet, exposed so callers can tell a
+        # strict-mode negotiation refusal apart from a normal timeout/no-reply
+        # (both currently surface as ``send_packet`` returning ``None``).
+        # Cleared at the start of each send_packet call.
+        self.last_error: Exception | None = None
 
         self.setup_ssl(
             certfile,
@@ -115,6 +145,10 @@ class RadSecClient:
         self.ssl_ctx.minimum_version = minimum_tls_version
         if ciphers is not None:
             self.ssl_ctx.set_ciphers(ciphers)
+
+        # RFC 9765 §3.1: advertise the configured RADIUS protocol versions.
+        # No-op when only V1_0 is configured.
+        apply_alpn(self.ssl_ctx, self.radius_versions)
 
     def _verify_server_fingerprint(self, writer: asyncio.StreamWriter) -> bool:
         """Verify the connected server certificate against the fingerprint allowlist.
@@ -157,6 +191,9 @@ class RadSecClient:
         writer = self._writer
         self._reader = None
         self._writer = None
+        # Negotiated version + Token counter are per-connection; clear them.
+        self._negotiated_version = RadiusVersion.V1_0
+        self._token_counter = None
         await self._close_writer(writer)
 
     async def __aenter__(self) -> "RadSecClient":
@@ -176,10 +213,32 @@ class RadSecClient:
             timeout=self.timeout,
         )
 
+        ssl_object = writer.get_extra_info("ssl_object")
+        selected_alpn = (
+            ssl_object.selected_alpn_protocol() if ssl_object is not None else None
+        )
+        try:
+            self._negotiated_version = negotiate(self.radius_versions, selected_alpn)
+        except NoCommonRadiusVersion as exc:
+            # RFC 9765 §3.3: a strict-mode client (no v1.0 in
+            # radius_versions) must not silently downgrade. Close the
+            # half-open connection and surface a clean failure.
+            await self._close_writer(writer)
+            raise PacketError(
+                "No common RADIUS protocol version with RadSec server: " + str(exc)
+            ) from exc
+        self._token_counter = (
+            TokenCounter()
+            if self._negotiated_version == RadiusVersion.V1_1
+            else None
+        )
+
         logger.info(
-            "Connected to RADSEC server on {}:{}",
+            "Connected to RADSEC server on {}:{} (ALPN={}, RADIUS/{})",
             self.server,
             self.port,
+            selected_alpn or "none",
+            "1.1" if self._negotiated_version == RadiusVersion.V1_1 else "1.0",
         )
 
         if not self._verify_server_fingerprint(writer):
@@ -208,9 +267,37 @@ class RadSecClient:
         self, writer: asyncio.StreamWriter, packet: PacketImplementation
     ) -> None:
         """Write one RADIUS packet to the RadSec stream within the client timeout."""
+        self._stamp_radius_version(packet)
         self._prepare_outgoing_packet(packet)
         writer.write(packet.request_packet())
         await asyncio.wait_for(writer.drain(), timeout=self.timeout)
+
+    def _stamp_radius_version(self, packet: PacketImplementation) -> None:
+        """Tag an outgoing packet with the negotiated RADIUS version.
+
+        Always overwrites ``packet.radius_version`` so a packet that was
+        previously serialized under a different negotiated version (for
+        example after a reconnect that dropped from v1.1 back to v1.0)
+        gets re-serialized correctly on retry rather than carrying its
+        prior v1.1 state — Token, zero Identifier, plaintext password —
+        onto a v1.0 wire format.
+
+        For v1.1 we also stamp a fresh Token — done exactly once per
+        packet so a retry reuses the same Token (hitting the server's
+        RFC 5080 dedup cache). The Token lives in its own slot,
+        distinct from ``packet.authenticator``, so any prior v1.0 flow
+        that populated authenticator (e.g. pw_crypt) can't leak random
+        bytes into the v1.1 Reserved-2 region (RFC 9765 §4.1).
+        """
+        packet.radius_version = self._negotiated_version
+        if self._negotiated_version == RadiusVersion.V1_1:
+            if packet.token is None and self._token_counter is not None:
+                packet.token = self._token_counter.next()
+        else:
+            # Clear any leftover v1.1 Token so the v1.0 serializer doesn't
+            # see it; the v1.0 path computes its own authenticator anyway,
+            # so the Token slot has no meaning here.
+            packet.token = None
 
     def _prepare_outgoing_packet(self, packet: PacketImplementation) -> None:
         """Apply Message-Authenticator policy before a packet is sent."""
@@ -310,6 +397,7 @@ class RadSecClient:
         Args:
             packet (Packet): The packet to send
         """
+        self.last_error = None
         attempts = max(1, self.retries)
         retryable_errors = (
             asyncio.IncompleteReadError,
@@ -324,10 +412,22 @@ class RadSecClient:
                 try:
                     return await self._send_packet_once(packet)
                 except PacketError as exc:
-                    logger.error("RADSEC packet error: {}", exc)
+                    # Most PacketErrors here are non-retryable handshake-level
+                    # failures: ALPN refused downgrade, certificate fingerprint
+                    # mismatch, or a malformed server reply. Stash the cause
+                    # so callers can distinguish them from "no reply received"
+                    # (which leaves last_error as None).
+                    self.last_error = exc
+                    tag = (
+                        "RADSEC negotiation failure"
+                        if "No common RADIUS protocol" in str(exc)
+                        else "RADSEC packet error"
+                    )
+                    logger.error("{}: {}", tag, exc)
                     await self.close()
                     return None
                 except retryable_errors as exc:
+                    self.last_error = exc
                     logger.warning(
                         "RADSEC request attempt {}/{} failed: {}",
                         attempt + 1,

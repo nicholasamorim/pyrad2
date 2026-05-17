@@ -181,3 +181,44 @@ You can find an example implementation [here](https://github.com/nicholasamorim/
 RadSec uses TLS/TCP on port 2083, so the UDP `examples/status.py` health-check
 script will not reach a RadSec server. Use
 `examples/status_radsec.py` for RadSec Status-Server health checks.
+
+## RADIUS/1.1 (RFC 9765)
+
+!!! Warning
+
+    Experimental.
+
+`RadSecClient` accepts the same `radius_versions=...` kwarg as the server. The default `(V1_0,)` advertises no ALPN string at all, so handshakes are byte-identical to historic RadSec. Pass `(V1_0, V1_1)` to offer both — the server picks the highest mutually supported version.
+
+```py title="Opting into RADIUS/1.1"
+from pyrad2.radsec.client import RadSecClient
+from pyrad2.radsec.v11 import RadiusVersion
+
+client = RadSecClient(
+    server="127.0.0.1",
+    secret=b"radsec",
+    dict=Dictionary("dictionary"),
+    certfile="certs/client/client.cert.pem",
+    keyfile="certs/client/client.key.pem",
+    certfile_server="certs/ca/ca.cert.pem",
+    radius_versions=(RadiusVersion.V1_0, RadiusVersion.V1_1),
+)
+
+req = client.create_auth_packet(User_Name="alice")
+# set_obfuscated defers encoding until send time: pw_crypt() if v1.0 is
+# negotiated, plain bytes if v1.1 wins. Necessary when both ALPN values
+# are advertised — direct ``req["User-Password"] = pw_crypt(...)`` would
+# bake in v1.0 encoding before the TLS handshake even starts.
+req.set_obfuscated("User-Password", "hunter2")
+reply = await client.send_packet(req)
+
+print(client._negotiated_version)  # RadiusVersion.V1_1 if both sides agreed
+```
+
+`set_obfuscated` is the safe choice for both `encrypt=1` (User-Password) and `encrypt=2` (Tunnel-Password, MS-MPPE keys) attributes — including vendor-specific ones, which the deferred path correctly wraps in Vendor-Specific (RADIUS attribute 26). Pass `str` for `string`-typed attributes (`User-Password`, `Tunnel-Password`) and `bytes` for `octets`-typed attributes (`MS-MPPE-Recv-Key`, `MS-MPPE-Send-Key`). For v1.0-only clients you can still use the historic `req["User-Password"] = req.pw_crypt("...")` pattern.
+
+If your client is configured for `(V1_1,)` only and the server doesn't advertise the `radius/1.1` ALPN, `send_packet()` returns `None` after raising `PacketError` internally — the client refuses to silently downgrade per RFC 9765 §3.3. To distinguish that case from a normal timeout, check `client.last_error` after a `None` return: a strict-mode refusal sets it to a `PacketError` whose message contains "No common RADIUS protocol"; a timeout leaves it as the underlying `TimeoutError`; a clean no-reply leaves it `None`.
+
+RadSec also requires TLS 1.3+ whenever v1.1 is configured (RFC 9765 §3.4); the constructor auto-promotes `minimum_tls_version` to `TLSv1_3` in that case.
+
+See [the server docs](server.md#radius11-rfc-9765) for a full description of what changes once v1.1 is negotiated (no MD5, no Message-Authenticator, Token in place of Request Authenticator).

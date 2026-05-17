@@ -13,6 +13,85 @@ Changelog
   Enabled by default; tune via `dedup_enabled`, `dedup_ttl`, `dedup_max_entries`,
   or `dedup_cache=` on the server constructor.
 
+# RADIUS/1.1 (RFC 9765, experimental)
+
+- New protocol profile selected via TLS ALPN (`radius/1.1` vs `radius/1.0`).
+  `RadSecServer` and `RadSecClient` accept `radius_versions=...` to advertise
+  the new ALPN protocol; the default `(V1_0,)` preserves byte-identical
+  handshake behavior with historic RadSec deployments.
+- When `radius/1.1` is negotiated the connection drops all MD5 baggage —
+  no User-Password / Tunnel-Password / MS-MPPE obfuscation, no
+  Message-Authenticator, no Response Authenticator MD5. A per-connection
+  32-bit Token replaces the Request/Response Authenticator; the Identifier
+  byte is zero on the wire.
+- TLS 1.3 floor (RFC 9765 §3.4) auto-applied when v1.1 is configured.
+- Strict mode (`radius_versions=(V1_1,)`) refuses to silently downgrade
+  (RFC 9765 §3.3): server closes the TLS connection, client raises a
+  clean `PacketError` and `send_packet` returns `None`.
+- New `Packet.set_obfuscated(name, plaintext)` defers password encoding
+  until send time so dual-advertise clients don't have to know the
+  negotiated version at attribute-assignment time. Covers User-Password
+  and any `encrypt=2` attribute (Tunnel-Password, MS-MPPE keys).
+- A separate `Packet.token` slot replaces the previous
+  Token-in-authenticator hack so a prior `pw_crypt()` on a packet can no
+  longer leak random bytes into the v1.1 Reserved-2 region (RFC 9765 §4.1).
+- Incoming v1.1 packets silently discard any received Message-Authenticator
+  attribute (RFC 9765 §5.2) — handlers never observe it.
+- ``Packet.set_obfuscated`` is now idempotent across serializations: the
+  plaintext sidecar remains the source of truth so a re-encode under a
+  different negotiated version (e.g. a retry after a reconnect that
+  resumed under a different ALPN) emits the correct ciphertext or
+  plaintext rather than replaying stale bytes from the first send.
+- The five copies of the v1.1 emission path collapse into a single
+  ``Packet._serialize_v11()`` helper.
+- ``_pack_v11_header`` now raises ``PacketError`` if the Token is missing
+  or the wrong size, with an explicit ``zero_token=True`` opt-in for
+  Protocol-Error replies (RFC 9765 §6.1).
+- ``RadSecClient.last_error`` exposes the failing exception after a
+  ``send_packet`` returns ``None``, so a strict-mode ALPN refusal is
+  distinguishable from a normal timeout. Negotiation errors log under a
+  distinct ``RADSEC negotiation failure`` tag.
+- ``RadSecClient._stamp_radius_version`` now always overwrites
+  ``packet.radius_version`` and clears ``packet.token`` on v1.0
+  negotiation, so a reused packet that was previously serialized under
+  v1.1 doesn't leak a Token / zero Identifier / plaintext password onto
+  the v1.0 wire when a reconnect drops the negotiation back.
+- ``StatusPacket.verify_status_request`` (new) replaces the inline
+  Message-Authenticator check in ``RadSecServer._verify_packet``;
+  RADIUS/1.1 Status-Server packets no longer get rejected by a
+  ``verify_packet=True`` server (RFC 9765 §5.2 forbids the AVP).
+- ``AuthPacket.verify_chap_passwd`` raises ``PacketError`` in RADIUS/1.1
+  when ``CHAP-Challenge`` is absent (RFC 9765 §5.1.2). Previously it
+  silently synthesized a random authenticator and "failed closed" for
+  the wrong reason.
+- Serialization is now side-effect free. The deferred-obfuscation
+  sidecar is encoded inline at ``_pkt_encode_attributes`` time rather
+  than by deleting and re-adding entries on ``self`` — repeated
+  ``request_packet()`` calls leave the packet's stored attribute map
+  byte-stable.
+- v1.1 request serializers no longer seed ``self.authenticator`` via
+  ``create_authenticator()`` before taking the v1.1 branch — v1.1
+  packets carry no misleading legacy state.
+- ``set_obfuscated`` now reuses the same per-AVP container dispatch the
+  main encoder uses (``_encode_avp_group``). That preserves whatever
+  framing the dictionary defines — plain top-level, Vendor-Specific
+  (RADIUS attribute 26), TLV nested under its parent code, EVS 4-tuple
+  routed through the extended-attribute encoder, or extended /
+  long-extended fragmentation. Previously the deferred path bypassed
+  this dispatch and emitted bare top-level AVPs, mis-encoding (e.g.)
+  MS-MPPE-Recv-Key as RADIUS-17 (Reply-Message) and crashing on EVS
+  4-tuple keys with a tuple-unpack error. Tag-prefixed names
+  (e.g. ``Tunnel-Password:1``) are honored on the deferred path with
+  the same byte layout as direct assignment. Mixing a deferred TLV /
+  extended sub-attribute with directly-assigned siblings under the
+  same container parent is now merged correctly — non-deferred
+  siblings ride on the wire alongside the deferred ones rather than
+  being silently dropped.
+- New module `pyrad2.radsec.v11`: `RadiusVersion`, `apply_alpn`,
+  `negotiate`, `NoCommonRadiusVersion`, `enforce_tls_version_floor`,
+  `TokenCounter`.
+- New scenario `scenarios/radsec_v11.py` and `make scenario_radsec_v11`.
+
 2.2 - May 17, 2025
 ------------------
 
