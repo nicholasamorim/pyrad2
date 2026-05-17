@@ -19,6 +19,10 @@ class PacketType(IntEnum):
     CoANAK = 45
 
 
+class ErrorCause(IntEnum):
+    UnsupportedExtension = 406
+
+
 class EAPPacketType(IntEnum):
     REQUEST = 1
     RESPONSE = 2

@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Optional
 
 from loguru import logger
 
-from pyrad2.constants import PacketType
+from pyrad2.constants import ErrorCause, PacketType
 from pyrad2.dictionary import Dictionary
 from pyrad2.packet import (
     AcctPacket,
@@ -23,7 +23,10 @@ from pyrad2.server import RemoteHost, ServerPacketError
 class ServerType(Enum):
     Auth = "Authentication"
     Acct = "Accounting"
-    Coa = "Coa"
+    Coa = "Dynamic Authorization"
+
+
+ERROR_CAUSE_ATTRIBUTE = 101
 
 
 class DatagramProtocolServer(asyncio.DatagramProtocol):
@@ -211,7 +214,7 @@ class ServerAsync(ABC):
         Args:
             auth_port (int): Port to listen on for authentication packets.
             acct_port (int): Port to listen on for accounting packets.
-            coa_port (int): Port to listen on for CoA packets.
+            coa_port (int): Port to listen on for Dynamic Authorization packets.
             hosts (dict[str, RemoteHost]): Hosts who we can talk to. A dictionary mapping IP to RemoteHost class instances.
             dictionary (Dictionary): RADIUS dictionary to use.
             enable_pkt_verify (bool): If true, the packet will be verified against its secret
@@ -262,8 +265,16 @@ class ServerAsync(ABC):
         )
         return self.create_reply_packet(pkt, code=code)
 
+    @staticmethod
+    def _add_error_cause(reply: Packet, cause: ErrorCause) -> None:
+        """Add an RFC 5176 Error-Cause value without requiring dictionary support."""
+        reply[ERROR_CAUSE_ATTRIBUTE] = [int(cause).to_bytes(4, "big")]
+
     def _request_handler(
-        self, protocol: DatagramProtocolServer, req: Packet, addr: str
+        self,
+        protocol: DatagramProtocolServer,
+        req: Packet,
+        addr: tuple[str | Any, int],
     ):
         try:
             if protocol.server_type == ServerType.Acct:
@@ -371,7 +382,7 @@ class ServerAsync(ABC):
 
     @abstractmethod
     def handle_auth_packet(
-        self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
+        self, protocol: DatagramProtocolServer, pkt: Packet, addr: tuple[str | Any, int]
     ):
         """Authentication packet handler.
         This is an empty function that is called when a valid
@@ -380,14 +391,14 @@ class ServerAsync(ABC):
 
         Args:
             protocol (DatagramProtocolServer): The protocol to use when sending responses
-            pkt (packet.Packet): Packet to process
-            addr (str): IP from the client
+            pkt (packet.Packet): Packet to process.
+            addr (tuple): Source address and port.
         """
         pass
 
     @abstractmethod
     def handle_acct_packet(
-        self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
+        self, protocol: DatagramProtocolServer, pkt: Packet, addr: tuple[str | Any, int]
     ):
         """Accounting packet handler.
         This is an empty function that is called when a valid
@@ -396,39 +407,45 @@ class ServerAsync(ABC):
 
         Args:
             protocol (DatagramProtocolServer): The protocol to use when sending responses
-            pkt (packet.Packet): Packet to process
-            addr (str): IP from the client
+            pkt (packet.Packet): Packet to process.
+            addr (tuple): Source address and port.
         """
         pass
 
-    @abstractmethod
     def handle_coa_packet(
-        self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
-    ):
-        """CoA packet handler.
-        This is an empty function that is called when a valid
-        accounting packet has been received. It can be overriden in
-        derived classes to add custom behaviour.
+        self, protocol: DatagramProtocolServer, pkt: Packet, addr: tuple[str | Any, int]
+    ) -> None:
+        """Handle an unsupported CoA-Request with a CoA-NAK by default.
+
+        Subclasses that act as a Dynamic Authorization Server can override
+        this method to apply authorization changes and send CoA-ACK/NAK
+        responses themselves.
 
         Args:
             protocol (DatagramProtocolServer): The protocol to use when sending responses
-            pkt (packet.Packet): Packet to process
-            addr (str): IP from the client
+            pkt (packet.Packet): Packet to process.
+            addr (tuple): Source address and port.
         """
-        pass
+        reply = self.create_reply_packet(pkt)
+        reply.code = PacketType.CoANAK
+        self._add_error_cause(reply, ErrorCause.UnsupportedExtension)
+        protocol.send_response(reply, addr)
 
-    @abstractmethod
     def handle_disconnect_packet(
-        self, protocol: DatagramProtocolServer, pkt: Packet, addr: str
-    ):
-        """CoA packet handler.
-        This is an empty function that is called when a valid
-        accounting packet has been received. It can be overriden in
-        derived classes to add custom behaviour.
+        self, protocol: DatagramProtocolServer, pkt: Packet, addr: tuple[str | Any, int]
+    ) -> None:
+        """Handle an unsupported Disconnect-Request with a NAK by default.
+
+        Subclasses that act as a Dynamic Authorization Server can override
+        this method to terminate sessions and send Disconnect-ACK/NAK
+        responses themselves.
 
         Args:
             protocol (DatagramProtocolServer): The protocol to use when sending responses
-            pkt (packet.Packet): Packet to process
-            addr (str): IP from the client
+            pkt (packet.Packet): Packet to process.
+            addr (tuple): Source address and port.
         """
-        pass
+        reply = self.create_reply_packet(pkt)
+        reply.code = PacketType.DisconnectNAK
+        self._add_error_cause(reply, ErrorCause.UnsupportedExtension)
+        protocol.send_response(reply, addr)
