@@ -22,3 +22,5 @@ What this fork does:
 PRs are very welcome. For more information on what has changed, see our [releases](https://github.com/nicholasamorim/pyrad2/releases) page.
 
 See the [Getting Started](https://nicholasamorim.github.io/pyrad2/setup/) guide for a tutorial on how to get started.
+
+The fastest way to *see* pyrad2 in action is the [`scenarios/`](https://github.com/nicholasamorim/pyrad2/tree/master/scenarios) folder — single-process demos that run a server and client in one event loop. Pair them with `PYRAD2_TRACE=1` to dump every packet's wire bytes and decoded AVPs as they cross the loopback. See the [Learning by running](setup.md#learning-by-running) section of the Getting Started guide.

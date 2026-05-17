@@ -56,3 +56,23 @@ status_radsec:
 
 dictionary_features:
 	PYTHONPATH=. uv run examples/dictionary_features.py
+
+#
+# Scenarios — single-process end-to-end demos (see scenarios/README.md)
+#
+scenario_auth:
+	uv run python scenarios/auth.py
+
+scenario_acct:
+	uv run python scenarios/acct.py
+
+scenario_coa:
+	uv run python scenarios/coa.py
+
+scenario_status:
+	uv run python scenarios/status.py
+
+scenario_radsec:
+	uv run python scenarios/radsec_auth.py
+
+demo: scenario_auth scenario_acct scenario_coa scenario_status scenario_radsec
