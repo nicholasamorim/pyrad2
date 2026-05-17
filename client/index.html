@@ -441,6 +441,84 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#radsec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RadSec
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RadSec">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-a-radsec-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a RadSec client
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#radius11-rfc-9765" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RADIUS/1.1 (RFC 9765)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RADIUS/1.1 (RFC 9765)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-set_obfuscated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why set_obfuscated?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strict-v11-mode-and-downgrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strict v1.1 mode and downgrades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tls-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS version
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1210,6 +1288,84 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#radsec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RadSec
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RadSec">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-a-radsec-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a RadSec client
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#radius11-rfc-9765" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RADIUS/1.1 (RFC 9765)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RADIUS/1.1 (RFC 9765)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-set_obfuscated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why set_obfuscated?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strict-v11-mode-and-downgrades" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strict v1.1 mode and downgrades
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tls-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS version
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1361,15 +1517,14 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nv">PYTHONPATH</span><span class="o">=</span>.<span class="w"> </span>uv<span class="w"> </span>run<span class="w"> </span>examples/status_radsec.py
 </span></code></pre></div>
 <p>The UDP <code>examples/status.py</code> script can't reach a RadSec server - they're on different ports and transports.</p>
-<hr />
-<h1 id="radsec">RadSec</h1>
+<h2 id="radsec">RadSec</h2>
 <div class="admonition info">
 <p class="admonition-title">Status</p>
 <p>Experimental. Implements <a href="https://datatracker.ietf.org/doc/html/rfc6614">RFC 6614</a>.</p>
 </div>
 <p>RadSec replaces UDP+MD5 with TLS/TCP on port 2083. Auth, accounting, and dynamic authorization all share one mutually-authenticated connection. The default shared secret per the RFC is <code>radsec</code>.</p>
 <p>For server-side details and a discussion of what the RFC actually changes, see <a href="../server/#radsec-radius-over-tls">RadSec in the server docs</a>.</p>
-<h2 id="creating-a-radsec-client">Creating a RadSec client</h2>
+<h3 id="creating-a-radsec-client">Creating a RadSec client</h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.radsec.client</span><span class="w"> </span><span class="kn">import</span> <span class="n">RadSecClient</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.dictionary</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dictionary</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
@@ -1383,8 +1538,7 @@
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">)</span>
 </span></code></pre></div>
 <p>A runnable example is in <a href="https://github.com/nicholasamorim/pyrad2/blob/master/examples/auth_radsec.py"><code>examples/auth_radsec.py</code></a>.</p>
-<hr />
-<h1 id="radius11-rfc-9765">RADIUS/1.1 (RFC 9765)</h1>
+<h2 id="radius11-rfc-9765">RADIUS/1.1 (RFC 9765)</h2>
 <div class="admonition warning">
 <p class="admonition-title">Status</p>
 <p>Experimental. See <a href="../server/#radius11-rfc-9765">the server docs</a> for a full description of what v1.1 changes.</p>
@@ -1409,7 +1563,7 @@
 </span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>
 </span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="nb">print</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">_negotiated_version</span><span class="p">)</span>  <span class="c1"># RadiusVersion.V1_1 if both sides agreed</span>
 </span></code></pre></div>
-<h2 id="why-set_obfuscated">Why <code>set_obfuscated</code>?</h2>
+<h3 id="why-set_obfuscated">Why <code>set_obfuscated</code>?</h3>
 <p>A client that advertises <em>both</em> v1.0 and v1.1 doesn't know which one will be negotiated until the TLS handshake completes. But attribute assignment happens <strong>before</strong> that. <code>set_obfuscated</code> defers the encoding decision until send time:</p>
 <ul>
 <li>If v1.0 is negotiated, the password is run through <code>pw_crypt()</code>.</li>
@@ -1438,7 +1592,7 @@
 </tbody>
 </table>
 <p>For v1.0-only clients, the historic <code>req["User-Password"] = req.pw_crypt("...")</code> pattern still works.</p>
-<h2 id="strict-v11-mode-and-downgrades">Strict v1.1 mode and downgrades</h2>
+<h3 id="strict-v11-mode-and-downgrades">Strict v1.1 mode and downgrades</h3>
 <p>If your client is configured for <code>(V1_1,)</code> only and the server doesn't advertise the <code>radius/1.1</code> ALPN, <code>send_packet()</code> returns <code>None</code> after raising <code>PacketError</code> internally - the client refuses to silently downgrade (<a href="https://datatracker.ietf.org/doc/html/rfc9765#section-3.3">RFC 9765 §3.3</a>).</p>
 <p>To distinguish that case from a normal timeout, check <code>client.last_error</code> after a <code>None</code> return:</p>
 <table>
@@ -1463,7 +1617,7 @@
 </tr>
 </tbody>
 </table>
-<h2 id="tls-version">TLS version</h2>
+<h3 id="tls-version">TLS version</h3>
 <p>RFC 9765 §3.4 mandates <strong>TLS 1.3 or later</strong> whenever v1.1 is configured. The constructor auto-promotes <code>minimum_tls_version</code> to <code>TLSv1_3</code> in that case.</p>
 
 
