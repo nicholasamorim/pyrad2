@@ -998,6 +998,7 @@
 <p>What this fork does:</p>
 <ul>
 <li>Adds RadSec (RFC 6614) support (Experimental)</li>
+<li><strong>Loads FreeRADIUS dictionaries</strong> with broad fidelity: <code>ifid</code> (RFC 3162) and <code>ether</code> (RFC 6911) types, the <code>concat</code> attribute option (RFC 7268), the per-vendor <code>format=</code> directive (1/2/4-byte type fields, 0/1/2-byte length fields), RFC 6929 extended / long-extended attributes (types 241–246) with transparent fragmentation, and EVS (Extended-Vendor-Specific) via <code>BEGIN-VENDOR parent=</code> syntax</li>
 <li>Supports only Python 3.12+</li>
 <li>Extensive typing</li>
 <li>Increased test coverage</li>

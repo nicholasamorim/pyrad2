@@ -1017,6 +1017,63 @@ be used in packets. The Dictionary class stores the attribute definitions from o
 <div class="language-py highlight"><span class="filename">Loading a dictionary</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">dictfile</span> <span class="o">=</span> <span class="n">dictionary</span><span class="o">.</span><span class="n">Dictionary</span><span class="p">(</span><span class="s2">&quot;dictionary&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 <p>You are actually passing a <em>path</em> to a file (or a <a href="https://docs.python.org/3/library/io.html">file-like object</a>) called <code>dictionary</code>, so make sure the file you pass is accessible from your code and it's a valid dictionary file.</p>
+<h4 id="supported-dictionary-features">Supported dictionary features</h4>
+<p>pyrad2 aims to load real-world FreeRADIUS dictionaries without modification.</p>
+<p>A runnable demo of every feature below lives in
+<a href="https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary_features.py"><code>examples/dictionary_features.py</code></a>,
+backed by <a href="https://github.com/nicholasamorim/pyrad2/blob/master/examples/dictionary.extended"><code>examples/dictionary.extended</code></a>.
+Run it with <code>make dictionary_features</code>.</p>
+<p><strong>Data types</strong>: <code>string</code>, <code>octets</code>, <code>integer</code>, <code>signed</code>, <code>short</code>, <code>byte</code>,
+<code>integer64</code>, <code>date</code>, <code>ipaddr</code>, <code>ipv6addr</code>, <code>ipv6prefix</code>, <code>ifid</code> (RFC 3162
+8-byte Interface-Id), <code>ether</code> (RFC 6911 MAC address), <code>abinary</code> (Ascend
+filter format), <code>tlv</code> (one level of nesting), <code>extended</code> and
+<code>long-extended</code> (RFC 6929 wrappers).</p>
+<p><strong>Attribute options</strong> (comma-separated, after the type column):</p>
+<ul>
+<li><code>has_tag</code> — attribute carries a one-byte tag prefix (RFC 2868).</li>
+<li><code>encrypt=N</code> — apply encryption flavour 1, 2, or 3.</li>
+<li><code>concat</code> — values longer than 253 bytes split across multiple AVPs on
+  the wire and concatenate on decode (RFC 7268 §3.6). Typical for
+  <code>EAP-Message</code> and <code>CHAP-Challenge</code>.</li>
+</ul>
+<p><strong>Vendor format</strong> (<code>VENDOR Name 9 format=type_len,len_len</code>): the per-vendor
+VSA wire format is honored end-to-end. <code>type_len</code> may be 1, 2, or 4 bytes
+and <code>len_len</code> may be 0, 1, or 2 bytes. The default when no <code>format=</code> is
+declared follows RFC 2865 §5.26 (<code>1,1</code>).</p>
+<p><strong>RFC 6929 extended attributes</strong> (types 241–246): declare the wrapper as
+<code>extended</code> (241–244) or <code>long-extended</code> (245–246), then add sub-attributes
+using dotted-code notation:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ATTRIBUTE Extended-Attribute-1  241    extended
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>ATTRIBUTE Frag-Status           241.1  integer
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>ATTRIBUTE Auth-Lifetime         241.2  integer
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>ATTRIBUTE Extended-Attribute-5  245    long-extended
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>ATTRIBUTE WiMAX-Blob            245.1  octets
+</span></code></pre></div>
+<p>Values are accessed by name on the packet (<code>pkt["Frag-Status"] = 5</code>) and
+read back through the parent (<code>pkt["Extended-Attribute-1"]</code> returns a
+dict of sub-attribute name → values). Long-extended values larger than
+251 bytes are fragmented across multiple AVPs on send and reassembled on
+receive — callers see one logical value either way.</p>
+<p><strong>Extended-Vendor-Specific</strong> (EVS, RFC 6929 §2.3): the <code>evs</code> type marks a
+sub-attribute of an extended wrapper that carries a vendor-specific
+payload. FreeRADIUS's <code>BEGIN-VENDOR &lt;name&gt; parent=&lt;evs-attr&gt;</code> syntax
+scopes the vendor's attributes underneath:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>ATTRIBUTE Extended-Attribute-1        241     extended
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ATTRIBUTE Extended-Vendor-Specific-1  241.26  evs
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>VENDOR Example 12345
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>ATTRIBUTE Example-Attr-1  1  string
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>ATTRIBUTE Example-Attr-2  2  integer
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>END-VENDOR Example
+</span></code></pre></div>
+<p>EVS attributes are accessed by name (<code>pkt["Example-Attr-1"] = "hello"</code>).
+The wire encoding wraps the vendor id and vendor type into the extended
+payload; long-extended EVS values are fragmented and reassembled the same
+way as plain long-extended attributes.</p>
+<p><strong>Not yet supported</strong>: TLV nesting deeper than two levels.</p>
 
 
 
