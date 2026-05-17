@@ -16,7 +16,7 @@ from pyrad2 import client_async, packet
 from pyrad2.client_async import ClientAsync, DatagramProtocolClient
 from pyrad2.constants import PacketType
 from pyrad2.dictionary import Dictionary
-from pyrad2.packet import AuthPacket
+from pyrad2.packet import AcctPacket, AuthPacket, CoAPacket, StatusPacket
 
 from .base import TEST_ROOT_PATH
 
@@ -424,6 +424,73 @@ class EapMd5AsyncTests(unittest.TestCase):
             self.assertIs(ans.result(), accept)
 
         _run(scenario())
+
+
+class SendPacketRoutingTests(unittest.TestCase):
+    """send_packet must route packets to the matching transport.
+
+    Regression guard: a CoAPacket sent without an initialized CoA
+    transport used to silently fall through; an Acct packet sent
+    without an Acct transport similarly went to the wrong place.
+    """
+
+    def setUp(self):
+        self.dictionary = Dictionary(
+            os.path.join(TEST_ROOT_PATH, "dicts/dictionary")
+        )
+
+    def _make_client(self) -> ClientAsync:
+        client = ClientAsync(
+            server="127.0.0.1",
+            secret=b"secret",
+            dict=self.dictionary,
+            retries=1,
+            timeout=1,
+        )
+        client.protocol_auth = MagicMock()
+        client.protocol_auth.create_id.side_effect = iter(range(1, 100))
+        client.protocol_acct = MagicMock()
+        client.protocol_acct.create_id.side_effect = iter(range(100, 200))
+        client.protocol_coa = MagicMock()
+        client.protocol_coa.create_id.side_effect = iter(range(200, 300))
+        return client
+
+    def test_acct_packet_uses_acct_protocol(self):
+        client = self._make_client()
+        pkt = AcctPacket(id=1, secret=b"secret", dict=self.dictionary)
+
+        client.send_packet(pkt)
+
+        client.protocol_acct.send_packet.assert_called_once()
+        client.protocol_coa.send_packet.assert_not_called()
+        client.protocol_auth.send_packet.assert_not_called()
+
+    def test_coa_packet_uses_coa_protocol(self):
+        client = self._make_client()
+        pkt = CoAPacket(id=1, secret=b"secret", dict=self.dictionary)
+
+        client.send_packet(pkt)
+
+        client.protocol_coa.send_packet.assert_called_once()
+        client.protocol_acct.send_packet.assert_not_called()
+        client.protocol_auth.send_packet.assert_not_called()
+
+    def test_status_packet_defaults_to_auth_protocol(self):
+        client = self._make_client()
+        pkt = StatusPacket(id=1, secret=b"secret", dict=self.dictionary)
+
+        client.send_packet(pkt)
+
+        client.protocol_auth.send_packet.assert_called_once()
+        client.protocol_acct.send_packet.assert_not_called()
+
+    def test_coa_without_initialized_transport_raises(self):
+        client = self._make_client()
+        client.protocol_coa = None
+        pkt = CoAPacket(id=1, secret=b"secret", dict=self.dictionary)
+
+        with self.assertRaises(Exception):
+            client.send_packet(pkt)
 
 
 # Quiet unused-import linters: packet is re-exported for downstream

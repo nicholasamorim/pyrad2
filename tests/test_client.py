@@ -11,6 +11,7 @@ from pyrad2.dictionary import Dictionary
 from pyrad2.client import Timeout
 from pyrad2.packet import AuthPacket
 from pyrad2.packet import AcctPacket
+from pyrad2.packet import CoAPacket
 from pyrad2.packet import StatusPacket
 from pyrad2.constants import PacketType
 
@@ -97,6 +98,14 @@ class SocketTests(unittest.TestCase):
 
         self.client.send_packet(AcctPacket())
         self.assertEqual(self.client._mock_port, self.client.acctport)
+
+        # CoA packets must route to the CoA port, not auth/acct.
+        self.client.send_packet(CoAPacket())
+        self.assertEqual(self.client._mock_port, self.client.coaport)
+
+        # Status-Server packets default to the auth port via send_status_packet.
+        self.client.send_packet(StatusPacket())
+        self.assertEqual(self.client._mock_port, self.client.authport)
 
         Client._send_packet = _send_packet
 
