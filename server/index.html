@@ -892,6 +892,90 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/constants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    constants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/eap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1011,20 +1095,63 @@ when constructing <code>Server</code>, <code>ServerAsync</code>, or <code>RadSec
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>        <span class="p">},</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="p">)</span>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">AccessAccept</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">AccessAccept</span>
 </span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="n">protocol</span><span class="o">.</span><span class="n">send_response</span><span class="p">(</span><span class="n">reply</span><span class="p">,</span> <span class="n">addr</span><span class="p">)</span>
 </span></code></pre></div>
-<p>Lastly, you set the reply code. Possible reply codes can be imported from <code>pyrad2.packet</code>.</p>
-<div class="language-py highlight"><span class="filename">Reply constants in pyrad2.packet</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">AccessAccept</span> <span class="o">=</span> <span class="mi">2</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">AccessReject</span> <span class="o">=</span> <span class="mi">3</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">AccountingResponse</span> <span class="o">=</span> <span class="mi">5</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">StatusServer</span> <span class="o">=</span> <span class="mi">12</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">StatusClient</span> <span class="o">=</span> <span class="mi">13</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">DisconnectACK</span> <span class="o">=</span> <span class="mi">41</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">DisconnectNAK</span> <span class="o">=</span> <span class="mi">42</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">CoAACK</span> <span class="o">=</span> <span class="mi">44</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">CoANAK</span> <span class="o">=</span> <span class="mi">45</span>
+<p>Lastly, you set the reply code. Reply codes live on the <code>PacketType</code> enum in
+<code>pyrad2.constants</code>:</p>
+<div class="language-py highlight"><span class="filename">Importing reply codes</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">PacketType</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">AccessAccept</span>
 </span></code></pre></div>
+<p>The most common reply codes are:</p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PacketType.AccessAccept</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>PacketType.AccessReject</code></td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>PacketType.AccountingResponse</code></td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>PacketType.StatusServer</code></td>
+<td>12</td>
+</tr>
+<tr>
+<td><code>PacketType.StatusClient</code></td>
+<td>13</td>
+</tr>
+<tr>
+<td><code>PacketType.DisconnectACK</code></td>
+<td>41</td>
+</tr>
+<tr>
+<td><code>PacketType.DisconnectNAK</code></td>
+<td>42</td>
+</tr>
+<tr>
+<td><code>PacketType.CoAACK</code></td>
+<td>44</td>
+</tr>
+<tr>
+<td><code>PacketType.CoANAK</code></td>
+<td>45</td>
+</tr>
+</tbody>
+</table>
+<p>See the <a href="../api/constants/">constants API reference</a> for the complete list.</p>
 <h1 id="status-server">Status-Server</h1>
 <p>PyRad2 handles RFC 5997 Status-Server health checks before dispatching to your
 normal authentication or accounting handlers. Status-Server requests must
