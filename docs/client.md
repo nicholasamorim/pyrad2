@@ -71,6 +71,24 @@ def create_request(client, user):
 
 You can find a list of standard RADIUS attributes [here](https://datatracker.ietf.org/doc/html/rfc2865#page-22). Note that these do not include vendor-specific attributes.
 
+## EAP-MD5
+
+The sync and async UDP clients both handle the EAP-MD5 challenge round-trip
+transparently. Pass `auth_type="eap-md5"` when constructing the
+`AuthPacket` and `User-Password`; the client injects an EAP-Identity, and
+on an `Access-Challenge` response it computes the MD5 challenge response,
+copies the server's `State`, and re-sends — surfacing only the final
+`Access-Accept` / `Access-Reject`.
+
+```py title="Async EAP-MD5 request"
+req = client.create_auth_packet(
+    User_Name="alice",
+    User_Password="hunter2",
+    auth_type="eap-md5",
+)
+reply = await client.send_packet(req)
+```
+
 ## Message-Authenticator
 
 PyRad2 validates reply `Message-Authenticator` attributes whenever they are
