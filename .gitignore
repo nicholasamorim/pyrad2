@@ -2,6 +2,7 @@
 
 build/
 dist/
+site/
 docs/.build/
 pyrad.egg-info/
 *.pyc

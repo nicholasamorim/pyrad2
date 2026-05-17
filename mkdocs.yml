@@ -28,6 +28,9 @@ nav:
       - dictfile: api/dictfile.md
       - proxy: api/proxy.md
       - bidict: api/bidict.md
+      - constants: api/constants.md
+      - exceptions: api/exceptions.md
+      - eap: api/eap.md
 
 markdown_extensions:
   - pymdownx.highlight:

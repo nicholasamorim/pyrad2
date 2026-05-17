@@ -100,23 +100,34 @@ def handle_auth_packet(self, protocol, pkt, addr):
         },
     )
 
-    reply.code = AccessAccept
+    reply.code = PacketType.AccessAccept
     protocol.send_response(reply, addr)
 ```
 
-Lastly, you set the reply code. Possible reply codes can be imported from `pyrad2.packet`.
+Lastly, you set the reply code. Reply codes live on the `PacketType` enum in
+`pyrad2.constants`:
 
-``` py title="Reply constants in pyrad2.packet"
-AccessAccept = 2
-AccessReject = 3
-AccountingResponse = 5
-StatusServer = 12
-StatusClient = 13
-DisconnectACK = 41
-DisconnectNAK = 42
-CoAACK = 44
-CoANAK = 45
+``` py title="Importing reply codes"
+from pyrad2.constants import PacketType
+
+reply.code = PacketType.AccessAccept
 ```
+
+The most common reply codes are:
+
+| Name | Value |
+| --- | --- |
+| `PacketType.AccessAccept` | 2 |
+| `PacketType.AccessReject` | 3 |
+| `PacketType.AccountingResponse` | 5 |
+| `PacketType.StatusServer` | 12 |
+| `PacketType.StatusClient` | 13 |
+| `PacketType.DisconnectACK` | 41 |
+| `PacketType.DisconnectNAK` | 42 |
+| `PacketType.CoAACK` | 44 |
+| `PacketType.CoANAK` | 45 |
+
+See the [constants API reference](api/constants.md) for the complete list.
 
 # Status-Server
 

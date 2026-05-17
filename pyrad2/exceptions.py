@@ -1,4 +1,6 @@
 class RadiusException(Exception):
+    """Base class for all exceptions raised by pyrad2."""
+
     pass
 
 
