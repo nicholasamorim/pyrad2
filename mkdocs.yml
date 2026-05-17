@@ -1,6 +1,8 @@
 site_name: pyrad2
 theme:
   name: material
+  logo: logo.png
+  favicon: favicon.ico
   features:
     - content.code.copy
     - navigation.expand
