@@ -63,7 +63,7 @@ server on UDP/1812. To check a RadSec server such as
 `examples/server_radsec.py`, use the TLS/TCP example instead:
 
 ```shell
-PYTHONPATH=. uv run examples/status_radsec.py
+make status_radsec
 ```
 
 ::: pyrad2.radsec.client
