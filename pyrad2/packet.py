@@ -169,7 +169,16 @@ def prepare_reply_message_authenticator(
     require_message_authenticator: bool = False,
     require_eap_message_authenticator: bool = True,
 ) -> None:
-    """Add Message-Authenticator to a reply when request or policy requires it."""
+    """Add Message-Authenticator to a reply when request or policy requires it.
+
+    ``require_message_authenticator`` is the BlastRADIUS mitigation and is
+    scoped to Access replies (Access-Accept/Reject/Challenge). For
+    Accounting-Response, CoA-ACK/NAK and Disconnect-ACK/NAK the wire
+    body is already integrity-protected by the Response Authenticator MD5,
+    so an unconditional MA there would just inflate the packet. The
+    mirror rule (request had MA → reply gets MA) and the EAP rule still
+    fire for every code.
+    """
     if _is_radius_11(request) or _is_radius_11(reply):
         # RFC 9765 §5.2: Message-Authenticator MUST NOT be sent in v1.1.
         return
@@ -177,9 +186,15 @@ def prepare_reply_message_authenticator(
     request_has_eap = getattr(request, "has_eap_message", lambda: False)
     reply_has_eap = getattr(reply, "has_eap_message", lambda: False)
     ensure_reply_ma = getattr(reply, "ensure_message_authenticator", None)
+    request_code = getattr(request, "code", None)
+
+    require_for_access = (
+        require_message_authenticator
+        and request_code == PacketType.AccessRequest
+    )
 
     if (
-        require_message_authenticator
+        require_for_access
         or request_has_ma()
         or (require_eap_message_authenticator and (request_has_eap() or reply_has_eap()))
     ):
@@ -513,7 +528,16 @@ class Packet(OrderedDict):
         require_message_authenticator: bool = False,
         require_eap_message_authenticator: bool = True,
     ) -> None:
-        """Validate Message-Authenticator presence and integrity policy."""
+        """Validate Message-Authenticator presence and integrity policy.
+
+        ``require_message_authenticator`` is the BlastRADIUS (CVE-2024-3596)
+        mitigation. It only applies to Access-Request: the other request
+        codes (Accounting-Request, CoA-Request, Disconnect-Request) carry
+        a Request Authenticator that is itself an MD5 MAC over the body
+        and the shared secret, so the body is already authenticated even
+        without an explicit Message-Authenticator AVP. Status-Server has
+        its own RFC 5997 MA requirement and is enforced unconditionally.
+        """
         if self.radius_version == RadiusVersion.V1_1:
             # RFC 9765 §5.2: any Message-Authenticator received in v1.1 must
             # be silently discarded; the policy checks below don't apply.
@@ -521,7 +545,10 @@ class Packet(OrderedDict):
         if not self.has_message_authenticator():
             if self.code == PacketType.StatusServer:
                 raise PacketError("Status-Server requires Message-Authenticator")
-            if require_message_authenticator:
+            if (
+                require_message_authenticator
+                and self.code == PacketType.AccessRequest
+            ):
                 raise PacketError("Message-Authenticator attribute is required")
             if require_eap_message_authenticator and self.has_eap_message():
                 raise PacketError("EAP-Message requires Message-Authenticator")
@@ -981,7 +1008,13 @@ class Packet(OrderedDict):
                 )
             except PacketError:
                 return False
-        elif enforce_ma:
+        elif enforce_ma and self.code == PacketType.AccessRequest:
+            # BlastRADIUS (CVE-2024-3596) mitigation applies to
+            # Access-Accept/Reject/Challenge. Replies to the other request
+            # codes (Accounting-Response, CoA-ACK/NAK, Disconnect-ACK/NAK)
+            # are already integrity-protected by the Response Authenticator
+            # MD5 verified above, so an absent Message-Authenticator there
+            # is not a forgery risk.
             return False
         return True
 

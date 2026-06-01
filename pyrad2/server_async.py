@@ -18,6 +18,10 @@ from pyrad2.packet import (
     StatusPacket,
     prepare_reply_message_authenticator,
 )
+
+_ACCESS_REPLY_CODES = frozenset(
+    {PacketType.AccessAccept, PacketType.AccessReject, PacketType.AccessChallenge}
+)
 from pyrad2.server import RemoteHost, ServerPacketError
 
 
@@ -285,7 +289,14 @@ class ServerAsync(ABC):
         """Apply outgoing Message-Authenticator policy to a reply packet."""
         if not isinstance(reply, Packet):
             return
-        if self.require_message_authenticator or (
+        # BlastRADIUS mitigation only forces MA on Access replies; the
+        # other reply codes are already integrity-protected by their
+        # Response Authenticator MD5.
+        force_ma_for_access = (
+            self.require_message_authenticator
+            and reply.code in _ACCESS_REPLY_CODES
+        )
+        if force_ma_for_access or (
             self.require_eap_message_authenticator and reply.has_eap_message()
         ):
             reply.ensure_message_authenticator()

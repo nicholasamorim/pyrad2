@@ -15,6 +15,10 @@ from pyrad2.dictionary import Dictionary
 from pyrad2.exceptions import ServerPacketError
 from pyrad2.constants import PacketType
 
+_ACCESS_REPLY_CODES = frozenset(
+    {PacketType.AccessAccept, PacketType.AccessReject, PacketType.AccessChallenge}
+)
+
 
 @dataclass
 class RemoteHost:
@@ -454,7 +458,15 @@ class Server(host.Host):
 
     def send_reply_packet(self, fd: socket.socket, pkt: packet.Packet) -> None:
         """Send a reply packet after applying Message-Authenticator policy."""
-        if self.require_message_authenticator or (
+        # BlastRADIUS mitigation only forces MA on Access replies; the
+        # other reply codes are already integrity-protected by their
+        # Response Authenticator MD5.
+        force_ma_for_access = (
+            self.require_message_authenticator
+            and isinstance(pkt, packet.Packet)
+            and pkt.code in _ACCESS_REPLY_CODES
+        )
+        if force_ma_for_access or (
             self.require_eap_message_authenticator
             and isinstance(pkt, packet.Packet)
             and pkt.has_eap_message()

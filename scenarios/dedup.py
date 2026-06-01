@@ -82,6 +82,9 @@ def _build_access_request(dictionary) -> bytes:
     req["User-Name"] = "alice"
     req["NAS-IP-Address"] = "192.168.1.10"
     req["Service-Type"] = "Login-User"
+    # Mandatory under the BlastRADIUS-default server. The HMAC is computed
+    # over the encoded packet inside request_packet().
+    req.add_message_authenticator()
     return req.request_packet()
 
 
