@@ -82,17 +82,23 @@ reply = await client.send_packet(req)
 
 ## Message-Authenticator
 
-pyrad2 validates `Message-Authenticator` whenever a reply includes it.
+By default (`enforce_ma=True`) pyrad2 stamps `Message-Authenticator` onto every outgoing `Access-Request` and refuses any `Access-Accept` / `Reject` / `Challenge` reply that doesn't carry one. This mitigates [BlastRADIUS (CVE-2024-3596)](https://www.blastradius.fail/) without any extra wiring on your side.
 
-- If you build an `Access-Request` with `EAP-Message`, the client automatically adds `Message-Authenticator` before sending. You don't need to do anything.
-- Pass `enforce_ma=True` to require **every** reply to include a valid `Message-Authenticator`:
+Scope of the default:
+
+- `Access-Request` gets `Message-Authenticator` added before send; the matching `Access-*` reply is required to carry one too.
+- Replies to `Accounting-Request`, `CoA-Request`, and `Disconnect-Request` aren't required to include `Message-Authenticator` — their Response Authenticator MD5 already authenticates the body and shared secret.
+- `Status-Server` (RFC 5997) always carries `Message-Authenticator`, regardless of the flag.
+- If you build an `Access-Request` with `EAP-Message`, `Message-Authenticator` is added automatically — same as before.
+
+If you're talking to a legacy server that can't process the attribute, opt out explicitly:
 
 ```python
 client = ClientAsync(
     server="localhost",
     secret=b"...",
     dict=Dictionary("dictionary"),
-    enforce_ma=True,
+    enforce_ma=False,  # legacy peer; drops BlastRADIUS mitigation
 )
 ```
 

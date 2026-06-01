@@ -184,12 +184,17 @@ Status-Server requests, CoA/Disconnect-NAK replies, and packets where the parsed
 
 ## Message-Authenticator
 
-pyrad2 validates `Message-Authenticator` whenever it's present. By default:
+pyrad2 validates `Message-Authenticator` whenever it's present and, by default, requires it on every incoming `Access-Request`. This mitigates [BlastRADIUS (CVE-2024-3596)](https://www.blastradius.fail/) out of the box — an off-path attacker who can spoof source IP can no longer forge an `Access-Accept`.
 
-- **Packets with `EAP-Message` must include a valid `Message-Authenticator`** (RFC requirement).
-- Other packets remain compatible with older clients that don't send one.
+Scope of the default (`require_message_authenticator=True`):
 
-To require it on **every** incoming packet, pass `require_message_authenticator=True` when constructing `Server`, `ServerAsync`, or `RadSecServer`.
+- **`Access-Request` must include a valid `Message-Authenticator`** — incoming packets without one are dropped before reaching your handler.
+- **Access replies (`Access-Accept` / `Reject` / `Challenge`) automatically get `Message-Authenticator`** before they go on the wire.
+- **`Accounting-Request`, `CoA-Request`, `Disconnect-Request` (and their replies) are unaffected** — those codes carry a Request/Response Authenticator MD5 over the body and shared secret, so the body is already integrity-protected.
+- **Packets with `EAP-Message` must include a valid `Message-Authenticator`** (RFC 3579 §3.2).
+- **`Status-Server` must include a valid `Message-Authenticator`** (RFC 5997 §3) — independent of the flag.
+
+To bridge a legacy NAS that doesn't emit the attribute, set `require_message_authenticator=False` when constructing `Server` or `ServerAsync`. `RadSecServer` defaults to `False` because TLS already authenticates origin and integrity (off-path forgery is impossible by construction); flip it to `True` only if you need strict parity with UDP deployments.
 
 ## RadSec - RADIUS over TLS
 

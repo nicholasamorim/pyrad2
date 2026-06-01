@@ -82,13 +82,24 @@ server = RadSecServer(
 
 ## Message-Authenticator policy
 
-PyRad2 validates `Message-Authenticator` whenever the attribute is present. By
-default, packets containing `EAP-Message` must include a valid
-`Message-Authenticator`, while non-EAP packets remain compatible with older
-clients.
+PyRad2 validates `Message-Authenticator` whenever the attribute is present.
+RadSec wraps RADIUS in TLS, so off-path BlastRADIUS (CVE-2024-3596) forgery
+is already impossible by construction — TLS authenticates origin and
+integrity of every byte. `RadSecServer` therefore defaults
+`require_message_authenticator=False`, in contrast to the UDP `Server` /
+`ServerAsync` classes which default it to `True`.
 
-To require `Message-Authenticator` on every incoming packet, enable
-`require_message_authenticator`:
+By default the only `Message-Authenticator` checks that fire on RadSec are:
+
+- packets containing `EAP-Message` must carry a valid `Message-Authenticator`
+  (RFC 3579 §3.2),
+- `Status-Server` requests must carry a valid `Message-Authenticator`
+  (RFC 5997 §3),
+- and any other packet that *does* include the attribute is verified.
+
+If you want strict parity with UDP deployments — for example because the
+same handler code services both transports and you want a single audit
+story — enable the flag explicitly:
 
 ```python
 server = RadSecServer(
@@ -101,9 +112,12 @@ server = RadSecServer(
 )
 ```
 
-Replies automatically include `Message-Authenticator` when the request included
-one, when `require_message_authenticator=True`, or when the reply contains
-`EAP-Message`.
+Replies automatically include `Message-Authenticator` when the request was
+an `Access-Request` and `require_message_authenticator=True`, when the
+request already carried one (mirror), or when the reply contains
+`EAP-Message`. Replies to Accounting / CoA / Disconnect requests are not
+augmented — their Response Authenticator MD5 already authenticates the
+body and shared secret.
 
 RadSec servers answer RFC 5997 Status-Server health checks directly with
 `Access-Accept`. Status-Server requests must include a valid

@@ -57,6 +57,7 @@ if reply.code == PacketType.AccessAccept:
 | CoA & Disconnect (Dynamic Authorization) | [RFC 5176](https://datatracker.ietf.org/doc/html/rfc5176) |
 | Status-Server health checks | [RFC 5997](https://datatracker.ietf.org/doc/html/rfc5997) |
 | Duplicate detection / response cache | [RFC 5080 §2.2.2](https://datatracker.ietf.org/doc/html/rfc5080#section-2.2.2) |
+| BlastRADIUS-safe defaults | [CVE-2024-3596](https://www.blastradius.fail/) - `Message-Authenticator` enforced on `Access-Request` out of the box |
 | FreeRADIUS dictionary support | Extended attributes, vendor formats, EVS - see [Dictionary Reference](dictionary.md) |
 | Wire-level packet tracing | `PYRAD2_TRACE=1` |
 
