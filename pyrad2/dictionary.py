@@ -71,10 +71,14 @@ concat     attribute may be split across multiple AVPs whose
            Typical examples: EAP-Message, CHAP-Challenge.
 ```
 
-Vendor format specifications honor the ``format=type_len,len_len`` syntax
-where ``type_len`` is 1, 2, or 4 and ``len_len`` is 0, 1, or 2. The
-default (RFC 2865 §5.26) is ``format=1,1``. Stored formats are applied
-when encoding and decoding Vendor-Specific Attributes for that vendor.
+Vendor format specifications honor the ``format=type_len,len_len[,c]``
+syntax where ``type_len`` is 1, 2, or 4 and ``len_len`` is 0, 1, or 2.
+The default (RFC 2865 §5.26) is ``format=1,1``. A trailing ``,c`` opts
+the vendor into the RFC 5904 long-packed-VSA convention used by WiMAX
+and a few others: a continuation byte is inserted after the type/length
+header whose high bit (0x80) flags fragments. Stored formats are
+applied when encoding and decoding Vendor-Specific Attributes for that
+vendor.
 
 RFC 6929 extended attributes are recognized via the dotted-code syntax
 (e.g. ``ATTRIBUTE Frag-Status 241.1 integer``) when the parent (type
@@ -87,8 +91,12 @@ Extended-Vendor-Specific (EVS, RFC 6929 §2.3) is supported through the
 parent=<evs-attr>`` syntax. Every ATTRIBUTE inside such a block becomes
 an EVS-VSA carried under the named extended wrapper.
 
-Limitations:
-    * Nested TLVs deeper than two levels are not yet supported.
+TLV containers can nest to arbitrary depth via dotted-code notation
+(e.g. ``ATTRIBUTE IP-Port-Type 241.5.1 integer``); see the
+`Dictionary Reference <https://pyradius.github.io/pyrad2/dictionary>`_
+docs page for the full feature matrix and the
+`FreeRADIUS Conformance <https://pyradius.github.io/pyrad2/conformance>`_
+page for the upstream-corpus test suite.
 """
 
 from copy import copy
@@ -99,6 +107,17 @@ from pyrad2.constants import DATATYPES
 from pyrad2.exceptions import ParseError
 
 RadiusAttributeValue = int | str | bytes
+
+# Modern (FreeRADIUS v4 / RFC 8044) names for integer-family types.
+# Mapped to the older tokens pyrad2's encoder/decoder already supports,
+# so the rest of the codec doesn't need to know about either spelling.
+_TYPE_ALIASES: Dict[str, str] = {
+    "uint8": "byte",
+    "uint16": "short",
+    "uint32": "integer",
+    "uint64": "integer64",
+    "int32": "signed",
+}
 
 
 class Attribute:
@@ -113,6 +132,10 @@ class Attribute:
         encrypt (int): Encryption type (0 = none)
         concat (bool): Whether values longer than 253 bytes are split
             across multiple AVPs on the wire and concatenated on decode.
+        virtual (bool): FreeRADIUS-style flag for server-internal
+            attributes that are never sent on the wire.
+        array (bool): RFC 8044 §3.8 — multiple values of a fixed-length
+            type packed into a single AVP value field.
         values (bidict.BiDict): Mapping of named values to their codes
     """
 
@@ -127,6 +150,8 @@ class Attribute:
         encrypt: int = 0,
         has_tag: bool = False,
         concat: bool = False,
+        virtual: bool = False,
+        array: bool = False,
     ):
         if datatype not in DATATYPES:
             raise ValueError("Invalid data type")
@@ -137,6 +162,8 @@ class Attribute:
         self.encrypt = encrypt
         self.has_tag = has_tag
         self.concat = concat
+        self.virtual = virtual
+        self.array = array
         self.values = bidict.BiDict()
         self.sub_attributes: dict = {}
         self.parent = None
@@ -146,7 +173,10 @@ class Attribute:
                 self.values.add(key, value)
 
 
-VENDOR_FORMAT_DEFAULT: tuple[int, int] = (1, 1)
+# Stored vendor format: (type_len, len_len, has_continuation). The
+# continuation flag corresponds to the trailing ``,c`` in FreeRADIUS's
+# ``format=`` syntax (RFC 5904 / WiMAX long-packed VSAs).
+VENDOR_FORMAT_DEFAULT: tuple[int, int, bool] = (1, 1, False)
 
 
 class Dictionary:
@@ -159,9 +189,11 @@ class Dictionary:
         vendors (bidict.BiDict): bidict mapping vendor name to vendor code
         attrindex (bidict.BiDict): bidict mapping
         attributes (bidict.BiDict): bidict mapping attribute name to attribute class
-        vendor_formats (dict[int, tuple[int, int]]): mapping vendor code to
-            its ``(type_len, len_len)`` VSA wire format. Vendors without an
-            explicit ``format=`` declaration default to ``(1, 1)``.
+        vendor_formats (dict[int, tuple[int, int, bool]]): mapping vendor
+            code to its ``(type_len, len_len, has_continuation)`` VSA wire
+            format. Vendors without an explicit ``format=`` declaration
+            default to ``(1, 1, False)``. ``has_continuation`` corresponds
+            to FreeRADIUS's ``,c`` (RFC 5904 long-packed VSAs).
     """
 
     def __init__(
@@ -186,7 +218,7 @@ class Dictionary:
         self.vendors.add("", 0)
         self.attrindex = bidict.BiDict()
         self.attributes: Dict[Hashable, Any] = {}
-        self.vendor_formats: Dict[int, tuple[int, int]] = {}
+        self.vendor_formats: Dict[int, tuple[int, int, bool]] = {}
         self.defer_parse: list[tuple[Dict, list]] = []
         self._include_base_dir = include_base_dir
 
@@ -196,11 +228,12 @@ class Dictionary:
         for i in dicts:
             self.read_dictionary(i)
 
-    def vendor_format(self, vendor_id: int) -> tuple[int, int]:
-        """Return the ``(type_len, len_len)`` VSA wire format for ``vendor_id``.
+    def vendor_format(self, vendor_id: int) -> tuple[int, int, bool]:
+        """Return the ``(type_len, len_len, has_continuation)`` VSA wire format.
 
-        Vendors without an explicit ``format=`` declaration use the RFC 2865
-        §5.26 default of one-byte type and one-byte length.
+        Vendors without an explicit ``format=`` declaration use the
+        RFC 2865 §5.26 default of one-byte type, one-byte length, no
+        continuation.
         """
         return self.vendor_formats.get(vendor_id, VENDOR_FORMAT_DEFAULT)
 
@@ -218,6 +251,28 @@ class Dictionary:
 
     has_key = __contains__
 
+    def _existing_container_chains(self) -> Dict[tuple, Any]:
+        """Build the parser's ``tlvs`` table from already-loaded attributes.
+
+        Reconstructs the full code chain for every previously-parsed
+        ``tlv`` / ``extended`` / ``long-extended`` attribute by walking
+        the ``parent`` links. Lets nested-TLV sub-attributes in one
+        dictionary file reference containers declared in another that
+        was loaded earlier in the same ``Dictionary`` instance.
+        """
+
+        chains: Dict[tuple, Any] = {}
+        for attr in self.attributes.values():
+            if attr.type not in ("tlv", "extended", "long-extended"):
+                continue
+            chain: list[int] = []
+            cur = attr
+            while cur is not None:
+                chain.append(cur.code)
+                cur = cur.parent
+            chains[tuple(reversed(chain))] = attr
+        return chains
+
     def __parse_attribute(self, state: dict, tokens: list):
         """Parse an ATTRIBUTE line from a dictionary file."""
         if len(tokens) not in [4, 5]:
@@ -231,6 +286,8 @@ class Dictionary:
         has_tag = False
         encrypt = 0
         concat = False
+        virtual = False
+        array = False
         if len(tokens) >= 5:
 
             def keyval(o):
@@ -257,6 +314,26 @@ class Dictionary:
                     options_recognized = True
                 elif key == "concat":
                     concat = True
+                    options_recognized = True
+                elif key == "virtual":
+                    # FreeRADIUS uses ``virtual`` for attributes that
+                    # exist in the dictionary for server-internal use
+                    # but are never sent on the wire (Auth-Type,
+                    # Client-Shortname, etc.). Record the flag so the
+                    # encoder can skip them.
+                    virtual = True
+                    options_recognized = True
+                elif key == "array":
+                    # RFC 8044 §3.8: multiple values of a fixed-length
+                    # type packed into a single AVP value field.
+                    array = True
+                    options_recognized = True
+                elif key == "secret":
+                    # FreeRADIUS flag meaning "treat this attribute's
+                    # value as sensitive in logs". No wire-format
+                    # implication — accept it so dictionaries that
+                    # declare it (``dictionary.freeradius.internal``)
+                    # load cleanly.
                     options_recognized = True
 
             # When the trailing column isn't a recognized option list, fall
@@ -286,17 +363,25 @@ class Dictionary:
                 tmp.append(int(c, 10))
         codes = tmp
 
+        if not codes:
+            raise ParseError(
+                "attribute code missing",
+                file=state["file"],
+                line=state["line"],
+            )
         is_sub_attribute = len(codes) > 1
-        if len(codes) == 2:
-            code = int(codes[1])
-            parent_code = int(codes[0])
-        elif len(codes) == 1:
-            code = int(codes[0])
-            parent_code = None
-        else:
-            raise ParseError("nested tlvs are not supported")
+        code = int(codes[-1])
+        # Full path from the root container down to (but not including)
+        # this attribute. Empty for top-level attributes; ``(241,)`` for
+        # a 2-level child; ``(241, 5)`` for a 3-level grandchild.
+        parent_chain: tuple[int, ...] = tuple(codes[:-1])
 
         datatype = datatype.split("[")[0]
+        # FreeRADIUS v4 renamed the integer-family tokens to ``uintN`` /
+        # ``intN``. They mean the same thing as the older names pyrad2's
+        # codec uses, so normalise upfront and leave the rest of the
+        # parser / encoder unchanged.
+        datatype = _TYPE_ALIASES.get(datatype, datatype)
 
         if datatype not in DATATYPES:
             raise ParseError(
@@ -318,12 +403,17 @@ class Dictionary:
             is_sub_attribute = True
         elif vendor:
             if is_sub_attribute:
-                key = (self.vendors.get_forward(vendor), parent_code, code)
+                # Vendor-namespaced sub-attribute: vendor id followed by
+                # the full code chain from the root container down.
+                key = (self.vendors.get_forward(vendor), *parent_chain, code)
             else:
                 key = (self.vendors.get_forward(vendor), code)
         else:
             if is_sub_attribute:
-                key = (parent_code, code)
+                # Plain (no-vendor) sub-attribute: the chain alone.
+                # ``(parent, code)`` for 2 levels, ``(241, 5, 1)`` for 3,
+                # etc.
+                key = (*parent_chain, code)
             else:
                 key = code
 
@@ -337,18 +427,29 @@ class Dictionary:
             encrypt=encrypt,
             has_tag=has_tag,
             concat=concat,
+            virtual=virtual,
+            array=array,
         )
         if datatype in ("tlv", "extended", "long-extended"):
-            # Save the container so subsequent dotted-code sub-attributes
-            # (e.g. ``ATTRIBUTE Frag-Status 241.1 integer``) can find their
-            # parent regardless of whether the wrapper is a TLV or an
-            # RFC 6929 extended attribute.
-            state["tlvs"][code] = self.attributes[attribute]
+            # Save the container under its full code chain so subsequent
+            # dotted-code sub-attributes (e.g. ``241.1`` under ``241``,
+            # or ``241.5.1`` under ``241.5``) can find their immediate
+            # parent regardless of nesting depth.
+            state["tlvs"][(*parent_chain, code)] = self.attributes[attribute]
         if state.get("evs_parent"):
             self.attributes[attribute].parent = self.attributes[state["evs_parent"]]
         elif is_sub_attribute:
-            state["tlvs"][parent_code].sub_attributes[code] = attribute
-            self.attributes[attribute].parent = state["tlvs"][parent_code]
+            try:
+                parent_attr = state["tlvs"][parent_chain]
+            except KeyError as exc:
+                raise ParseError(
+                    f"sub-attribute references undefined parent chain "
+                    f"{'.'.join(str(c) for c in parent_chain)}",
+                    file=state["file"],
+                    line=state["line"],
+                ) from exc
+            parent_attr.sub_attributes[code] = attribute
+            self.attributes[attribute].parent = parent_attr
 
     def __parse_value(self, state: dict, tokens: list, defer: bool) -> None:
         """Parse a VALUE line from a dictionary file."""
@@ -397,14 +498,26 @@ class Dictionary:
                     line=state["line"],
                 )
             try:
-                (_type, length) = tuple(int(a) for a in fmt[1].split(","))
+                fields = fmt[1].split(",")
+                if len(fields) not in (2, 3):
+                    raise ValueError
+                _type = int(fields[0])
+                length = int(fields[1])
+                has_continuation = False
+                if len(fields) == 3:
+                    # RFC 5904 / WiMAX continuation marker. The third
+                    # field is the literal letter ``c``; FreeRADIUS uses
+                    # no other token here.
+                    if fields[2] != "c":
+                        raise ValueError
+                    has_continuation = True
                 if _type not in [1, 2, 4] or length not in [0, 1, 2]:
                     raise ParseError(
                         "Unknown vendor format specification %s" % (fmt[1]),
                         file=state["file"],
                         line=state["line"],
                     )
-                vsa_format = (_type, length)
+                vsa_format = (_type, length, has_continuation)
             except ValueError:
                 raise ParseError(
                     "Syntax error in vendor specification",
@@ -519,7 +632,13 @@ class Dictionary:
         state: Dict[str, Any] = {}
         state["vendor"] = ""
         state["evs_parent"] = None
-        state["tlvs"] = {}
+        # Carry container declarations across files: when a sub-attribute
+        # in this file refers to a container defined in a previously-
+        # loaded dictionary (e.g. dictionary.rfc7499 declaring 241.X under
+        # the Extended-Attribute-1 wrapper declared in dictionary.rfc6929),
+        # the parent has to be findable. Walk what we already know and
+        # seed the table keyed by full code chain.
+        state["tlvs"] = self._existing_container_chains()
         self.defer_parse = []
         for line in fil:
             state["file"] = fil.file()

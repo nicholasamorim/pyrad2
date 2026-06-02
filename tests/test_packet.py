@@ -1012,6 +1012,245 @@ class TestExtendedAttribute:
             pkt._pkt_encode_attributes()
 
 
+class TestNestedExtendedTlv:
+    """RFC 6929 Extended-Type slot containing a nested TLV chain.
+
+    Mirrors the layout used by ``dictionary.rfc7499`` etc.: an
+    Extended-Attribute-1 wrapper whose ext-type 5 is declared as a
+    ``tlv`` container, with integer / ipaddr leaves nested under it.
+    """
+
+    def _make_dict(self):
+        return Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE IP-Port-Limit-Info 241.5 tlv\n"
+                "ATTRIBUTE IP-Port-Type 241.5.1 integer\n"
+                "ATTRIBUTE IP-Port-Limit 241.5.2 integer\n"
+                "ATTRIBUTE IP-Port-Ext-IPv4-Addr 241.5.3 ipaddr\n"
+            )
+        )
+
+    def _make_packet(self, dictionary=None):
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=dictionary or self._make_dict(),
+        )
+
+    def test_encode_single_nested_leaf(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("IP-Port-Type", 7)
+        encoded = pkt._pkt_encode_attributes()
+        # Extended AVP: [241][total-len=9][ext_type=5] + inner TLV
+        # Inner: [code=1][len=6][4-byte int] = 6 bytes
+        # Total = 3 (Extended header) + 6 (inner) = 9 bytes.
+        assert encoded == b"\xf1\x09\x05\x01\x06\x00\x00\x00\x07"
+
+    def test_storage_shape_is_nested_dict(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("IP-Port-Type", 7)
+        pkt.add_attribute("IP-Port-Limit", 100)
+        # self[241] = {5: {1: [...], 2: [...]}}
+        assert pkt[241] == {5: {1: [b"\x00\x00\x00\x07"], 2: [b"\x00\x00\x00\x64"]}}
+
+    def test_roundtrip_multiple_nested_leaves(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("IP-Port-Type", 7)
+        pkt.add_attribute("IP-Port-Limit", 100)
+        pkt.add_attribute("IP-Port-Ext-IPv4-Addr", "192.0.2.1")
+        encoded = pkt._pkt_encode_attributes()
+
+        decoded = self._make_packet()
+        header = struct.pack("!BBH", 1, 1, 20 + len(encoded)) + b"0123456789ABCDEF"
+        decoded.decode_packet(header + encoded)
+
+        # Top-level Extended container resolves into a nested map of
+        # decoded sub-attribute values.
+        assert decoded["Extended-Attribute-1"] == {
+            "IP-Port-Limit-Info": {
+                "IP-Port-Type": [7],
+                "IP-Port-Limit": [100],
+                "IP-Port-Ext-IPv4-Addr": ["192.0.2.1"],
+            }
+        }
+
+    def test_decode_recognises_nested_tlv_slot(self):
+        # Hand-built wire bytes for IP-Port-Type=7 + IP-Port-Limit=100
+        # inside Extended-Attribute-1 ext_type=5. Inner chain is 12
+        # bytes; Extended length field = 3 + 12 = 15 (0x0f).
+        attrs = b"\xf1\x0f\x05\x01\x06\x00\x00\x00\x07\x02\x06\x00\x00\x00\x64"
+        header = struct.pack("!BBH", 1, 1, 20 + len(attrs)) + b"0123456789ABCDEF"
+
+        pkt = self._make_packet()
+        pkt.decode_packet(header + attrs)
+
+        assert pkt[241] == {5: {1: [b"\x00\x00\x00\x07"], 2: [b"\x00\x00\x00\x64"]}}
+
+    def test_encode_rejects_oversized_nested_chain(self):
+        d = Dictionary(
+            StringIO(
+                "ATTRIBUTE Extended-Attribute-1 241 extended\n"
+                "ATTRIBUTE Container 241.5 tlv\n"
+                "ATTRIBUTE Big-Blob 241.5.1 octets\n"
+            )
+        )
+        pkt = self._make_packet(d)
+        # 252-byte cap on Extended payload. Inner TLV header eats 2 bytes,
+        # so a 251-byte blob produces a 253-byte chain → reject.
+        pkt[241] = {5: {1: [b"A" * 251]}}
+        with pytest.raises(ValueError):
+            pkt._pkt_encode_attributes()
+
+
+class TestFreeRADIUSExtensions:
+    """FreeRADIUS dict extensions: uintN type aliases, virtual, array."""
+
+    def _make_packet(self, dict_source: str):
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=Dictionary(StringIO(dict_source)),
+        )
+
+    def test_uint_aliases_normalise_to_native_types(self):
+        d = Dictionary(
+            StringIO(
+                "ATTRIBUTE A-Byte    1 uint8\n"
+                "ATTRIBUTE A-Short   2 uint16\n"
+                "ATTRIBUTE A-Int     3 uint32\n"
+                "ATTRIBUTE A-Long    4 uint64\n"
+                "ATTRIBUTE A-Signed  5 int32\n"
+            )
+        )
+        # Aliases should land as the canonical pyrad2 type tokens so
+        # the rest of the codec doesn't have to know they exist.
+        assert d.attributes["A-Byte"].type == "byte"
+        assert d.attributes["A-Short"].type == "short"
+        assert d.attributes["A-Int"].type == "integer"
+        assert d.attributes["A-Long"].type == "integer64"
+        assert d.attributes["A-Signed"].type == "signed"
+
+    def test_virtual_attribute_is_omitted_from_wire(self):
+        pkt = self._make_packet(
+            "ATTRIBUTE Real-Attr     1   string\n"
+            "ATTRIBUTE Virtual-Attr  2   string virtual\n"
+        )
+        pkt.add_attribute("Real-Attr", "visible")
+        pkt.add_attribute("Virtual-Attr", "hidden")
+
+        encoded = pkt._pkt_encode_attributes()
+        # Only the real attribute should appear on the wire.
+        assert encoded == b"\x01\x09visible"
+
+    def test_array_attribute_packs_multiple_values_into_one_avp(self):
+        pkt = self._make_packet("ATTRIBUTE Router-Addr 3 ipaddr array\n")
+        pkt.add_attribute("Router-Addr", "10.0.0.1")
+        pkt.add_attribute("Router-Addr", "10.0.0.2")
+        pkt.add_attribute("Router-Addr", "10.0.0.3")
+
+        encoded = pkt._pkt_encode_attributes()
+        # One AVP: [code=3][len=14][3 × 4-byte IPv4]
+        assert encoded == (
+            b"\x03\x0e"
+            + b"\x0a\x00\x00\x01"
+            + b"\x0a\x00\x00\x02"
+            + b"\x0a\x00\x00\x03"
+        )
+
+    def test_array_attribute_roundtrips(self):
+        source = "ATTRIBUTE Router-Addr 3 ipaddr array\n"
+        send = self._make_packet(source)
+        send.add_attribute("Router-Addr", "10.0.0.1")
+        send.add_attribute("Router-Addr", "10.0.0.2")
+        wire = send._pkt_encode_attributes()
+
+        recv = self._make_packet(source)
+        header = struct.pack("!BBH", 1, 1, 20 + len(wire)) + b"0123456789ABCDEF"
+        recv.decode_packet(header + wire)
+
+        # Decoder should have split the single 8-byte payload into two
+        # 4-byte values so reading by name returns the same list.
+        assert recv["Router-Addr"] == ["10.0.0.1", "10.0.0.2"]
+
+    def test_single_value_array_is_indistinguishable_from_non_array(self):
+        # Sanity check: one value packed as an array still emits exactly
+        # one AVP with the value in it — the array flag is a noop for N=1.
+        pkt = self._make_packet("ATTRIBUTE Router-Addr 3 ipaddr array\n")
+        pkt.add_attribute("Router-Addr", "10.0.0.7")
+        encoded = pkt._pkt_encode_attributes()
+        assert encoded == b"\x03\x06\x0a\x00\x00\x07"
+
+
+class TestWiMAXContinuation:
+    """RFC 5904 / WiMAX long-packed VSAs (``format=1,1,c``).
+
+    Continuation byte after the type/length header; high bit (0x80)
+    is the More flag for fragmentation across multiple AVPs.
+    """
+
+    def _make_packet(self):
+        d = Dictionary(
+            StringIO(
+                "VENDOR WiMAX 24757 format=1,1,c\n"
+                "BEGIN-VENDOR WiMAX\n"
+                "ATTRIBUTE WiMAX-Capability 1 octets\n"
+                "END-VENDOR WiMAX\n"
+            )
+        )
+        return packet.Packet(
+            id=0,
+            secret=b"secret",
+            authenticator=b"0123456789ABCDEF",
+            dict=d,
+        )
+
+    def test_encode_short_value_emits_single_avp_with_zero_continuation(self):
+        pkt = self._make_packet()
+        pkt.add_attribute("WiMAX-Capability", b"hello")
+        encoded = pkt._pkt_encode_attributes()
+        # AVP: [26][len=14][vendor=24757][vsa_type=1][vsa_len=8][cont=0][hello]
+        # vsa_len counts type(1) + len(1) + cont(1) + value(5) = 8.
+        assert encoded == (
+            b"\x1a\x0e" + struct.pack("!L", 24757) + b"\x01\x08\x00hello"
+        )
+
+    def test_encode_long_value_fragments_with_more_flag(self):
+        pkt = self._make_packet()
+        # Per-fragment payload budget = 255 - 2 (AVP hdr) - 4 (vendor-id)
+        # - 1 (vsa_type) - 1 (vsa_len) - 1 (continuation) = 246. A
+        # 250-byte value needs two fragments: 246 + 4.
+        value = b"A" * 250
+        pkt.add_attribute("WiMAX-Capability", value)
+        encoded = pkt._pkt_encode_attributes()
+
+        first_avp_len = 2 + 4 + 1 + 1 + 1 + 246
+        second_avp_len = 2 + 4 + 1 + 1 + 1 + 4
+        assert len(encoded) == first_avp_len + second_avp_len
+
+        # Cont byte sits right after the vsa_len. More on first fragment,
+        # cleared on the last.
+        first_cont = encoded[2 + 4 + 1 + 1]
+        second_cont = encoded[first_avp_len + 2 + 4 + 1 + 1]
+        assert first_cont == 0x80
+        assert second_cont == 0x00
+
+    def test_roundtrip_long_value(self):
+        send = self._make_packet()
+        value = b"B" * 500  # spans three fragments
+        send.add_attribute("WiMAX-Capability", value)
+        wire = send._pkt_encode_attributes()
+
+        recv = self._make_packet()
+        header = struct.pack("!BBH", 1, 1, 20 + len(wire)) + b"0123456789ABCDEF"
+        recv.decode_packet(header + wire)
+
+        # Decoder reassembles the fragment chain into one logical value.
+        assert recv["WiMAX-Capability"] == [value]
+
+
 class TestLongExtendedAttribute:
     """RFC 6929 long-extended attributes (245-246), with fragmentation."""
 

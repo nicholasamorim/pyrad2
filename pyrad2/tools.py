@@ -27,12 +27,17 @@ def encode_string(origstr: str) -> bytes:
 
 
 def encode_octets(octetstring: str) -> str | bytes:
-    """Encode raw octet string (already in bytes)."""
-    # Check for max length of the hex encoded with 0x prefix, as a sanity check
+    """Encode raw octet string (already in bytes).
+
+    Length-capping is the AVP layer's job — fragmenting attributes
+    (``concat``, RFC 6929 ``long-extended``, RFC 5904 WiMAX
+    continuation) legitimately encode logical values larger than one
+    AVP's 253-byte payload field. This function only ensures the
+    string-form ``0x...`` hex input doesn't expand past what the AVP
+    layer can handle in one shot.
+    """
     if octetstring is None:
         return b""
-    elif len(octetstring) > 508:
-        raise ValueError("Can only encode strings of <= 253 characters")
 
     hexstring: str | bytes
     encoded_octets: str | bytes
@@ -47,9 +52,15 @@ def encode_octets(octetstring: str) -> str | bytes:
     else:
         encoded_octets = octetstring
 
-    # Check for the encoded value being longer than 253 chars
-    if len(encoded_octets) > 253:
-        raise ValueError("Can only encode strings of <= 253 characters")
+    # Hex literals (``0x...``) historically bounded to one AVP. Raw
+    # bytes and decimal forms are trusted: the AVP / fragmentation
+    # layer that calls us decides whether to chunk.
+    if isinstance(octetstring, (str, bytes)) and (
+        (isinstance(octetstring, bytes) and octetstring.startswith(b"0x"))
+        or (isinstance(octetstring, str) and octetstring.startswith("0x"))
+    ):
+        if len(encoded_octets) > 253:
+            raise ValueError("Can only encode strings of <= 253 characters")
 
     return encoded_octets
 
@@ -94,6 +105,22 @@ def encode_ipv6_address(addr: str | IPv6Address) -> bytes:
         raise TypeError("IPv6 Address has to be a string")
 
     return IPv6Address(addr).packed
+
+
+def encode_combo_ip(addr: str | IPv4Address | IPv6Address) -> bytes:
+    """Encode an IPv4 or IPv6 address for a ``combo-ip`` attribute.
+
+    FreeRADIUS's ``combo-ip`` type carries either an IPv4 (4 bytes) or
+    an IPv6 (16 bytes) address — the wire length tells which. The
+    address family is decided here by inspecting the input: a string is
+    parsed by ``ip_address``, which returns the right family natively.
+    """
+
+    if isinstance(addr, (IPv4Address, IPv6Address)):
+        return addr.packed
+    if not isinstance(addr, str):
+        raise TypeError("combo-ip has to be a string, IPv4Address, or IPv6Address")
+    return ip_address(addr).packed
 
 
 def encode_ifid(value: str | bytes) -> bytes:
@@ -316,6 +343,22 @@ def decode_ipv6_address(addr: bytes | bytearray) -> str:
     return str(IPv6Address(addr))
 
 
+def decode_combo_ip(addr: bytes | bytearray) -> str:
+    """Decode a ``combo-ip`` attribute, dispatching on wire length.
+
+    4 bytes is an IPv4 address; 16 bytes an IPv6 address. Any other
+    length is invalid — combo-ip has no other valid encoding.
+    """
+
+    if len(addr) == 4:
+        return str(IPv4Address(bytes(addr)))
+    if len(addr) == 16:
+        return str(IPv6Address(bytes(addr)))
+    raise ValueError(
+        f"combo-ip value must be 4 (IPv4) or 16 (IPv6) bytes, got {len(addr)}"
+    )
+
+
 def decode_ascend_binary(orig_bytes: bytes) -> bytes:
     """Decode Ascend-specific binary format (length-prefixed)."""
     return orig_bytes
@@ -350,6 +393,8 @@ def encode_attr(datatype: str, value) -> bytes | str:
         return encode_ipv6_prefix(value)
     elif datatype == "ipv6addr":
         return encode_ipv6_address(value)
+    elif datatype == "combo-ip":
+        return encode_combo_ip(value)
     elif datatype == "abinary":
         return encode_ascend_binary(value)
     elif datatype == "signed":
@@ -384,6 +429,8 @@ def decode_attr(datatype: str, value) -> bytes | str:
         return decode_ipv6_prefix(value)
     elif datatype == "ipv6addr":
         return decode_ipv6_address(value)
+    elif datatype == "combo-ip":
+        return decode_combo_ip(value)
     elif datatype == "abinary":
         return decode_ascend_binary(value)
     elif datatype == "signed":
