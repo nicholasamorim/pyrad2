@@ -48,10 +48,10 @@ make scenario_radsec   # RadSec over mutual TLS (RFC 6614)
 make demo              # all of the above, in sequence
 ```
 
-To **watch the actual bytes** on the wire, set `PYRAD2_TRACE=1`:
+To **watch the actual bytes** on the wire, set `PYRAD2_TRACE=1` **and** `PYRAD2_TRACE_UNSAFE=1`:
 
 ```bash
-PYRAD2_TRACE=1 make scenario_auth
+PYRAD2_TRACE=1 PYRAD2_TRACE_UNSAFE=1 make scenario_auth
 ```
 
 Every packet is dumped with direction (`→` outgoing, `←` incoming), code, id, length, authenticator, decoded attributes, and a hex view of the raw bytes:
@@ -68,6 +68,10 @@ Every packet is dumped with direction (`→` outgoing, `←` incoming), code, id
         0010  9f 51 ed 81 01 07 61 6c 69 63 65 04 06 c0 a8 01  .Q....alice.....
         0020  0a 06 06 00 00 00 01                             .......
 ```
+
+!!! danger "Why two env vars?"
+
+    The trace dumps the Request Authenticator and the **obfuscated** `User-Password` verbatim. Anyone who later reads the log archive *and* knows the shared secret (commonly stored in the same config the operator reading the log can see) can recover the plaintext password — the RFC 2865 obfuscation is fully reversible with both inputs. `PYRAD2_TRACE_UNSAFE=1` is an acknowledgement that the destination of these log lines is access-controlled at the same level as the shared secret. Setting `PYRAD2_TRACE=1` without it logs a warning and keeps the trace **disabled**.
 
 `PYRAD2_TRACE` works on any script - scenarios, examples, or your own code - and costs nothing when off.
 

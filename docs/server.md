@@ -343,3 +343,7 @@ async def handle_access_request(self, packet):
 ```
 
 The reply path is fully automatic: `create_reply()` propagates `radius_version` and the Token; `reply_packet()` skips MD5 / Message-Authenticator when v1.1 is set.
+
+!!! tip "Watching for misconfigured shared secrets"
+
+    If the receiver's shared secret doesn't match the sender's, `pw_decrypt` returns lossy garbage — and now logs a `WARNING` saying so. If you see `AuthPacket.pw_decrypt produced non-UTF-8 bytes` in production logs, check the `RemoteHost` secret for that NAS before chasing user-level auth bugs.

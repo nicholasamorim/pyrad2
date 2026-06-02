@@ -59,7 +59,7 @@ if reply.code == PacketType.AccessAccept:
 | Duplicate detection / response cache | [RFC 5080 §2.2.2](https://datatracker.ietf.org/doc/html/rfc5080#section-2.2.2) |
 | BlastRADIUS-safe defaults | [CVE-2024-3596](https://www.blastradius.fail/) - `Message-Authenticator` enforced on `Access-Request` out of the box |
 | FreeRADIUS dictionary support | Extended attributes, vendor formats, EVS - see [Dictionary Reference](dictionary.md) |
-| Wire-level packet tracing | `PYRAD2_TRACE=1` |
+| Wire-level packet tracing | `PYRAD2_TRACE=1` + `PYRAD2_TRACE_UNSAFE=1` |
 
 pyrad2 is a **library**, not a daemon. It is not a drop-in replacement for [FreeRADIUS](https://freeradius.org); it gives you the moving parts to build your own.
 
