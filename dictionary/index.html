@@ -1,0 +1,1641 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../client/">
+      
+      
+        <link rel="next" href="../conformance/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Dictionary Reference - pyrad2</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#dictionary-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pyrad2" class="md-header__button md-logo" aria-label="pyrad2" data-md-component="logo">
+      
+  <img src="../logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pyrad2
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Dictionary Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pyrad2" class="md-nav__button md-logo" aria-label="pyrad2" data-md-component="logo">
+      
+  <img src="../logo.png" alt="logo">
+
+    </a>
+    pyrad2
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running a RADIUS Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Making RADIUS Requests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dictionary Reference
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dictionary Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data types
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attribute-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attribute options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vendor-specific-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vendor-specific format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extended-attributes-rfc-6929" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extended attributes (RFC 6929)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Extended attributes (RFC 6929)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#access-on-the-packet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access on the packet
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extended-vendor-specific-evs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extended-Vendor-Specific (EVS)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nested-tlvs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nested TLVs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#real-world-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real-world compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FreeRADIUS Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from pyrad
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/server_async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    server_async
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    client
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/client_async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    client_async
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    radsec
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    radsec
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/radsec_server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/radsec_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/radius11/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RADIUS/1.1 (RFC 9765)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/packet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    packet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/dedup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dedup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/dictionary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dictionary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/host/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/dictfile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dictfile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/proxy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    proxy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/bidict/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bidict
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/constants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    constants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/eap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data types
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attribute-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attribute options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vendor-specific-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vendor-specific format
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extended-attributes-rfc-6929" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extended attributes (RFC 6929)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Extended attributes (RFC 6929)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#access-on-the-packet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Access on the packet
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extended-vendor-specific-evs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extended-Vendor-Specific (EVS)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nested-tlvs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nested TLVs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#real-world-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Real-world compatibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="dictionary-reference">Dictionary Reference</h1>
+<p>The dictionary is what pyrad2 reads to translate <code>User-Name</code> into "attribute code 1, type string" and back. This page documents every dictionary feature pyrad2 understands.</p>
+<p>For a hands-on tour, run <a href="https://github.com/pyradius/pyrad2/blob/master/examples/dictionary_features.py"><code>examples/dictionary_features.py</code></a> - backed by <a href="https://github.com/pyradius/pyrad2/blob/master/examples/dictionary.extended"><code>examples/dictionary.extended</code></a> - which exercises every feature below:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>dictionary_features
+</span></code></pre></div>
+<h2 id="goal">Goal</h2>
+<p>pyrad2 aims to load real-world FreeRADIUS dictionaries <strong>without modification</strong>. If a dictionary works in FreeRADIUS, it should work here too.</p>
+<h2 id="data-types">Data types</h2>
+<p>Use these in the third column of an <code>ATTRIBUTE</code> declaration:</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>string</code></td>
+<td>UTF-8 text</td>
+</tr>
+<tr>
+<td><code>octets</code></td>
+<td>Raw bytes</td>
+</tr>
+<tr>
+<td><code>integer</code></td>
+<td>32-bit unsigned integer</td>
+</tr>
+<tr>
+<td><code>signed</code></td>
+<td>32-bit signed integer</td>
+</tr>
+<tr>
+<td><code>short</code></td>
+<td>16-bit unsigned integer</td>
+</tr>
+<tr>
+<td><code>byte</code></td>
+<td>8-bit unsigned integer</td>
+</tr>
+<tr>
+<td><code>integer64</code></td>
+<td>64-bit unsigned integer</td>
+</tr>
+<tr>
+<td><code>date</code></td>
+<td>Seconds since the Unix epoch</td>
+</tr>
+<tr>
+<td><code>ipaddr</code></td>
+<td>IPv4 address</td>
+</tr>
+<tr>
+<td><code>ipv6addr</code></td>
+<td>IPv6 address</td>
+</tr>
+<tr>
+<td><code>ipv6prefix</code></td>
+<td>IPv6 prefix</td>
+</tr>
+<tr>
+<td><code>ipv4prefix</code></td>
+<td>IPv4 prefix (<a href="https://datatracker.ietf.org/doc/html/rfc5090">RFC 5090</a>)</td>
+</tr>
+<tr>
+<td><code>combo-ip</code></td>
+<td>Either IPv4 (4 bytes) or IPv6 (16 bytes); decided by wire length</td>
+</tr>
+<tr>
+<td><code>ifid</code></td>
+<td>8-byte Interface-Id (<a href="https://datatracker.ietf.org/doc/html/rfc3162">RFC 3162</a>)</td>
+</tr>
+<tr>
+<td><code>ether</code></td>
+<td>MAC address (<a href="https://datatracker.ietf.org/doc/html/rfc6911">RFC 6911</a>)</td>
+</tr>
+<tr>
+<td><code>abinary</code></td>
+<td>Ascend filter format</td>
+</tr>
+<tr>
+<td><code>tlv</code></td>
+<td>TLV container — arbitrarily deep nesting</td>
+</tr>
+<tr>
+<td><code>extended</code></td>
+<td>RFC 6929 wrapper (types 241–244)</td>
+</tr>
+<tr>
+<td><code>long-extended</code></td>
+<td>RFC 6929 wrapper (types 245–246) - transparent fragmentation</td>
+</tr>
+<tr>
+<td><code>vsa</code></td>
+<td>Bare Vendor-Specific attribute (<a href="https://datatracker.ietf.org/doc/html/rfc2865">RFC 2865</a> code 26)</td>
+</tr>
+</tbody>
+</table>
+<p>FreeRADIUS v4 uses modern type names — <code>uint8</code>, <code>uint16</code>, <code>uint32</code>, <code>uint64</code>, <code>int32</code> — which pyrad2 accepts as aliases for <code>byte</code>, <code>short</code>, <code>integer</code>, <code>integer64</code>, and <code>signed</code> respectively. Mix and match freely.</p>
+<h2 id="attribute-options">Attribute options</h2>
+<p>Add comma-separated options after the type column:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>has_tag</code></td>
+<td>Attribute carries a one-byte tag prefix (<a href="https://datatracker.ietf.org/doc/html/rfc2868">RFC 2868</a>)</td>
+</tr>
+<tr>
+<td><code>encrypt=1</code></td>
+<td>User-Password obfuscation</td>
+</tr>
+<tr>
+<td><code>encrypt=2</code></td>
+<td>Tunnel-Password / MS-MPPE-Key obfuscation</td>
+</tr>
+<tr>
+<td><code>encrypt=3</code></td>
+<td>Ascend-Send / Ascend-Receive obfuscation</td>
+</tr>
+<tr>
+<td><code>concat</code></td>
+<td>Values &gt; 253 bytes split across multiple AVPs on the wire (<a href="https://datatracker.ietf.org/doc/html/rfc7268#section-3.6">RFC 7268 §3.6</a>) - typical for <code>EAP-Message</code>, <code>CHAP-Challenge</code></td>
+</tr>
+<tr>
+<td><code>array</code></td>
+<td>Multiple fixed-length values packed into one AVP's value field (<a href="https://datatracker.ietf.org/doc/html/rfc8044#section-3.8">RFC 8044 §3.8</a>) - typical for <code>DHCP-Router-Address</code> and other multi-address attributes</td>
+</tr>
+<tr>
+<td><code>virtual</code></td>
+<td>Server-internal attribute, never emitted on the wire. Used for things like <code>Auth-Type</code>, <code>Client-Shortname</code></td>
+</tr>
+<tr>
+<td><code>secret</code></td>
+<td>Hint that the value is sensitive in logs. Accepted with no wire-format change</td>
+</tr>
+</tbody>
+</table>
+<h2 id="vendor-specific-format">Vendor-specific format</h2>
+<p>Per-vendor VSA wire format is honored end-to-end. Declare it on the <code>VENDOR</code> line:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>VENDOR Cisco 9 format=1,1
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>VENDOR Microsoft 311 format=1,1
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>VENDOR USR 429 format=4,0
+</span></code></pre></div>
+<p>The <code>format=type_len,len_len[,c]</code> directive controls:</p>
+<ul>
+<li><strong><code>type_len</code></strong> - bytes in the vendor-type field: <code>1</code>, <code>2</code>, or <code>4</code></li>
+<li><strong><code>len_len</code></strong> - bytes in the vendor-length field: <code>0</code>, <code>1</code>, or <code>2</code></li>
+<li><strong><code>c</code></strong> (optional) - opts the vendor into <a href="https://datatracker.ietf.org/doc/html/rfc5904">RFC 5904</a> long-packed VSAs: an extra continuation byte is inserted after the length header, with bit <code>0x80</code> flagging fragments. WiMAX (<code>format=1,1,c</code>) is the canonical example; Telrad uses the same shape. Pyrad2 handles fragmentation and reassembly transparently — callers see one logical value either way.</li>
+</ul>
+<p>If <code>format=</code> is omitted, pyrad2 falls back to the RFC 2865 §5.26 default of <code>1,1</code>.</p>
+<h2 id="extended-attributes-rfc-6929">Extended attributes (RFC 6929)</h2>
+<p>RFC 6929 reserves attribute types 241–246 as <strong>wrappers</strong> that hold sub-attributes. Declare the wrapper, then add sub-attributes using dotted-code notation:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ATTRIBUTE Extended-Attribute-1  241    extended
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ATTRIBUTE Frag-Status           241.1  integer
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>ATTRIBUTE Auth-Lifetime         241.2  integer
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>ATTRIBUTE Extended-Attribute-5  245    long-extended
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>ATTRIBUTE WiMAX-Blob            245.1  octets
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>extended</code> (241–244)</td>
+<td>Standard extended attribute</td>
+</tr>
+<tr>
+<td><code>long-extended</code> (245–246)</td>
+<td>Extended attribute with fragmentation for values &gt; 251 bytes</td>
+</tr>
+</tbody>
+</table>
+<h3 id="access-on-the-packet">Access on the packet</h3>
+<p>Sub-attributes are accessed by name; the parent returns a dict of sub-attribute values:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">packet</span><span class="p">[</span><span class="s2">&quot;Frag-Status&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">packet</span><span class="p">[</span><span class="s2">&quot;Auth-Lifetime&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">3600</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">packet</span><span class="p">[</span><span class="s2">&quot;Extended-Attribute-1&quot;</span><span class="p">]</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># -&gt; {&quot;Frag-Status&quot;: [5], &quot;Auth-Lifetime&quot;: [3600]}</span>
+</span></code></pre></div>
+<p><code>long-extended</code> values larger than 251 bytes are fragmented on send and reassembled on receive. Callers see one logical value either way.</p>
+<h2 id="extended-vendor-specific-evs">Extended-Vendor-Specific (EVS)</h2>
+<p>EVS (<a href="https://datatracker.ietf.org/doc/html/rfc6929#section-2.3">RFC 6929 §2.3</a>) is how a vendor carries its own attributes inside an extended wrapper. The <code>evs</code> type marks the slot, and <code>BEGIN-VENDOR &lt;name&gt; parent=&lt;evs-attr&gt;</code> scopes the vendor's attributes underneath it:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ATTRIBUTE Extended-Attribute-1        241     extended
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>ATTRIBUTE Extended-Vendor-Specific-1  241.26  evs
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>VENDOR Example 12345
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>BEGIN-VENDOR Example parent=Extended-Vendor-Specific-1
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>ATTRIBUTE Example-Attr-1  1  string
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>ATTRIBUTE Example-Attr-2  2  integer
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>END-VENDOR Example
+</span></code></pre></div>
+<p>Access EVS attributes by name like any other attribute:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">packet</span><span class="p">[</span><span class="s2">&quot;Example-Attr-1&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;hello&quot;</span>
+</span></code></pre></div>
+<p>The wire encoding wraps the vendor id and vendor type into the extended payload. <code>long-extended</code> EVS values fragment and reassemble the same way as plain <code>long-extended</code> attributes.</p>
+<h2 id="nested-tlvs">Nested TLVs</h2>
+<p>TLV containers can hold further TLV containers to arbitrary depth. Sub-attributes use dotted-code notation at every level:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ATTRIBUTE Extended-Attribute-1   241      extended
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>ATTRIBUTE IP-Port-Limit-Info     241.5    tlv
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>ATTRIBUTE IP-Port-Type           241.5.1  integer
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>ATTRIBUTE IP-Port-Limit          241.5.2  integer
+</span></code></pre></div>
+<p>The packet API recurses through the nesting so each level surfaces as a <code>{sub_name: [values]}</code> map:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">packet</span><span class="p">[</span><span class="s2">&quot;IP-Port-Type&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">7</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">packet</span><span class="p">[</span><span class="s2">&quot;IP-Port-Limit&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">100</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">packet</span><span class="p">[</span><span class="s2">&quot;Extended-Attribute-1&quot;</span><span class="p">]</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># -&gt; {&quot;IP-Port-Limit-Info&quot;: {&quot;IP-Port-Type&quot;: [7], &quot;IP-Port-Limit&quot;: [100]}}</span>
+</span></code></pre></div>
+<p>Wire encoding nests <code>&lt;type&gt;&lt;length&gt;&lt;value&gt;</code> triplets at every level inside the outer envelope. This covers the RFC 6929 / 7499 / 8045 dictionaries among others.</p>
+<h2 id="real-world-compatibility">Real-world compatibility</h2>
+<p>pyrad2 is regression-tested against the upstream FreeRADIUS dictionary corpus and packet test vectors. See the <a href="../conformance/">FreeRADIUS Conformance</a> page for the suite, its results, and the small number of known corner cases.</p>
+<p>If you hit something that FreeRADIUS handles but pyrad2 doesn't, please <a href="https://github.com/pyradius/pyrad2/issues">open an issue</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.expand"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

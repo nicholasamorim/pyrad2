@@ -1,0 +1,2022 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../setup/">
+      
+      
+        <link rel="next" href="../client/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Running a RADIUS Server - pyrad2</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#running-a-radius-server" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="pyrad2" class="md-header__button md-logo" aria-label="pyrad2" data-md-component="logo">
+      
+  <img src="../logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            pyrad2
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Running a RADIUS Server
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="pyrad2" class="md-nav__button md-logo" aria-label="pyrad2" data-md-component="logo">
+      
+  <img src="../logo.png" alt="logo">
+
+    </a>
+    pyrad2
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running a RADIUS Server
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Running a RADIUS Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#your-first-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your first server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handling-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handling requests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sending-replies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sending replies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sending replies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reply-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reply codes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-authorization-coa-disconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dynamic authorization (CoA &amp; Disconnect)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-server-health-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status-Server health checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#duplicate-detection-rfc-5080" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Duplicate detection (RFC 5080)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Duplicate detection (RFC 5080)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#message-authenticator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Message-Authenticator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#radsec-radius-over-tls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RadSec - RADIUS over TLS
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RadSec - RADIUS over TLS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-minimal-radsec-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A minimal RadSec server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#health-checking-a-radsec-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health-checking a RadSec server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#radius11-rfc-9765" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RADIUS/1.1 (RFC 9765)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RADIUS/1.1 (RFC 9765)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-changes-in-v11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What changes in v1.1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enabling-v11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enabling v1.1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#negotiation-outcomes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Negotiation outcomes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#writing-a-v11-aware-handler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing a v1.1-aware handler
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Making RADIUS Requests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dictionary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dictionary Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FreeRADIUS Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating from pyrad
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/server_async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    server_async
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    client
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/client_async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    client_async
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    radsec
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    radsec
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/radsec_server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/radsec_client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Client
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/radius11/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RADIUS/1.1 (RFC 9765)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/packet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    packet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/dedup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dedup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/dictionary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dictionary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/host/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    host
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/dictfile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    dictfile
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/proxy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    proxy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/bidict/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    bidict
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/constants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    constants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/exceptions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/eap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    eap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#your-first-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Your first server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#handling-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Handling requests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sending-replies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sending replies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Sending replies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reply-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reply codes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dynamic-authorization-coa-disconnect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dynamic authorization (CoA &amp; Disconnect)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-server-health-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status-Server health checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#duplicate-detection-rfc-5080" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Duplicate detection (RFC 5080)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Duplicate detection (RFC 5080)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#message-authenticator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Message-Authenticator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#radsec-radius-over-tls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RadSec - RADIUS over TLS
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RadSec - RADIUS over TLS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-minimal-radsec-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A minimal RadSec server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#health-checking-a-radsec-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Health-checking a RadSec server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#radius11-rfc-9765" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RADIUS/1.1 (RFC 9765)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RADIUS/1.1 (RFC 9765)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-changes-in-v11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What changes in v1.1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enabling-v11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enabling v1.1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#negotiation-outcomes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Negotiation outcomes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#writing-a-v11-aware-handler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing a v1.1-aware handler
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="running-a-radius-server">Running a RADIUS Server</h1>
+<p>pyrad2 servers are libraries you subclass - pyrad2 handles packet parsing, transport, retransmission, and replies, and you implement the business logic.</p>
+<p>This page builds up from a minimal server to RadSec and RADIUS/1.1, in that order.</p>
+<h2 id="your-first-server">Your first server</h2>
+<p>A server is one class with two handler methods. Save this as <code>server.py</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.server_async</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServerAsync</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.dictionary</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dictionary</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.host</span><span class="w"> </span><span class="kn">import</span> <span class="n">RemoteHost</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">PacketType</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyServer</span><span class="p">(</span><span class="n">ServerAsync</span><span class="p">):</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">handle_auth_packet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol</span><span class="p">,</span> <span class="n">pkt</span><span class="p">,</span> <span class="n">addr</span><span class="p">):</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>        <span class="n">reply</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_reply_packet</span><span class="p">(</span><span class="n">pkt</span><span class="p">,</span> <span class="o">**</span><span class="p">{</span><span class="s2">&quot;Service-Type&quot;</span><span class="p">:</span> <span class="s2">&quot;Framed-User&quot;</span><span class="p">})</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">AccessAccept</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="n">protocol</span><span class="o">.</span><span class="n">send_response</span><span class="p">(</span><span class="n">reply</span><span class="p">,</span> <span class="n">addr</span><span class="p">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">handle_acct_packet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol</span><span class="p">,</span> <span class="n">pkt</span><span class="p">,</span> <span class="n">addr</span><span class="p">):</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        <span class="n">reply</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_reply_packet</span><span class="p">(</span><span class="n">pkt</span><span class="p">)</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>        <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">AccountingResponse</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="n">protocol</span><span class="o">.</span><span class="n">send_response</span><span class="p">(</span><span class="n">reply</span><span class="p">,</span> <span class="n">addr</span><span class="p">)</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">server</span> <span class="o">=</span> <span class="n">MyServer</span><span class="p">(</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>        <span class="n">hosts</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">:</span> <span class="n">RemoteHost</span><span class="p">(</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;my-secret&quot;</span><span class="p">,</span> <span class="s2">&quot;localhost&quot;</span><span class="p">)},</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>        <span class="n">dictionary</span><span class="o">=</span><span class="n">Dictionary</span><span class="p">(</span><span class="s2">&quot;dictionary&quot;</span><span class="p">),</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="p">)</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="k">await</span> <span class="n">server</span><span class="o">.</span><span class="n">initialize_transports</span><span class="p">(</span><span class="n">enable_auth</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">enable_acct</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>        <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>    <span class="k">finally</span><span class="p">:</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>        <span class="k">await</span> <span class="n">server</span><span class="o">.</span><span class="n">deinitialize_transports</span><span class="p">()</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></code></pre></div>
+<p>Run it:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>run<span class="w"> </span>server.py
+</span></code></pre></div>
+<p>You should see:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>[127.0.0.1:1812] Transport created
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>[127.0.0.1:1813] Transport created
+</span></code></pre></div>
+<p>That's a working RADIUS server. The next sections explain what's happening and how to make it useful.</p>
+<div class="admonition tip">
+<p class="admonition-title">Sync or async?</p>
+<p>The example above is async - recommended for new code. A synchronous <code>Server</code> class exists in <code>pyrad2.server</code> for legacy compatibility, but sync support <strong>may be dropped in a future release</strong>. Use <a href="https://github.com/pyradius/pyrad2/blob/master/examples/server_async.py"><code>server_async.py</code></a> as your starting template.</p>
+</div>
+<h2 id="handling-requests">Handling requests</h2>
+<p>Every handler receives:</p>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>protocol</code></td>
+<td>The transport - call <code>protocol.send_response(reply, addr)</code> to reply</td>
+</tr>
+<tr>
+<td><code>pkt</code></td>
+<td>A parsed <a href="../api/packet/"><code>Packet</code></a> - already validated and decoded</td>
+</tr>
+<tr>
+<td><code>addr</code></td>
+<td>The source <code>(host, port)</code> tuple</td>
+</tr>
+</tbody>
+</table>
+<p><code>pkt</code> behaves like a dict of attributes. Iterate it, look up values, log it - whatever your logic needs:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">handle_auth_packet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol</span><span class="p">,</span> <span class="n">pkt</span><span class="p">,</span> <span class="n">addr</span><span class="p">):</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Auth request id=</span><span class="si">{}</span><span class="s2"> from </span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">pkt</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">addr</span><span class="p">)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">pkt</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;  </span><span class="si">{}</span><span class="s2">: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span>
+</span></code></pre></div>
+<h2 id="sending-replies">Sending replies</h2>
+<p>Every reply starts with <code>self.create_reply_packet(request, **attributes)</code>, then sets the response code, then goes out via the protocol:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">handle_auth_packet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol</span><span class="p">,</span> <span class="n">pkt</span><span class="p">,</span> <span class="n">addr</span><span class="p">):</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">reply</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_reply_packet</span><span class="p">(</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>        <span class="n">pkt</span><span class="p">,</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>        <span class="o">**</span><span class="p">{</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>            <span class="s2">&quot;Service-Type&quot;</span><span class="p">:</span> <span class="s2">&quot;Framed-User&quot;</span><span class="p">,</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>            <span class="s2">&quot;Framed-IP-Address&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.0.1&quot;</span><span class="p">,</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>            <span class="s2">&quot;Framed-IPv6-Prefix&quot;</span><span class="p">:</span> <span class="s2">&quot;fc66::1/64&quot;</span><span class="p">,</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>        <span class="p">},</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="p">)</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">AccessAccept</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="n">protocol</span><span class="o">.</span><span class="n">send_response</span><span class="p">(</span><span class="n">reply</span><span class="p">,</span> <span class="n">addr</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="reply-codes">Reply codes</h3>
+<p>Reply codes live on the <a href="../api/constants/"><code>PacketType</code></a> enum:</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PacketType.AccessAccept</code></td>
+<td>Auth succeeded</td>
+</tr>
+<tr>
+<td><code>PacketType.AccessReject</code></td>
+<td>Auth failed</td>
+</tr>
+<tr>
+<td><code>PacketType.AccessChallenge</code></td>
+<td>Need more info (EAP, RADIUS challenge)</td>
+</tr>
+<tr>
+<td><code>PacketType.AccountingResponse</code></td>
+<td>Acknowledge an accounting record</td>
+</tr>
+<tr>
+<td><code>PacketType.CoAACK</code> / <code>CoANAK</code></td>
+<td>Accept/reject a CoA-Request</td>
+</tr>
+<tr>
+<td><code>PacketType.DisconnectACK</code> / <code>DisconnectNAK</code></td>
+<td>Accept/reject a Disconnect-Request</td>
+</tr>
+</tbody>
+</table>
+<p>See the <a href="../api/constants/">constants reference</a> for the complete list.</p>
+<h2 id="dynamic-authorization-coa-disconnect">Dynamic authorization (CoA &amp; Disconnect)</h2>
+<p>CoA and Disconnect are part of <a href="https://datatracker.ietf.org/doc/html/rfc5176">RFC 5176</a>. They flow <em>from</em> a Dynamic Authorization Server <em>to</em> a NAS to <strong>change</strong> or <strong>terminate</strong> an active session - the opposite direction from normal auth requests.</p>
+<p>You only need these handlers if your server is acting as a NAS or proxy and accepts CoA/Disconnect requests. Enable the listener with <code>enable_coa=True</code> and override the handlers:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyDynAuthServer</span><span class="p">(</span><span class="n">ServerAsync</span><span class="p">):</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">handle_coa_packet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol</span><span class="p">,</span> <span class="n">pkt</span><span class="p">,</span> <span class="n">addr</span><span class="p">):</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>        <span class="c1"># apply session change ...</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>        <span class="n">reply</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_reply_packet</span><span class="p">(</span><span class="n">pkt</span><span class="p">)</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>        <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">CoAACK</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="n">protocol</span><span class="o">.</span><span class="n">send_response</span><span class="p">(</span><span class="n">reply</span><span class="p">,</span> <span class="n">addr</span><span class="p">)</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">handle_disconnect_packet</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol</span><span class="p">,</span> <span class="n">pkt</span><span class="p">,</span> <span class="n">addr</span><span class="p">):</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>        <span class="c1"># tear down session ...</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="n">reply</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_reply_packet</span><span class="p">(</span><span class="n">pkt</span><span class="p">)</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>        <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">DisconnectACK</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>        <span class="n">protocol</span><span class="o">.</span><span class="n">send_response</span><span class="p">(</span><span class="n">reply</span><span class="p">,</span> <span class="n">addr</span><span class="p">)</span>
+</span></code></pre></div>
+<p>If you <strong>don't</strong> override them, pyrad2 responds with <code>CoA-NAK</code> / <code>Disconnect-NAK</code> and <code>Error-Cause = Unsupported-Extension</code>. That's the correct, clean default - you never have to write a stub just to be polite.</p>
+<h2 id="status-server-health-checks">Status-Server health checks</h2>
+<p><a href="https://datatracker.ietf.org/doc/html/rfc5997">RFC 5997</a> Status-Server requests are handled <strong>before</strong> they reach your auth/acct handlers - no extra code required.</p>
+<table>
+<thead>
+<tr>
+<th>Arrives on</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Auth port (1812)</td>
+<td><code>Access-Accept</code></td>
+</tr>
+<tr>
+<td>Accounting port (1813)</td>
+<td><code>Accounting-Response</code></td>
+</tr>
+</tbody>
+</table>
+<p>Status-Server requests <strong>must</strong> include a valid <code>Message-Authenticator</code>; requests without one are dropped. Your handlers are not called, so health checks never run authentication side effects.</p>
+<h2 id="duplicate-detection-rfc-5080">Duplicate detection (RFC 5080)</h2>
+<p>UDP loses packets. Clients retransmit. <a href="https://datatracker.ietf.org/doc/html/rfc5080#section-2.2.2">RFC 5080 §2.2.2</a> requires servers to <strong>detect duplicates and resend the original reply</strong> instead of re-running the handler.</p>
+<p>This matters most for <strong>EAP</strong>: each <code>Access-Challenge</code> carries a fresh <code>State</code> attribute, and re-processing a retransmission would mint a new <code>State</code> that breaks the conversation. It also matters for <strong>accounting</strong> (no double-counts) and <strong>CoA/Disconnect</strong> (no double-applying authorization changes).</p>
+<p>Both <code>Server</code> and <code>ServerAsync</code> enable it by default. The cache key is the RFC-mandated tuple <code>(source IP, source UDP port, code, Identifier, Request Authenticator)</code>. Retransmissions of:</p>
+<ul>
+<li><code>Access-Request</code></li>
+<li><code>Accounting-Request</code></li>
+<li><code>CoA-Request</code></li>
+<li><code>Disconnect-Request</code></li>
+</ul>
+<p>receive the <strong>byte-identical</strong> cached reply for <code>dedup_ttl</code> seconds. Your handler runs exactly once. Duplicates that arrive while the original is still being processed are dropped silently.</p>
+<h3 id="tuning">Tuning</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">server</span> <span class="o">=</span> <span class="n">ServerAsync</span><span class="p">(</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="c1"># ...</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">dedup_enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>      <span class="c1"># default</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">dedup_ttl</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>          <span class="c1"># seconds a cached reply stays valid</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">dedup_max_entries</span><span class="o">=</span><span class="mi">4096</span><span class="p">,</span>  <span class="c1"># LRU cap before old entries get evicted</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>Pass <code>dedup_enabled=False</code> to opt out, or <code>dedup_cache=...</code> (a <code>pyrad2.dedup.ResponseCache</code> instance) to share one cache across servers or inject a custom clock for tests.</p>
+<p>Status-Server requests, CoA/Disconnect-NAK replies, and packets where the parsed source doesn't match an allowed <code>RemoteHost</code> are never cached.</p>
+<div class="admonition note">
+<p class="admonition-title">RadSec is exempt</p>
+<p>RadSec runs over TCP/TLS, where the transport handles retransmission of lost segments. The dedup cache is not wired into <code>RadSecServer</code>.</p>
+</div>
+<h2 id="message-authenticator">Message-Authenticator</h2>
+<p>pyrad2 validates <code>Message-Authenticator</code> whenever it's present and, by default, requires it on every incoming <code>Access-Request</code>. This mitigates <a href="https://www.blastradius.fail/">BlastRADIUS (CVE-2024-3596)</a> out of the box — an off-path attacker who can spoof source IP can no longer forge an <code>Access-Accept</code>.</p>
+<p>Scope of the default (<code>require_message_authenticator=True</code>):</p>
+<ul>
+<li><strong><code>Access-Request</code> must include a valid <code>Message-Authenticator</code></strong> — incoming packets without one are dropped before reaching your handler.</li>
+<li><strong>Access replies (<code>Access-Accept</code> / <code>Reject</code> / <code>Challenge</code>) automatically get <code>Message-Authenticator</code></strong> before they go on the wire.</li>
+<li><strong><code>Accounting-Request</code>, <code>CoA-Request</code>, <code>Disconnect-Request</code> (and their replies) are unaffected</strong> — those codes carry a Request/Response Authenticator MD5 over the body and shared secret, so the body is already integrity-protected.</li>
+<li><strong>Packets with <code>EAP-Message</code> must include a valid <code>Message-Authenticator</code></strong> (RFC 3579 §3.2).</li>
+<li><strong><code>Status-Server</code> must include a valid <code>Message-Authenticator</code></strong> (RFC 5997 §3) — independent of the flag.</li>
+</ul>
+<p>To bridge a legacy NAS that doesn't emit the attribute, set <code>require_message_authenticator=False</code> when constructing <code>Server</code> or <code>ServerAsync</code>. <code>RadSecServer</code> defaults to <code>False</code> because TLS already authenticates origin and integrity (off-path forgery is impossible by construction); flip it to <code>True</code> only if you need strict parity with UDP deployments.</p>
+<h2 id="radsec-radius-over-tls">RadSec - RADIUS over TLS</h2>
+<div class="admonition info">
+<p class="admonition-title">Status</p>
+<p>Experimental. Implements <a href="https://datatracker.ietf.org/doc/html/rfc6614">RFC 6614</a>.</p>
+</div>
+<p>RadSec is RADIUS over TLS/TCP instead of UDP. It replaces the MD5-based packet authentication that has aged poorly with proper TLS, and uses port <strong>2083</strong> for everything - auth, accounting, and dynamic authorization all share one mutually-authenticated connection.</p>
+<p>The shared secret defaults to <code>radsec</code> per the RFC, but you can override it per host.</p>
+<h3 id="a-minimal-radsec-server">A minimal RadSec server</h3>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">asyncio</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.radsec.server</span><span class="w"> </span><span class="kn">import</span> <span class="n">RadSecServer</span> <span class="k">as</span> <span class="n">BaseRadSecServer</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.dictionary</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dictionary</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.host</span><span class="w"> </span><span class="kn">import</span> <span class="n">RemoteHost</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.constants</span><span class="w"> </span><span class="kn">import</span> <span class="n">PacketType</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">RadSecServer</span><span class="p">(</span><span class="n">BaseRadSecServer</span><span class="p">):</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle_access_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">packet</span><span class="p">):</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="n">reply</span> <span class="o">=</span> <span class="n">packet</span><span class="o">.</span><span class="n">create_reply</span><span class="p">()</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>        <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">AccessAccept</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>        <span class="k">return</span> <span class="n">reply</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle_accounting</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">packet</span><span class="p">):</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>        <span class="n">reply</span> <span class="o">=</span> <span class="n">packet</span><span class="o">.</span><span class="n">create_reply</span><span class="p">()</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>        <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">AccountingResponse</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>        <span class="k">return</span> <span class="n">reply</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="c1"># Optional - override only when acting as a Dynamic Authorization Server.</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>    <span class="c1"># Default behavior is CoA-NAK / Disconnect-NAK with Error-Cause.</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>    <span class="c1"># async def handle_coa(self, packet): ...</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>    <span class="c1"># async def handle_disconnect(self, packet): ...</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>    <span class="n">here</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">))</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>    <span class="n">server</span> <span class="o">=</span> <span class="n">RadSecServer</span><span class="p">(</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>        <span class="n">hosts</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">:</span> <span class="n">RemoteHost</span><span class="p">(</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;radsec&quot;</span><span class="p">,</span> <span class="s2">&quot;localhost&quot;</span><span class="p">)},</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>        <span class="n">dictionary</span><span class="o">=</span><span class="n">Dictionary</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">here</span><span class="si">}</span><span class="s2">/dictionary&quot;</span><span class="p">),</span>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>        <span class="n">certfile</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">here</span><span class="si">}</span><span class="s2">/certs/server/server.cert.pem&quot;</span><span class="p">,</span>
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>        <span class="n">keyfile</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">here</span><span class="si">}</span><span class="s2">/certs/server/server.key.pem&quot;</span><span class="p">,</span>
+</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>        <span class="n">ca_certfile</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">here</span><span class="si">}</span><span class="s2">/certs/ca/ca.cert.pem&quot;</span><span class="p">,</span>
+</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a>    <span class="p">)</span>
+</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>    <span class="k">await</span> <span class="n">server</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>
+</span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>
+</span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a><span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</span></code></pre></div>
+<p>When the server is ready you'll see:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>RADSEC Server with mutual TLS running on (&#39;0.0.0.0&#39;, 2083)
+</span></code></pre></div>
+<p>A full example lives in <a href="https://github.com/pyradius/pyrad2/blob/master/examples/server_radsec.py"><code>examples/server_radsec.py</code></a>. Test certificates ship in <a href="https://github.com/pyradius/pyrad2/blob/master/examples/certs/"><code>examples/certs/</code></a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Async only</p>
+<p>There is no sync RadSec server.</p>
+</div>
+<h3 id="health-checking-a-radsec-server">Health-checking a RadSec server</h3>
+<p>Status-Server health checks reuse the same TLS/TCP connection as everything else. Use <a href="https://github.com/pyradius/pyrad2/blob/master/examples/status_radsec.py"><code>examples/status_radsec.py</code></a> - the UDP <code>status.py</code> script can't reach a RadSec server.</p>
+<h2 id="radius11-rfc-9765">RADIUS/1.1 (RFC 9765)</h2>
+<div class="admonition warning">
+<p class="admonition-title">Status</p>
+<p>Experimental. <a href="https://datatracker.ietf.org/doc/html/rfc9765">RFC 9765</a> was published in April 2025 and ecosystem support is still small.</p>
+</div>
+<p>RADIUS/1.1 is a <strong>TLS-only profile</strong> of RADIUS that drops the MD5 baggage now that TLS already provides authentication, integrity, and confidentiality. Both versions share the same RadSec port (2083); the protocol version is negotiated via <strong>TLS ALPN</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>ALPN string</th>
+<th>Profile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>radius/1.0</code></td>
+<td>Historic RADIUS, MD5-based (<a href="https://datatracker.ietf.org/doc/html/rfc2865">RFC 2865</a>)</td>
+</tr>
+<tr>
+<td><code>radius/1.1</code></td>
+<td>RFC 9765 - no MD5, no Message-Authenticator, Token instead of Request Authenticator</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-changes-in-v11">What changes in v1.1</h3>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>User-Password</code>, <code>Tunnel-Password</code>, <code>MS-MPPE-*-Key</code></td>
+<td><strong>Plain text</strong> - TLS authenticated the bytes (§5.1.1, §5.1.3, §5.1.4)</td>
+</tr>
+<tr>
+<td><code>Message-Authenticator</code></td>
+<td><strong>Forbidden</strong> to send; silently discarded if received (§5.2)</td>
+</tr>
+<tr>
+<td>Request Authenticator</td>
+<td>Replaced by a 32-bit per-connection <strong>Token</strong>; remaining 12 bytes zero (§4.1)</td>
+</tr>
+<tr>
+<td>Identifier byte</td>
+<td>Zero on the wire - matching uses the Token (§4.1)</td>
+</tr>
+<tr>
+<td>MD5 verifiers</td>
+<td>All short-circuit - TLS already authenticated the bytes</td>
+</tr>
+</tbody>
+</table>
+<p>In your auth handler, <code>packet["User-Password"]</code> is the literal cleartext bytes the client sent.</p>
+<h3 id="enabling-v11">Enabling v1.1</h3>
+<p>Pass <code>radius_versions=...</code> to the server constructor. The default is <code>(V1_0,)</code> for backward compatibility - no ALPN string is advertised, so historic peers see byte-identical TLS handshakes.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pyrad2.radsec.v11</span><span class="w"> </span><span class="kn">import</span> <span class="n">RadiusVersion</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">server</span> <span class="o">=</span> <span class="n">RadSecServer</span><span class="p">(</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="c1"># ...</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    <span class="n">radius_versions</span><span class="o">=</span><span class="p">(</span><span class="n">RadiusVersion</span><span class="o">.</span><span class="n">V1_0</span><span class="p">,</span> <span class="n">RadiusVersion</span><span class="o">.</span><span class="n">V1_1</span><span class="p">),</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="negotiation-outcomes">Negotiation outcomes</h3>
+<table>
+<thead>
+<tr>
+<th>Server advertises</th>
+<th>Client advertises</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>(V1_0,)</code></td>
+<td><code>(V1_0,)</code></td>
+<td>v1.0 (no ALPN sent - identical to historic RadSec)</td>
+</tr>
+<tr>
+<td><code>(V1_0, V1_1)</code></td>
+<td><code>(V1_0, V1_1)</code></td>
+<td><strong>v1.1</strong> - highest mutually supported wins</td>
+</tr>
+<tr>
+<td><code>(V1_0,)</code></td>
+<td><code>(V1_0, V1_1)</code></td>
+<td>v1.0 (server silent on ALPN, client falls back)</td>
+</tr>
+<tr>
+<td><code>(V1_0, V1_1)</code></td>
+<td><code>(V1_0,)</code></td>
+<td>v1.0 (client silent on ALPN, server falls back)</td>
+</tr>
+<tr>
+<td><code>(V1_1,)</code></td>
+<td><code>(V1_0,)</code></td>
+<td><strong>Connection closed</strong> - server refuses to downgrade (§3.3)</td>
+</tr>
+<tr>
+<td><code>(V1_0,)</code></td>
+<td><code>(V1_1,)</code></td>
+<td>Client raises <code>PacketError</code> and the call returns <code>None</code></td>
+</tr>
+<tr>
+<td><code>(V1_1,)</code></td>
+<td><code>(V1_1,)</code></td>
+<td>v1.1</td>
+</tr>
+</tbody>
+</table>
+<p>A connection is rejected exactly when one side is configured <em>only</em> for v1.1 and the other side doesn't advertise the <code>radius/1.1</code> ALPN.</p>
+<p><strong>TLS 1.3 is the default for RadSec</strong> on both sides (<a href="https://datatracker.ietf.org/doc/html/rfc9325">RFC 9325</a> deprecates 1.1 and below and treats 1.2 as legacy). RFC 9765 §3.4 additionally mandates <strong>TLS 1.3 or later</strong> whenever v1.1 is in play, and <code>RadSecServer</code> / <code>RadSecClient</code> auto-promote <code>minimum_tls_version</code> to <code>TLSv1_3</code> when v1.1 is configured. To bridge a legacy peer that can't yet negotiate 1.3 on a pure v1.0 deployment, pin the floor down explicitly:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ssl</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">RadSecServer</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">minimum_tls_version</span><span class="o">=</span><span class="n">ssl</span><span class="o">.</span><span class="n">TLSVersion</span><span class="o">.</span><span class="n">TLSv1_2</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The negotiated version is available on every parsed packet as <code>packet.radius_version</code>. The RadSec server logs <code>RADSEC connection established from ... (ALPN=..., RADIUS/...)</code> on every handshake.</p>
+<h3 id="writing-a-v11-aware-handler">Writing a v1.1-aware handler</h3>
+<p>Most handlers work unchanged. The only practical difference is the <code>User-Password</code> access pattern: in v1.1 it's already plaintext; in v1.0 you decrypt it as before.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle_access_request</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">packet</span><span class="p">):</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="k">if</span> <span class="n">packet</span><span class="o">.</span><span class="n">radius_version</span> <span class="o">==</span> <span class="n">RadiusVersion</span><span class="o">.</span><span class="n">V1_1</span><span class="p">:</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>        <span class="n">password</span> <span class="o">=</span> <span class="n">packet</span><span class="p">[</span><span class="s2">&quot;User-Password&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>          <span class="c1"># plain string</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="k">else</span><span class="p">:</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>        <span class="n">password</span> <span class="o">=</span> <span class="n">packet</span><span class="o">.</span><span class="n">pw_decrypt</span><span class="p">(</span><span class="n">packet</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>     <span class="c1"># raw bytes → str</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="n">reply</span> <span class="o">=</span> <span class="n">packet</span><span class="o">.</span><span class="n">create_reply</span><span class="p">()</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>    <span class="n">reply</span><span class="o">.</span><span class="n">code</span> <span class="o">=</span> <span class="n">PacketType</span><span class="o">.</span><span class="n">AccessAccept</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="k">return</span> <span class="n">reply</span>
+</span></code></pre></div>
+<p>The reply path is fully automatic: <code>create_reply()</code> propagates <code>radius_version</code> and the Token; <code>reply_packet()</code> skips MD5 / Message-Authenticator when v1.1 is set.</p>
+<div class="admonition tip">
+<p class="admonition-title">Watching for misconfigured shared secrets</p>
+<p>If the receiver's shared secret doesn't match the sender's, <code>pw_decrypt</code> returns lossy garbage — and now logs a <code>WARNING</code> saying so. If you see <code>AuthPacket.pw_decrypt produced non-UTF-8 bytes</code> in production logs, check the <code>RemoteHost</code> secret for that NAS before chasing user-level auth bugs.</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.expand"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
