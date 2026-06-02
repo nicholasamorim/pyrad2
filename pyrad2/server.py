@@ -290,7 +290,13 @@ class Server(host.Host):
         try:
             handler(pkt)
         finally:
-            self._router.dedup_drop_in_flight(key)
+            # If the handler called ``send_reply_packet`` (which calls
+            # ``record_reply``), the in-flight marker was already moved
+            # to the cached entry — this is a no-op. If it didn't (raised
+            # or returned silently), this records a DROP sentinel so
+            # retransmissions within the TTL window are suppressed
+            # instead of re-running the failed handler (RFC 5080 §2.2.2).
+            self._router.dedup_mark_dropped_if_in_flight(key)
 
     def _lookup_secret(self, addr: str) -> bytes:
         """Return the shared secret for ``addr`` or raise ``ServerPacketError``."""

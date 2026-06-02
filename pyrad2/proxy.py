@@ -19,11 +19,22 @@ from pyrad2.server import Server, ServerPacketError
 
 class Proxy(Server):
     """Base class for RADIUS proxies.
-    This class extends tha RADIUS server class with the capability to
-    handle communication with other RADIUS servers as well.
+
+    Extends :obj:`pyrad2.server.Server` with a second UDP socket
+    (``_proxyfd``) used to talk to upstream RADIUS servers. The standard
+    auth/acct/coa listeners receive client requests; replies from
+    upstream RADIUS servers arrive back on ``_proxyfd`` and are
+    dispatched to ``_handle_proxy_packet`` for forwarding to the
+    original requester.
+
+    Subclasses typically override ``handle_auth_packet`` /
+    ``handle_acct_packet`` to forward inbound requests on ``_proxyfd``
+    and ``_handle_proxy_packet`` to match the upstream reply back to
+    the original client.
 
     Attributes:
-        _proxyfd (socket.socket): network socket used to communicate with other servers
+        _proxyfd (socket.socket): UDP socket used to communicate with
+            upstream RADIUS servers.
     """
 
     def _prepare_sockets(self):
@@ -39,13 +50,25 @@ class Proxy(Server):
             )
 
     def _handle_proxy_packet(self, pkt: packet.Packet) -> None:
-        """Process a packet received on the reply socket.
-        If this packet should be dropped instead of processed a
-        :obj:`ServerPacketError` exception should be raised. The main loop
-        will drop the packet and log the reason.
+        """Process a packet received on the upstream-reply socket.
+
+        Raises :obj:`pyrad2.exceptions.ServerPacketError` if the packet
+        should be dropped (unknown source, or a code that isn't a
+        legitimate reply from an upstream RADIUS server). The main loop
+        catches the exception and logs the reason; subclasses typically
+        override this method to forward the validated reply back to the
+        original client.
+
+        The upstream RADIUS server's address must appear in ``self.hosts``
+        for the same reason a NAS does — the proxy needs the shared
+        secret to verify the upstream response. ``_grab_packet`` does
+        the host lookup and seeds ``pkt.secret`` during parse; this
+        method's own ``hosts`` check guards callers that construct
+        ``pkt`` by hand (e.g. unit tests).
 
         Args:
-            pkt (packet.Packet): Packet to process
+            pkt (packet.Packet): Reply packet from an upstream RADIUS
+                server.
         """
         if pkt.source[0] not in self.hosts:
             raise ServerPacketError("Received packet from unknown host")
@@ -59,29 +82,20 @@ class Proxy(Server):
             raise ServerPacketError("Received non-response on proxy socket")
 
     def _process_input(self, fd: socket.socket) -> None:
-        """Process available data.
-        If this packet should be dropped instead of processed a
-        `ServerPacketError` exception should be raised. The main loop
-        will drop the packet and log the reason.
+        """Dispatch an incoming UDP datagram.
 
-        This function calls either :obj:`handle_auth_packet`,
-        :obj:`HandleAcctPacket` or :obj:`_handle_proxy_packet` depending on
-        which socket is being processed.
-
-        Args:
-            fd (socket.socket): socket to read packet from
+        If the datagram landed on ``_proxyfd`` it's an upstream reply and
+        flows through ``_handle_proxy_packet``. Anything else is a
+        client-side request and flows through the base server's
+        per-port handlers.
         """
         if fd.fileno() == self._proxyfd.fileno():
-            # FIXME: ``Server._grab_packet`` lost its ``pktgen`` parameter
-            # in the M1 router refactor — proxy needs its own grab method
-            # because the reply-side parse runs without a known host secret.
-            # See review item L1 / proxy.py. Type-ignored to keep mypy
-            # green; this code path is exercised only via the proxy demo
-            # which doesn't run in CI.
-            pkt = self._grab_packet(  # type: ignore[call-arg]
-                lambda data, s=self: s.create_packet(packet=data),  # type: ignore[arg-type]
-                fd,
-            )
+            # The upstream RADIUS server must be registered as a host
+            # (same as a NAS) so ``_grab_packet`` can resolve its shared
+            # secret. ``ServerPacketError("Received packet from unknown
+            # host")`` is raised otherwise — the main loop catches and
+            # logs, exactly like the auth-port path.
+            pkt = self._grab_packet(fd)
             self._handle_proxy_packet(pkt)
         else:
             Server._process_input(self, fd)

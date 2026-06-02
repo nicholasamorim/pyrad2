@@ -123,6 +123,54 @@ class TestResponseCache:
         action = dedup.consult_cache(self.cache, None, lambda _: None)
         assert action is dedup.DispatchAction.PROCESS
 
+    def test_mark_dropped_if_in_flight_records_no_reply_sentinel(self):
+        # H6: a handler that completes without producing a reply must
+        # leave a DROP sentinel so retransmissions within the TTL window
+        # short-circuit to ``DispatchAction.DROP``.
+        self.cache.mark_in_flight(self.key)
+        self.cache.mark_dropped_if_in_flight(self.key)
+        assert self.cache.lookup(self.key) is dedup.DROP_NOREPLY
+
+        # And ``consult_cache`` maps that sentinel onto DROP — same
+        # action a still-in-flight key would produce.
+        resends: list[bytes] = []
+        action = dedup.consult_cache(
+            self.cache, self.key, lambda raw: resends.append(raw)
+        )
+        assert action is dedup.DispatchAction.DROP
+        assert resends == []
+
+    def test_mark_dropped_if_in_flight_is_noop_after_record_reply(self):
+        # Successful handlers transition through ``record_reply`` which
+        # clears the in-flight marker. Calling ``mark_dropped_if_in_flight``
+        # in the ``finally`` clause must NOT overwrite the cached reply.
+        self.cache.mark_in_flight(self.key)
+        self.cache.record_reply(self.key, b"reply")
+        self.cache.mark_dropped_if_in_flight(self.key)
+        assert self.cache.lookup(self.key) == b"reply"
+
+    def test_drop_sentinel_expires_with_ttl(self):
+        self.cache.mark_in_flight(self.key)
+        self.cache.mark_dropped_if_in_flight(self.key)
+        assert self.cache.lookup(self.key) is dedup.DROP_NOREPLY
+
+        self.now[0] += 9.999
+        assert self.cache.lookup(self.key) is dedup.DROP_NOREPLY
+
+        self.now[0] += 0.002
+        assert self.cache.lookup(self.key) is None
+
+    def test_record_reply_overrides_prior_drop_sentinel(self):
+        # If an earlier attempt left a DROP sentinel and a later attempt
+        # for the same key succeeds, the successful reply must
+        # supersede the sentinel (rare but possible with concurrent
+        # processing or operator-triggered cache clear scenarios).
+        self.cache.mark_in_flight(self.key)
+        self.cache.mark_dropped_if_in_flight(self.key)
+        self.cache.mark_in_flight(self.key)
+        self.cache.record_reply(self.key, b"late-reply")
+        assert self.cache.lookup(self.key) == b"late-reply"
+
 
 class _CaptureFd:
     def __init__(self):
@@ -224,6 +272,94 @@ class TestSyncServerDedup:
 
         assert server.call_count == 1
         assert first.fd.sent[0][0] == first.fd.sent[1][0]
+
+    def test_failed_handler_drops_retransmission_within_ttl(self):
+        """H6 regression: a handler that raises (or silently drops) must
+        leave a DROP sentinel so retransmissions within the TTL window are
+        suppressed instead of re-running the failed handler (RFC 5080
+        §2.2.2). Previously the ``finally`` cleared the in-flight marker
+        without recording anything, so retries went straight back into a
+        clean cache."""
+
+        class _RaisingServer(Server):
+            def __init__(inner_self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                inner_self.call_count = 0
+
+            def handle_auth_packet(inner_self, pkt):
+                inner_self.call_count += 1
+                raise RuntimeError("simulated handler failure")
+
+        server = _RaisingServer(
+            hosts={"10.0.0.1": self.remote_host},
+            dict=self.dictionary,
+            require_message_authenticator=False,
+        )
+
+        first = self._make_parsed_packet()
+        with pytest.raises(RuntimeError):
+            server._handle_auth_packet(first)
+        assert server.call_count == 1
+        assert first.fd.sent == [], "failed handler must not have sent a reply"
+
+        # Retransmission of the same packet within the TTL window: dedup
+        # cache returns DROP, handler must NOT re-run, fd must NOT be sent.
+        retry = self._make_parsed_packet()
+        retry.fd = first.fd
+        server._handle_auth_packet(retry)
+        assert server.call_count == 1, "failed handler must not re-run on retry"
+        assert retry.fd.sent == [], "retry must be dropped silently"
+
+    def test_failed_handler_drop_expires_with_ttl(self):
+        """The DROP sentinel respects the cache TTL — once it expires, a
+        retransmission falls through to a fresh handler invocation."""
+
+        clock = [1000.0]
+
+        class _RaisingOnceServer(Server):
+            def __init__(inner_self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                inner_self.call_count = 0
+
+            def handle_auth_packet(inner_self, pkt):
+                inner_self.call_count += 1
+                if inner_self.call_count == 1:
+                    raise RuntimeError("simulated handler failure")
+                # Second attempt succeeds.
+                reply = inner_self.create_reply_packet(pkt)
+                reply.code = PacketType.AccessAccept
+                inner_self.send_reply_packet(pkt.fd, reply)
+
+        # Inject a clock the test controls so the TTL window is
+        # deterministic and the test doesn't sleep.
+        cache = dedup.ResponseCache(ttl=5.0, clock=lambda: clock[0])
+        server = _RaisingOnceServer(
+            hosts={"10.0.0.1": self.remote_host},
+            dict=self.dictionary,
+            require_message_authenticator=False,
+            dedup_cache=cache,
+        )
+
+        first = self._make_parsed_packet()
+        with pytest.raises(RuntimeError):
+            server._handle_auth_packet(first)
+        assert server.call_count == 1
+
+        # Within the TTL: retry dropped silently.
+        clock[0] += 1.0
+        retry = self._make_parsed_packet()
+        retry.fd = first.fd
+        server._handle_auth_packet(retry)
+        assert server.call_count == 1
+        assert retry.fd.sent == []
+
+        # Past the TTL: retry falls through and the handler succeeds.
+        clock[0] += 10.0
+        post_ttl = self._make_parsed_packet()
+        post_ttl.fd = _CaptureFd()
+        server._handle_auth_packet(post_ttl)
+        assert server.call_count == 2
+        assert len(post_ttl.fd.sent) == 1
 
 
 class TestAsyncServerDedup:

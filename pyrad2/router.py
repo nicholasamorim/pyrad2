@@ -225,9 +225,27 @@ class RequestRouter:
         return dedup.consult_cache(self.dedup_cache, key, resend)
 
     def dedup_drop_in_flight(self, key: Optional[dedup.DedupKey]) -> None:
-        """Remove the in-flight marker for ``key`` (idempotent)."""
+        """Remove the in-flight marker for ``key`` (idempotent).
+
+        Legacy helper retained for callers (and tests) that explicitly
+        want to clear the marker without recording a DROP sentinel.
+        New dispatch paths use ``dedup_mark_dropped_if_in_flight``.
+        """
         if key is not None and self.dedup_cache is not None:
             self.dedup_cache.drop_in_flight(key)
+
+    def dedup_mark_dropped_if_in_flight(self, key: Optional[dedup.DedupKey]) -> None:
+        """Record a no-reply DROP sentinel if ``key`` is still in flight.
+
+        Idempotent: ``record_reply`` (called by ``send_reply_packet``)
+        atomically transitions the key from in-flight to cached, so this
+        is a no-op for handlers that produced a reply. Handlers that
+        raised or returned silently end up dropped for one TTL window —
+        retransmissions are suppressed without re-running the handler
+        (RFC 5080 §2.2.2).
+        """
+        if key is not None and self.dedup_cache is not None:
+            self.dedup_cache.mark_dropped_if_in_flight(key)
 
     def record_reply(self, reply: Any, raw: bytes) -> None:
         """Cache ``raw`` if ``reply`` carries a dedup key from its request."""

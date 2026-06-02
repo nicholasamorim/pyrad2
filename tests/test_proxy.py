@@ -88,3 +88,21 @@ class TestProcessInput:
             "_grab_packet",
             "_handle_proxy_packet",
         ]
+
+    def test_process_input_calls_grab_packet_with_fd_only(self):
+        # Regression: the pre-M1 ``Proxy._process_input`` called
+        # ``self._grab_packet(lambda data: ..., fd)``. The router refactor
+        # in 3.0 changed ``_grab_packet`` to ``(self, fd)`` and proxy.py
+        # silently broke. This test pins the new signature so the
+        # mismatch can't recur.
+        MockClassMethod(Proxy, "_grab_packet")
+        MockClassMethod(Proxy, "_handle_proxy_packet")
+
+        self.proxy._process_input(self.proxy._proxyfd)
+
+        grab_call = self.proxy.called[0]
+        assert grab_call[0] == "_grab_packet"
+        # Positional args: exactly one — the fd.
+        assert grab_call[1] == (self.proxy._proxyfd,)
+        # And no kwargs.
+        assert grab_call[2] == {}

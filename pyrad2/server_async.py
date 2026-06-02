@@ -332,7 +332,12 @@ class ServerAsync(ABC):
         try:
             handler(protocol, req, addr)
         finally:
-            self._router.dedup_drop_in_flight(key)
+            # See ``Server._dedup_dispatch`` for the rationale: a handler
+            # that produced a reply has already had its in-flight marker
+            # cleared by ``record_reply``; a handler that didn't gets a
+            # DROP sentinel so retransmissions of the failed request are
+            # silently suppressed for one TTL window (RFC 5080 §2.2.2).
+            self._router.dedup_mark_dropped_if_in_flight(key)
 
     async def initialize_transports(
         self,
