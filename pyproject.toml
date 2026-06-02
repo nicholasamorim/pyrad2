@@ -40,11 +40,10 @@ Changelog = "https://github.com/nicholasamorim/pyrad2/releases"
 dev = [
     "mypy>=2.1.0",
     "pytest>=9.0.3",
-    "pytest-asyncio>=1.0.0",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-sugar>=1.1.1",
-    "ruff>=0.15.3",
-    "types-setuptools>=82.0.0.20260508",
+    "ruff>=0.15.15",
 ]
 docs = [
     "mkdocs>=1.6.1",
