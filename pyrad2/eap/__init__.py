@@ -58,6 +58,9 @@ from pyrad2.eap.md5 import (
     inject_eap_identity,
     password_from_packet,
 )
+from pyrad2.eap.peap import EAP_TYPE_PEAP, PeapMethod
+from pyrad2.eap.tls import EAP_TYPE_TLS, TlsMethod
+from pyrad2.eap.ttls import EAP_TYPE_TTLS, TtlsMethod
 
 # Stateless methods register their class directly — the class is its
 # own zero-argument factory because nothing crosses conversations.
@@ -67,11 +70,29 @@ register_method("eap-gtc", GtcMethod)
 # rounds for the Success-Request check); the factory shape ensures
 # every conversation gets its own instance.
 register_method("eap-mschapv2", MschapV2Method)
+# EAP-TLS is stateful (one TLS engine per conversation) but its
+# constructor needs cert paths, so we deliberately do NOT register a
+# default factory — callers register their own::
+#
+#     from pyrad2.eap import register_method
+#     from pyrad2.eap.tls import TlsMethod
+#
+#     register_method(
+#         "eap-tls",
+#         lambda: TlsMethod(
+#             ca_cert="/etc/pki/aaa.crt",
+#             client_cert="/etc/pki/me.crt",
+#             client_key="/etc/pki/me.key",
+#         ),
+#     )
 
 __all__ = [
     "EAP_MESSAGE_ATTR",
     "EAP_TYPE_GTC",
     "EAP_TYPE_MSCHAPV2",
+    "EAP_TYPE_PEAP",
+    "EAP_TYPE_TLS",
+    "EAP_TYPE_TTLS",
     "STATE_ATTR",
     "USER_NAME_ATTR",
     "USER_PASSWORD_ATTR",
@@ -80,6 +101,9 @@ __all__ = [
     "Md5Method",
     "MethodFactory",
     "MschapV2Method",
+    "PeapMethod",
+    "TlsMethod",
+    "TtlsMethod",
     "apply_eap_gtc_challenge",
     "apply_eap_md5_challenge",
     "build_eap_gtc_response",

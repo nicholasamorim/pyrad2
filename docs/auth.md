@@ -3,7 +3,8 @@
 pyrad2 ships byte-level primitives plus an `EapMethod` registry so common
 authentication flows are a one-line opt-in on the client side. This page
 covers everything that lives outside the cleartext-User-Password (PAP)
-default: CHAP, EAP-MD5, EAP-GTC, MS-CHAPv2, and EAP-MSCHAPv2.
+default: CHAP, EAP-MD5, EAP-GTC, MS-CHAPv2, EAP-MSCHAPv2, and the
+TLS-protected family (EAP-TLS, PEAPv0, EAP-TTLS).
 
 ## At a glance
 
@@ -15,6 +16,9 @@ default: CHAP, EAP-MD5, EAP-GTC, MS-CHAPv2, and EAP-MSCHAPv2.
 | **EAP-GTC** (RFC 3748 §5.6) | `pyrad2.eap` | `req.auth_type = "eap-gtc"` | none |
 | **MS-CHAPv2** (RFC 2759 / 2548) | `pyrad2.mschap` | `mschap.prepare_mschap2_request(...)` | `[mschap]` |
 | **EAP-MSCHAPv2** (RFC 2759 + EAP framing) | `pyrad2.eap` | `req.auth_type = "eap-mschapv2"` | `[mschap]` |
+| **EAP-TLS** (RFC 5216) | `pyrad2.eap.tls` | register `TlsMethod` with cert paths, then `req.auth_type = "eap-tls"` | none |
+| **PEAPv0** (draft-josefsson) | `pyrad2.eap.peap` | register `PeapMethod` with `inner_method=`, then `req.auth_type = "eap-peap"` | none (`[mschap]` if inner is MSCHAPv2) |
+| **EAP-TTLS / PAP** (RFC 5281) | `pyrad2.eap.ttls` | register `TtlsMethod` with `ca_cert=`, then `req.auth_type = "eap-ttls"` | none |
 
 The EAP methods all flow through one generic client loop. `start()` is
 called once before the first send, `respond()` after every
@@ -195,6 +199,97 @@ concurrent EAP-MSCHAPv2 clients don't share state.
 
 Runnable demo: [`scenarios/auth_eap_mschapv2.py`](https://github.com/pyradius/pyrad2/blob/master/scenarios/auth_eap_mschapv2.py),
 `make scenario_auth_eap_mschapv2`.
+
+## TLS-protected EAP family (EAP-TLS, PEAPv0, EAP-TTLS)
+
+The three TLS-EAP methods share one framing module
+(`pyrad2.eap._tls_eap`) and one TLS engine (`TlsEapEngine` wrapping
+`ssl.MemoryBIO`). Each method's `start()` / `respond()` only owns its
+own state machine — fragmentation, the L/M/S flags byte, the
+first-fragment Length header, and the EAP-Message AVP split/join are
+all handled by the shared helpers.
+
+None of the TLS-EAP methods are auto-registered: their constructors
+need cert paths. Register your own factory once at startup and the
+client loop handles the rest.
+
+### EAP-TLS (RFC 5216) — certificate-only mutual auth
+
+```python
+from pyrad2.eap import register_method
+from pyrad2.eap.tls import TlsMethod
+
+register_method(
+    "eap-tls",
+    lambda: TlsMethod(
+        ca_cert="/etc/pki/aaa-ca.pem",
+        client_cert="/etc/pki/client.crt",
+        client_key="/etc/pki/client.key",
+        identity=b"anonymous@realm",  # outer EAP-Identity, optional
+    ),
+)
+
+req = client.create_auth_packet(User_Name="alice@realm")
+req.auth_type = "eap-tls"
+reply = await client.send_packet(req)
+```
+
+EAP-TLS doesn't use `User-Password` — the certificate *is* the
+credential. MSK derivation (the MS-MPPE-Send / Recv keys the
+production server packs into the final Access-Accept) is the server's
+responsibility; pyrad2 drives the handshake to completion and reads
+the resulting Accept.
+
+### PEAPv0 (draft-josefsson) — server-cert + inner EAP method
+
+```python
+from pyrad2.eap import register_method
+from pyrad2.eap.peap import PeapMethod
+
+register_method(
+    "eap-peap",
+    lambda: PeapMethod(
+        ca_cert="/etc/pki/aaa-ca.pem",
+        inner_method="eap-mschapv2",  # any registered EapMethod name
+        outer_identity=b"anonymous",
+    ),
+)
+
+req = client.create_auth_packet(
+    User_Name="alice", User_Password="hunter2"
+)
+req.auth_type = "eap-peap"
+```
+
+The inner method (typically EAP-MSCHAPv2 — `pip install
+pyrad2[mschap]` for that one) sees a synthetic packet carrying the
+outer `User-Name` and `User-Password`, drives its own challenge
+exchange through the TLS tunnel, and PEAP echoes the closing
+Result-TLV so the server can emit outer Access-Accept.
+
+### EAP-TTLS (RFC 5281) — server-cert + inner Diameter AVPs (PAP)
+
+```python
+from pyrad2.eap import register_method
+from pyrad2.eap.ttls import TtlsMethod
+
+register_method(
+    "eap-ttls",
+    lambda: TtlsMethod(
+        ca_cert="/etc/pki/aaa-ca.pem",
+        outer_identity=b"anonymous@realm",
+    ),
+)
+
+req = client.create_auth_packet(
+    User_Name="alice@realm", User_Password="hunter2"
+)
+req.auth_type = "eap-ttls"
+```
+
+EAP-TTLS pushes `User-Name` + `User-Password` AVPs (RFC 5281 §11.2
+PAP shape) into TLS application data once and waits for outer
+EAP-Success — no inner EAP exchange, no inner-method registry to wire.
 
 ## Adding a new EAP method
 

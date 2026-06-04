@@ -1,6 +1,131 @@
 Changelog
 =========
 
+3.2 - Unreleased
+----------------
+
+3.2 closes the EAP coverage gap. The 3.1 ``EapMethod`` ABC + registry
+was built with EAP-TLS / PEAP / EAP-TTLS as the explicit next step;
+3.2 lands all three on top of a single shared TLS-EAP framing module
+so each method only implements its own start/inner-exchange behaviour.
+
+# TLS-EAP framing
+
+- **New ``pyrad2.eap._tls_eap``** carrying the shape every TLS-based
+  EAP method sits on: Flags byte (L/M/S bits per RFC 5216 §3.1),
+  first-fragment Length header, outbound fragmentation
+  (``fragment_outbound``) and inbound reassembly, EAP-Message AVP
+  split/join helpers (RFC 3579 §3.1), MemoryBIO + SSLObject wrapping
+  (``TlsEapEngine``), and a hardened
+  ``make_client_tls_context`` factory. The context factory
+  intentionally does **not** expose an "insecure skip-verify"
+  toggle — production TLS-EAP without server validation is a
+  MITM-trivial channel and the only consumer that needs to bypass
+  the trust store is a test harness, which can pass its own
+  ``SSLContext`` explicitly.
+- **240-byte default fragment payload** leaves 13 bytes of headroom
+  in a single ``EAP-Message`` AVP for the 5-byte EAP header, the
+  flags byte, and the optional 4-byte first-fragment Length, so no
+  TLS-EAP packet ever needs to be split across two AVPs at the
+  RADIUS attribute layer.
+
+# EAP-TLS (RFC 5216)
+
+- **New ``pyrad2.eap.tls.TlsMethod``** — cert-based mutual-auth EAP
+  supplicant. One TLS engine per conversation (registry hands out a
+  fresh instance per ``get_method`` call). Both ``ca_cert`` and the
+  client cert/key pair are constructor args; the method has no use
+  for ``User-Password`` so the outer packet doesn't need one. The
+  outer EAP-Identity defaults to ``b"anonymous"`` or to the packet's
+  ``User-Name`` when present.
+- **EAP-TLS is not auto-registered**: its constructor needs cert
+  paths, so callers register their own factory via
+  ``register_method("eap-tls", lambda: TlsMethod(...))``. Documented
+  in the ``pyrad2.eap`` ``__init__`` docstring.
+- MSK derivation (the TLS master-secret-to-MS-MPPE-key flow) is the
+  *server's* responsibility, not the supplicant's; pyrad2 drives the
+  handshake to completion and reads the resulting Access-Accept, no
+  key export needed. This matches the constraint that
+  ``ssl.SSLObject`` (memory-BIO mode) does not expose
+  ``export_keying_material`` in stdlib.
+
+# PEAPv0 (draft-josefsson-pppext-eap-tls-eap)
+
+- **New ``pyrad2.eap.peap.PeapMethod``** — outer EAP-TLS-shaped
+  framing carrying an inner EAP exchange tunneled inside TLS
+  application records. Inner method selection is via the existing
+  ``EapMethod`` registry — pass ``inner_method="eap-mschapv2"`` (or
+  any other registered name) and PEAP delegates challenge handling
+  to the registered ``EapMethod`` instance through a synthetic dict-
+  shaped inner packet.
+- **Inner Identity is handled directly** by PEAP itself — the very
+  first inner EAP-Request is always an Identity request, and the
+  ``User-Name`` for the inner reply lives on the outer packet, so
+  short-circuiting it inside PEAP avoids forcing every inner method
+  to know about the EAP-Identity round.
+- **PEAPv0 Result-TLV (EAP-Type 33)** echo handled at the PEAP layer
+  so the inner method doesn't need to know the conversation is
+  closing — once the TLV arrives, PEAP echoes the status back and
+  the server is free to emit outer EAP-Success.
+- **Server-only TLS auth** is the default. PEAP exists to put a
+  password method behind a server cert; mutual TLS would defeat the
+  point of the inner method. ``client_cert`` / ``client_key`` are
+  optional constructor args for the few deployments that opt in.
+
+# EAP-TTLS (RFC 5281)
+
+- **New ``pyrad2.eap.ttls.TtlsMethod``** with PAP as the inner
+  method. After the TLS handshake the supplicant pushes a Diameter
+  AVP stream — ``User-Name`` + ``User-Password`` — into TLS
+  application data; the server validates and emits outer
+  EAP-Success. No server-side inner request, no inner EAP framing.
+- **Diameter AVP codec** (``encode_diameter_avp`` /
+  ``decode_diameter_avps``) per RFC 6733 §4.1: 8-byte header
+  (12-byte with vendor), 24-bit length, 4-byte alignment padding.
+  RADIUS attribute codes are reused as Diameter AVP codes for the
+  TTLS PAP path (``User-Name``=1, ``User-Password``=2). Both AVPs
+  ship with the M (Mandatory) flag per RFC 5281 §11.2.
+- **Inner credentials are pushed exactly once**, not on every round.
+  Servers that hold the TLS connection through ACK rounds while
+  validating won't see the password re-emitted.
+- **Defensive parse**: ``decode_diameter_avps`` raises
+  ``ValueError`` on a truncated header or a length field that
+  overruns the buffer — both indicators of either a corrupted record
+  or a codec mismatch a test should catch loud.
+
+# Testing surface
+
+- **New ``tests/_tls_eap_harness.py``** — an in-process EAP-TLS /
+  PEAP / EAP-TTLS responder driven through ``ssl.MemoryBIO``. The
+  harness speaks the production wire framing (fragmentation, flags
+  byte, Length header) but is bare-bones — no RADIUS, no UDP, no
+  router — so handshake-level assertions stay local and a state-
+  machine bug surfaces as ``AssertionError at line N`` rather than
+  "test hung". Reuses the existing ``tests/certs`` tree.
+- **23 new tests** across ``test_eap_tls.py``, ``test_eap_peap.py``,
+  ``test_eap_ttls.py``, and ``test_eap_tls_framing.py``:
+  - Full EAP-TLS handshake to completion against a real TLS server.
+  - PEAP TLS handshake + inner Identity / Result-TLV + inner
+    EAP-MD5 method delegation via the registry.
+  - TTLS handshake + decoded inner Diameter AVPs (verifies both
+    User-Name and User-Password land with the M flag).
+  - Diameter AVP encode/decode round-trip, 4-byte alignment padding,
+    rejection of truncated and overlong headers.
+  - Framing-level fragmentation + Length-header roundtrip pinned in
+    its own test file so a regression there fails its own assertion
+    rather than only manifesting as a mid-handshake stall.
+- **Total test count**: 659 (636 → 659, +23). No regressions in
+  the existing suite.
+
+# Migration
+
+3.2 is **fully backwards compatible** with 3.1. The three new
+methods are additive — none of the existing EAP / packet / client
+APIs changed shape, and the three TLS-EAP methods are not
+auto-registered, so a 3.1 deployment that doesn't reference them
+sees no change in registry behaviour.
+
+
 3.1 - Unreleased
 ----------------
 
