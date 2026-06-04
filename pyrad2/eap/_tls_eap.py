@@ -32,7 +32,13 @@ from __future__ import annotations
 
 import ssl
 import struct
-from typing import Iterable
+from typing import TYPE_CHECKING, ClassVar, Iterable
+
+from pyrad2.constants import EAPPacketType, EAPType
+from pyrad2.eap.base import EapMethod
+
+if TYPE_CHECKING:
+    from pyrad2.packet import AuthPacket, Packet
 
 # RFC 5216 §3.1 / RFC 5281 §9.1 / draft-josefsson §3.1 — Flags byte bits.
 FLAG_LENGTH = 0x80
@@ -350,3 +356,157 @@ class TlsEapEngine:
                 break
             out.append(chunk)
         return b"".join(out)
+
+
+# ----------------------------------------------------------------------
+# Shared supplicant-side helpers used by every TLS-EAP method
+# ----------------------------------------------------------------------
+
+
+def build_eap_identity_response(identity: bytes, eap_id: int | None = None) -> bytes:
+    """Pack an EAP-Response/Identity packet (RFC 3748 §5.1).
+
+    All three TLS-EAP methods need this on the first send (the outer
+    Identity that lives outside TLS). ``eap_id`` defaults to the
+    package-level rolling counter so the bytes match what every other
+    pyrad2 EAP method emits.
+    """
+    if eap_id is None:
+        # Local import keeps the cycle out of module load order.
+        from pyrad2 import packet as _packet
+
+        eap_id = _packet.CURRENT_ID
+    length = 5 + len(identity)
+    return (
+        bytes([EAPPacketType.RESPONSE, eap_id])
+        + length.to_bytes(2, "big")
+        + bytes([EAPType.IDENTITY])
+        + identity
+    )
+
+
+def identity_from_packet(pkt: "AuthPacket", default: bytes) -> bytes:
+    """Pull a User-Name off an outer packet, falling back to ``default``.
+
+    Outer ``AuthPacket`` instances index attributes by integer code
+    (1 = User-Name); the dict-shaped synthetic and ``FakeAuthPacket``
+    test stand-ins also accept string keys. Try both shapes; surface
+    ``default`` when neither is present. Bytes are returned verbatim,
+    ``str`` values are UTF-8 encoded.
+    """
+    for key in (1, "User-Name"):
+        try:
+            if key in pkt:
+                raw = pkt[key][0]
+                return raw.encode("utf-8") if isinstance(raw, str) else raw
+        except (TypeError, KeyError):
+            continue
+    return default
+
+
+class TlsEapMethodBase(EapMethod):
+    """Shared template for the EAP-TLS / PEAP / EAP-TTLS supplicant flow.
+
+    The three methods sit on the same wire shape: parse the inbound
+    EAP-TLS framing, advance the TLS engine, run a tiny per-method
+    inner hook, then fragment + emit. Subclasses set
+    :attr:`EAP_TYPE` (13 / 25 / 21) and override :meth:`_handle_inner`
+    when there's something to do after the handshake completes.
+
+    Constructor parameters mirror the three production methods —
+    ``ca_cert`` / ``client_cert`` / ``client_key`` build a default
+    context via :func:`make_client_tls_context`, or callers pass a
+    pre-built ``ssl_context`` for tests. ``identity`` is the outer
+    EAP-Identity sent on the first round; subclasses pick whether
+    ``None`` falls back to the outer ``User-Name`` (EAP-TLS) or to
+    ``b"anonymous"`` (PEAP / TTLS).
+    """
+
+    #: Subclass sets this to the EAP-Type byte on the wire.
+    EAP_TYPE: ClassVar[int]
+
+    #: Default identity when the constructor was passed ``None``.
+    #: PEAP / TTLS override to ``b"anonymous"`` to keep the real
+    #: User-Name inside the TLS tunnel.
+    DEFAULT_IDENTITY_FALLBACK: ClassVar[bytes] = b"anonymous"
+
+    def __init__(
+        self,
+        ca_cert: str | None = None,
+        client_cert: str | None = None,
+        client_key: str | None = None,
+        ssl_context: ssl.SSLContext | None = None,
+        identity: bytes | None = None,
+    ) -> None:
+        if ssl_context is None:
+            ssl_context = make_client_tls_context(
+                ca_cert=ca_cert,
+                client_cert=client_cert,
+                client_key=client_key,
+            )
+        self._engine = TlsEapEngine(ssl_context)
+        self._outbound_queue: list[tuple[int, bytes, int | None]] = []
+        self._identity = identity
+
+    def start(self, pkt: "AuthPacket") -> None:
+        identity = self._identity or identity_from_packet(
+            pkt, default=self.DEFAULT_IDENTITY_FALLBACK
+        )
+        pkt[EAP_MESSAGE_ATTR] = split_into_eap_message_avps(
+            build_eap_identity_response(identity)
+        )
+
+    def respond(self, pkt: "AuthPacket", challenge: "Packet") -> None:
+        eap_payload = join_eap_message_avps(challenge[EAP_MESSAGE_ATTR])
+        eap_id, eap_type, flags, body = parse_eap_tls_request(eap_payload)
+        if eap_type != self.EAP_TYPE:
+            raise ValueError(f"Expected EAP-Type {self.EAP_TYPE}, got {eap_type}")
+
+        if flags & FLAG_START:
+            # S=1 carries an empty body; just kick the handshake.
+            self._engine.advance_handshake()
+        else:
+            self._engine.feed(body)
+            if not self._engine.handshake_done:
+                self._engine.advance_handshake()
+
+        # Per-method post-engine hook — TLS does nothing, PEAP decrypts
+        # and dispatches an inner EAP-Request, TTLS pushes inner AVPs
+        # once after the handshake completes.
+        self._handle_inner(pkt, body)
+
+        tls_out = self._engine.pending_outbound()
+        if tls_out and not self._outbound_queue:
+            self._outbound_queue = fragment_outbound(tls_out)
+
+        if self._outbound_queue:
+            flags_out, chunk, total_length = self._outbound_queue.pop(0)
+        else:
+            # Empty body is the legitimate ACK shape — used to
+            # acknowledge the server's final handshake message
+            # (RFC 5216 §2.1.5) and to fill rounds where the server
+            # owes us bytes mid-fragmentation.
+            flags_out, chunk, total_length = 0, b"", None
+
+        response = build_eap_tls_response(
+            eap_id=eap_id,
+            eap_type=self.EAP_TYPE,
+            flags=flags_out,
+            tls_bytes=chunk,
+            total_length=total_length,
+        )
+        pkt[EAP_MESSAGE_ATTR] = split_into_eap_message_avps(response)
+        pkt[STATE_ATTR] = challenge[STATE_ATTR]
+
+    def _handle_inner(self, pkt: "AuthPacket", body: bytes) -> None:
+        """Hook for per-method post-engine work.
+
+        Called once per round after :meth:`TlsEapEngine.feed` +
+        :meth:`TlsEapEngine.advance_handshake` and before the
+        outbound fragment is built. ``body`` is the inbound TLS bytes
+        from this round — empty when the server sent a bare ACK or
+        the Start (S=1) request. Default implementation is a no-op,
+        which is exactly EAP-TLS's behaviour: nothing happens after
+        the handshake; the next EAP-Request is Access-Accept.
+        """
+        return None

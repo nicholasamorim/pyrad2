@@ -26,6 +26,12 @@ indication directly. This module implements v0.
 Client cert is **not** required — PEAP authenticates only the server's
 cert during TLS, with the inner method authenticating the user. EAP-TLS
 demands mutual cert auth; PEAP relaxes that, which is the whole point.
+
+The TLS-EAP framing, fragmentation, and engine state machine all
+live in :class:`pyrad2.eap._tls_eap.TlsEapMethodBase`. PEAP just sets
+:attr:`EAP_TYPE = 25`, overrides :attr:`DEFAULT_IDENTITY_FALLBACK` to
+``b"anonymous"`` so the real username stays inside the tunnel, and
+overrides :meth:`_handle_inner` to drive the inner EAP exchange.
 """
 
 from __future__ import annotations
@@ -36,21 +42,14 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pyrad2.constants import EAPPacketType, EAPType
 from pyrad2.eap._tls_eap import (
-    EAP_MESSAGE_ATTR,
-    STATE_ATTR,
-    FLAG_START,
-    TlsEapEngine,
-    build_eap_tls_response,
-    fragment_outbound,
-    join_eap_message_avps,
-    make_client_tls_context,
-    parse_eap_tls_request,
-    split_into_eap_message_avps,
+    TlsEapMethodBase,
+    build_eap_identity_response,
+    identity_from_packet,
 )
 from pyrad2.eap.base import EapMethod, MethodFactory
 
 if TYPE_CHECKING:
-    from pyrad2.packet import AuthPacket, Packet
+    from pyrad2.packet import AuthPacket
 
 # IANA / draft assignment.
 EAP_TYPE_PEAP = 25
@@ -64,17 +63,6 @@ PEAP_TLV_TYPE = 33  # EAP-Type for "PEAP TLV / Extensions"
 PEAP_TLV_RESULT = 0x8003
 PEAP_TLV_STATUS_SUCCESS = 1
 PEAP_TLV_STATUS_FAILURE = 2
-
-
-def _build_inner_eap_identity(eap_id: int, identity: bytes) -> bytes:
-    """Pack an inner EAP-Response/Identity to send back through the tunnel."""
-    length = 5 + len(identity)
-    return (
-        bytes([EAPPacketType.RESPONSE, eap_id])
-        + length.to_bytes(2, "big")
-        + bytes([EAPType.IDENTITY])
-        + identity
-    )
 
 
 def _build_peap_tlv_result_response(eap_id: int, status: int) -> bytes:
@@ -99,7 +87,7 @@ def _build_peap_tlv_result_response(eap_id: int, status: int) -> bytes:
     )
 
 
-class PeapMethod(EapMethod):
+class PeapMethod(TlsEapMethodBase):
     """PEAPv0 supplicant driver.
 
     One instance per conversation. The TLS engine and the inner
@@ -113,10 +101,13 @@ class PeapMethod(EapMethod):
     on the first inner EAP-Request, before any credential leaks.
 
     The outer EAP-Identity is sent in cleartext (it's outside TLS) and
-    defaults to the bytes ``b"anonymous"`` so the real username — which
-    PEAP exists to protect — stays inside the tunnel. The inner
-    Identity is the real ``User-Name``, sent only after the handshake.
+    defaults to ``b"anonymous"`` so the real username — which PEAP
+    exists to protect — stays inside the tunnel. The inner Identity is
+    the real ``User-Name``, sent only after the handshake.
     """
+
+    EAP_TYPE = EAP_TYPE_PEAP
+    DEFAULT_IDENTITY_FALLBACK = b"anonymous"
 
     def __init__(
         self,
@@ -128,15 +119,13 @@ class PeapMethod(EapMethod):
         inner_method: str | None = None,
         inner_method_factory: MethodFactory | None = None,
     ) -> None:
-        if ssl_context is None:
-            ssl_context = make_client_tls_context(
-                ca_cert=ca_cert,
-                client_cert=client_cert,
-                client_key=client_key,
-            )
-        self._engine = TlsEapEngine(ssl_context)
-        self._outbound_queue: list[tuple[int, bytes, int | None]] = []
-        self._outer_identity = outer_identity
+        super().__init__(
+            ca_cert=ca_cert,
+            client_cert=client_cert,
+            client_key=client_key,
+            ssl_context=ssl_context,
+            identity=outer_identity,
+        )
         self._inner_method_name = inner_method
         self._inner_method_factory = inner_method_factory
         # Inner method instantiated on first inner EAP-Request that
@@ -146,68 +135,26 @@ class PeapMethod(EapMethod):
         # again across the rest of the conversation.
         self._inner_method_started = False
 
-    def start(self, pkt: "AuthPacket") -> None:
-        identity = self._outer_identity
-        eap_identity = _build_inner_eap_identity(eap_id=0, identity=identity)
-        # Outer identity gets a fresh EAP id when the client sends the
-        # very first Access-Request; we leave id=0 here for simplicity
-        # since the server doesn't check it on the Identity round.
-        pkt[EAP_MESSAGE_ATTR] = split_into_eap_message_avps(eap_identity)
+    def _handle_inner(self, pkt: "AuthPacket", body: bytes) -> None:
+        """Decrypt one inner EAP-Request and queue the encrypted reply.
 
-    def respond(self, pkt: "AuthPacket", challenge: "Packet") -> None:
-        eap_payload = join_eap_message_avps(challenge[EAP_MESSAGE_ATTR])
-        eap_id, eap_type, flags, body = parse_eap_tls_request(eap_payload)
+        Mirrors the base class's hook semantics: called once per
+        round, after the engine has been advanced. The bulk of the
+        work is downstream in :meth:`_dispatch_inner_request` — this
+        wrapper only handles the "is there anything to decrypt?"
+        gate, since pre-handshake rounds and bare ACK rounds (no TLS
+        body) have nothing for us to do.
+        """
+        if not self._engine.handshake_done or not body:
+            return
+        inner_request = self._engine.read_plaintext()
+        if not inner_request:
+            return
+        inner_response = self._dispatch_inner_request(inner_request, pkt)
+        if inner_response is not None:
+            self._engine.write_plaintext(inner_response)
 
-        if eap_type != EAP_TYPE_PEAP:
-            raise ValueError(
-                f"Expected EAP-Type {EAP_TYPE_PEAP} (PEAP), got {eap_type}"
-            )
-
-        if flags & FLAG_START:
-            self._engine.advance_handshake()
-        else:
-            # Mid-handshake the body is a TLS record; post-handshake
-            # it's an encrypted EAP-Request. The engine demuxes by
-            # internal state — write to inbound BIO regardless.
-            self._engine.feed(body)
-            if not self._engine.handshake_done:
-                self._engine.advance_handshake()
-
-        # Post-handshake path: if we just finished the TLS handshake
-        # *and* the server piggybacked an inner EAP-Request in the
-        # same record, decrypt and handle it now.
-        if self._engine.handshake_done and body:
-            inner_request = self._engine.read_plaintext()
-            if inner_request:
-                inner_response = self._handle_inner_eap(inner_request, pkt)
-                if inner_response is not None:
-                    self._engine.write_plaintext(inner_response)
-
-        # Drain any queued outbound TLS bytes (handshake records or
-        # the encrypted inner EAP response we just wrote).
-        tls_out = self._engine.pending_outbound()
-        if tls_out and not self._outbound_queue:
-            self._outbound_queue = fragment_outbound(tls_out)
-
-        if self._outbound_queue:
-            flags_out, chunk, total_length = self._outbound_queue.pop(0)
-        else:
-            # Nothing to send back: empty EAP-Response acknowledges
-            # either a mid-fragmentation ACK or the server's final
-            # handshake message (RFC 5216 §2.1.5).
-            flags_out, chunk, total_length = 0, b"", None
-
-        response = build_eap_tls_response(
-            eap_id=eap_id,
-            eap_type=EAP_TYPE_PEAP,
-            flags=flags_out,
-            tls_bytes=chunk,
-            total_length=total_length,
-        )
-        pkt[EAP_MESSAGE_ATTR] = split_into_eap_message_avps(response)
-        pkt[STATE_ATTR] = challenge[STATE_ATTR]
-
-    def _handle_inner_eap(
+    def _dispatch_inner_request(
         self, inner_request: bytes, outer_pkt: "AuthPacket"
     ) -> bytes | None:
         """Drive one round of the *inner* EAP exchange.
@@ -227,14 +174,13 @@ class PeapMethod(EapMethod):
         eap_type = inner_request[4]
 
         if code != EAPPacketType.REQUEST:
-            # Unexpected — the inner side only sends Requests at us.
             raise ValueError(
                 f"Inner EAP code {code} is not a Request — server protocol violation"
             )
 
         if eap_type == EAPType.IDENTITY:
-            identity = self._real_identity_from_packet(outer_pkt)
-            return _build_inner_eap_identity(eap_id, identity)
+            identity = identity_from_packet(outer_pkt, default=b"anonymous")
+            return build_eap_identity_response(identity, eap_id=eap_id)
 
         if eap_type == PEAP_TLV_TYPE:
             # Result-TLV from the server — echo it back so the server
@@ -242,7 +188,6 @@ class PeapMethod(EapMethod):
             status = self._parse_peap_tlv_status(inner_request)
             return _build_peap_tlv_result_response(eap_id, status)
 
-        # Delegate to the inner EAP method.
         return self._delegate_to_inner_method(inner_request, outer_pkt)
 
     def _delegate_to_inner_method(
@@ -257,6 +202,9 @@ class PeapMethod(EapMethod):
         bootstrap). The inner method writes its response into the
         synthetic packet; we extract and return the bytes.
         """
+        # Local import to dodge circular: _tls_eap → __init__ → this module.
+        from pyrad2.eap._tls_eap import EAP_MESSAGE_ATTR, STATE_ATTR
+
         inner_method = self._ensure_inner_method()
         synth_outgoing = _SyntheticInnerPacket()
         # Mirror credentials so the inner method's start/respond can
@@ -288,11 +236,9 @@ class PeapMethod(EapMethod):
 
         synth_challenge = _SyntheticInnerPacket()
         synth_challenge[EAP_MESSAGE_ATTR] = [inner_request]
-        # Inner methods carry State via the outer EAP envelope, but
-        # they unconditionally read challenge[STATE_ATTR] today —
+        # Inner methods unconditionally read challenge[STATE_ATTR];
         # supply an empty list so the assignment in respond() doesn't
-        # KeyError. We immediately overwrite synth_outgoing[STATE_ATTR]
-        # below so nothing leaks.
+        # KeyError.
         synth_challenge[STATE_ATTR] = [b""]
 
         inner_method.respond(synth_out_any, cast(Any, synth_challenge))
@@ -344,24 +290,6 @@ class PeapMethod(EapMethod):
         if len(eap_packet) < 5 + 6:
             return PEAP_TLV_STATUS_FAILURE
         return struct.unpack("!H", eap_packet[9:11])[0]
-
-    @staticmethod
-    def _real_identity_from_packet(pkt: "AuthPacket") -> bytes:
-        """Real (inner) identity is the outer packet's User-Name.
-
-        Falls back to ``b"anonymous"`` only so the inner side has
-        *something* to respond with even when the caller forgot — a
-        degenerate but well-formed exchange that the server will
-        Reject.
-        """
-        for key in (1, "User-Name"):
-            try:
-                if key in pkt:
-                    raw = pkt[key][0]
-                    return raw.encode("utf-8") if isinstance(raw, str) else raw
-            except (TypeError, KeyError):
-                continue
-        return b"anonymous"
 
 
 class _SyntheticInnerPacket:

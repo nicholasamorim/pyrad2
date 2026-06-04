@@ -45,27 +45,13 @@ Diameter AVP wire format (RFC 6733 §4.1), as used by TTLS::
 
 from __future__ import annotations
 
-import ssl
 import struct
 from typing import TYPE_CHECKING
 
-from pyrad2.constants import EAPPacketType, EAPType
-from pyrad2.eap._tls_eap import (
-    EAP_MESSAGE_ATTR,
-    STATE_ATTR,
-    FLAG_START,
-    TlsEapEngine,
-    build_eap_tls_response,
-    fragment_outbound,
-    join_eap_message_avps,
-    make_client_tls_context,
-    parse_eap_tls_request,
-    split_into_eap_message_avps,
-)
-from pyrad2.eap.base import EapMethod
+from pyrad2.eap._tls_eap import TlsEapMethodBase
 
 if TYPE_CHECKING:
-    from pyrad2.packet import AuthPacket, Packet
+    from pyrad2.packet import AuthPacket
 
 # IANA assignment for EAP-TTLS.
 EAP_TYPE_TTLS = 21
@@ -161,7 +147,7 @@ def decode_diameter_avps(buffer: bytes) -> list[tuple[int, int, int | None, byte
     return out
 
 
-class TtlsMethod(EapMethod):
+class TtlsMethod(TlsEapMethodBase):
     """EAP-TTLS supplicant driver with PAP as the inner method.
 
     One instance per conversation. Inner credentials are populated
@@ -174,85 +160,44 @@ class TtlsMethod(EapMethod):
     ``client_cert`` / ``client_key`` to opt in to mutual TLS. TTLS
     deployments rarely use it: the inner password method authenticates
     the user, and the outer cert authenticates the server.
+
+    The TLS-EAP framing, fragmentation, and engine state machine all
+    live in :class:`pyrad2.eap._tls_eap.TlsEapMethodBase`. TTLS just
+    sets :attr:`EAP_TYPE = 21`, takes the anonymous-outer default, and
+    overrides :meth:`_handle_inner` to push the PAP credentials once
+    after the handshake completes.
     """
 
-    def __init__(
-        self,
-        ca_cert: str | None = None,
-        client_cert: str | None = None,
-        client_key: str | None = None,
-        ssl_context: ssl.SSLContext | None = None,
-        outer_identity: bytes = b"anonymous",
-    ) -> None:
-        if ssl_context is None:
-            ssl_context = make_client_tls_context(
-                ca_cert=ca_cert,
-                client_cert=client_cert,
-                client_key=client_key,
-            )
-        self._engine = TlsEapEngine(ssl_context)
-        self._outbound_queue: list[tuple[int, bytes, int | None]] = []
-        self._outer_identity = outer_identity
+    EAP_TYPE = EAP_TYPE_TTLS
+    DEFAULT_IDENTITY_FALLBACK = b"anonymous"
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        # ``outer_identity`` keeps the same kwarg name PEAP uses —
+        # tests and existing callers pass it through as a clearer
+        # intent label than the base ABC's ``identity``. Map it
+        # explicitly so the public signature stays back-compatible.
+        outer_identity = kwargs.pop("outer_identity", None)
+        if outer_identity is not None and "identity" not in kwargs:
+            kwargs["identity"] = outer_identity
+        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
         # Flip the moment we've pushed the inner AVPs into the TLS
         # plaintext queue — keeps the supplicant from re-sending them
         # on every subsequent round (the server's ACK rounds while it
         # processes our auth, for instance).
         self._inner_sent = False
 
-    def start(self, pkt: "AuthPacket") -> None:
-        from pyrad2 import packet as _packet
+    def _handle_inner(self, pkt: "AuthPacket", body: bytes) -> None:
+        """Push inner PAP credentials once on first handshake-done round.
 
-        identity = self._outer_identity
-        length = 5 + len(identity)
-        eap_identity = (
-            bytes([EAPPacketType.RESPONSE, _packet.CURRENT_ID])
-            + length.to_bytes(2, "big")
-            + bytes([EAPType.IDENTITY])
-            + identity
-        )
-        pkt[EAP_MESSAGE_ATTR] = split_into_eap_message_avps(eap_identity)
-
-    def respond(self, pkt: "AuthPacket", challenge: "Packet") -> None:
-        eap_payload = join_eap_message_avps(challenge[EAP_MESSAGE_ATTR])
-        eap_id, eap_type, flags, body = parse_eap_tls_request(eap_payload)
-
-        if eap_type != EAP_TYPE_TTLS:
-            raise ValueError(
-                f"Expected EAP-Type {EAP_TYPE_TTLS} (EAP-TTLS), got {eap_type}"
-            )
-
-        if flags & FLAG_START:
-            self._engine.advance_handshake()
-        else:
-            self._engine.feed(body)
-            if not self._engine.handshake_done:
-                self._engine.advance_handshake()
-
-        # First TLS round after the handshake completes: push the
-        # inner PAP credentials encrypted into the TLS layer.
+        Unlike PEAP, TTLS has no inbound inner exchange to drive — the
+        supplicant just writes the AVPs into TLS plaintext as soon as
+        the handshake completes. ``self._inner_sent`` guards against
+        re-emitting the password on later ACK rounds while the server
+        is still processing.
+        """
         if self._engine.handshake_done and not self._inner_sent:
-            credentials = self._build_pap_avps(pkt)
-            self._engine.write_plaintext(credentials)
+            self._engine.write_plaintext(self._build_pap_avps(pkt))
             self._inner_sent = True
-
-        tls_out = self._engine.pending_outbound()
-        if tls_out and not self._outbound_queue:
-            self._outbound_queue = fragment_outbound(tls_out)
-
-        if self._outbound_queue:
-            flags_out, chunk, total_length = self._outbound_queue.pop(0)
-        else:
-            flags_out, chunk, total_length = 0, b"", None
-
-        response = build_eap_tls_response(
-            eap_id=eap_id,
-            eap_type=EAP_TYPE_TTLS,
-            flags=flags_out,
-            tls_bytes=chunk,
-            total_length=total_length,
-        )
-        pkt[EAP_MESSAGE_ATTR] = split_into_eap_message_avps(response)
-        pkt[STATE_ATTR] = challenge[STATE_ATTR]
 
     @staticmethod
     def _build_pap_avps(pkt: "AuthPacket") -> bytes:

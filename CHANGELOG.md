@@ -7,7 +7,9 @@ Changelog
 3.2 closes the EAP coverage gap. The 3.1 ``EapMethod`` ABC + registry
 was built with EAP-TLS / PEAP / EAP-TTLS as the explicit next step;
 3.2 lands all three on top of a single shared TLS-EAP framing module
-so each method only implements its own start/inner-exchange behaviour.
++ template-method base so each method only implements its own
+post-handshake behaviour. Three runnable scenarios demo the full
+exchange end-to-end.
 
 # TLS-EAP framing
 
@@ -23,6 +25,20 @@ so each method only implements its own start/inner-exchange behaviour.
   MITM-trivial channel and the only consumer that needs to bypass
   the trust store is a test harness, which can pass its own
   ``SSLContext`` explicitly.
+- **New ``TlsEapMethodBase``** — a template-method ABC that owns the
+  full TLS-EAP supplicant ``respond()`` skeleton (parse, advance
+  engine, drain fragments, emit, carry State). The three concrete
+  methods each provide only their ``EAP_TYPE`` byte and a one-method
+  ``_handle_inner(pkt, body)`` hook. ``TlsMethod`` (EAP-TLS) is now
+  77 lines — down from 233 — and almost entirely docstring. PEAP and
+  TTLS each shrank by 50+ lines too.
+- **Shared identity helpers** (``build_eap_identity_response`` and
+  ``identity_from_packet``) lifted to ``_tls_eap.py`` so the three
+  methods stop carrying near-identical copies. Falls back through
+  integer attribute code (1) and string name (``"User-Name"``) so the
+  same helper works against real ``AuthPacket`` and against the
+  dict-shaped synthetic packets used by tests / PEAP's inner
+  delegation.
 - **240-byte default fragment payload** leaves 13 bytes of headroom
   in a single ``EAP-Message`` AVP for the 5-byte EAP header, the
   flags byte, and the optional 4-byte first-fragment Length, so no
@@ -92,6 +108,26 @@ so each method only implements its own start/inner-exchange behaviour.
   ``ValueError`` on a truncated header or a length field that
   overruns the buffer — both indicators of either a corrupted record
   or a codec mismatch a test should catch loud.
+
+# Demo scenarios
+
+- **Three new runnable scenarios** under ``scenarios/``:
+  - ``auth_eap_tls.py`` — full mutual-TLS EAP-TLS exchange against an
+    in-process UDP RADIUS server, ``make scenario_auth_eap_tls``.
+  - ``auth_eap_peap.py`` — PEAPv0 with EAP-MD5 as inner method, real
+    digest verification against a known password, ``make
+    scenario_auth_eap_peap``.
+  - ``auth_eap_ttls.py`` — EAP-TTLS / PAP with the server decoding
+    the inner Diameter AVPs and validating User-Password, ``make
+    scenario_auth_eap_ttls``.
+- **New ``scenarios/_tls_eap_demo_server.py``** — per-session TLS-EAP
+  responder shared by all three scenarios. Owns the TLS engine + EAP
+  fragmentation state machine and exposes a tiny ``inner_handler``
+  callback for the method-specific post-handshake behaviour. Joins
+  the existing ``scenarios/_shared.py`` helper module.
+- Each scenario adds a ``make scenario_…`` target plus an entry in
+  the ``make demo`` aggregate. README + scenarios/README.md updated
+  to list the new demos.
 
 # Testing surface
 

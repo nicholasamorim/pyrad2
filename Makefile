@@ -106,4 +106,13 @@ scenario_auth_eap_gtc:
 scenario_auth_eap_mschapv2:
 	uv run python scenarios/auth_eap_mschapv2.py
 
-demo: scenario_auth scenario_acct scenario_coa scenario_status scenario_dedup scenario_radsec scenario_radsec_v11 scenario_proxy scenario_auth_chap scenario_auth_eap_md5 scenario_auth_eap_gtc scenario_auth_eap_mschapv2
+scenario_auth_eap_tls:
+	uv run python scenarios/auth_eap_tls.py
+
+scenario_auth_eap_peap:
+	uv run python scenarios/auth_eap_peap.py
+
+scenario_auth_eap_ttls:
+	uv run python scenarios/auth_eap_ttls.py
+
+demo: scenario_auth scenario_acct scenario_coa scenario_status scenario_dedup scenario_radsec scenario_radsec_v11 scenario_proxy scenario_auth_chap scenario_auth_eap_md5 scenario_auth_eap_gtc scenario_auth_eap_mschapv2 scenario_auth_eap_tls scenario_auth_eap_peap scenario_auth_eap_ttls

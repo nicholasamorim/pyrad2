@@ -78,6 +78,9 @@ make scenario_auth_chap          # CHAP authentication (RFC 1994)
 make scenario_auth_eap_md5       # EAP-MD5 (RFC 3748)
 make scenario_auth_eap_gtc       # EAP-GTC (RFC 3748)
 make scenario_auth_eap_mschapv2  # EAP-MSCHAPv2 (RFC 2759), needs pyrad2[mschap]
+make scenario_auth_eap_tls       # EAP-TLS (RFC 5216) — mutual cert auth
+make scenario_auth_eap_peap      # PEAPv0 (draft-josefsson) — TLS + inner EAP-MD5
+make scenario_auth_eap_ttls      # EAP-TTLS (RFC 5281) — TLS + inner PAP
 ```
 
 Watch the actual bytes on the wire by setting `PYRAD2_TRACE=1` on any script:

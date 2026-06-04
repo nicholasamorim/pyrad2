@@ -36,6 +36,9 @@ make scenario_auth_chap            # CHAP authentication (RFC 1994 / 2865 §2.2)
 make scenario_auth_eap_md5         # EAP-MD5 challenge/response (RFC 3748 §5.4)
 make scenario_auth_eap_gtc         # EAP-GTC prompt-and-response (RFC 3748 §5.6)
 make scenario_auth_eap_mschapv2    # EAP-MSCHAPv2 — needs pip install pyrad2[mschap]
+make scenario_auth_eap_tls         # EAP-TLS (RFC 5216) — mutual cert auth
+make scenario_auth_eap_peap        # PEAPv0 (draft-josefsson) — TLS + inner EAP-MD5
+make scenario_auth_eap_ttls        # EAP-TTLS (RFC 5281) — TLS + inner PAP via Diameter AVPs
 make demo                  # all of the above sequentially
 ```
 
