@@ -1,7 +1,12 @@
 Changelog
 =========
 
-3.1 - Unreleased
+3.2 - 2026-06-17
+----------------
+
+Support for uvloop.
+
+3.1 - 2026-06-04
 ----------------
 
 pyrad2 now ships a conformance suite that loads the upstream
